@@ -1,0 +1,255 @@
+<div class="col-12 col-lg-4 col-md-12 col-sm-12 mb-5">
+    <label for="shop_id" class="form-label required fs-6 fw-bold text-dark mb-3">اسم المحل</label>
+    <div>
+        <select class="form-select fw-bolder  shop_id  " id="shop_id" name="shop_id" dir="rtl" onchange='get_manager_name()'
+            data-placeholder="اسم المحل">
+            <option value="">اختر ..</option>
+        </select>
+    </div>
+</div>
+<div class=" col-12 col-lg-3 col-md-12 col-sm-12 mb-5"><label for="expense_respon"
+    class="form-label  fs-6 fw-bold text-dark mb-3">قائد المجموعة</label>
+<div class="input-group">
+    <div class="input-group-prepend"><span class="input-group-text"><i
+                class="fas fa-users fa-fw text-dark"></i></span></div><input type="text" name="manager_name" readonly disabled
+        id="manager_name" class="form-control fw-bold  text-dark form-control-solid" placeholder="قائد المجموعة " autocomplete="off">
+</div>
+</div>
+<div class="col-12 col-lg-3 col-md-12 col-sm-12 mb-5">
+    <label for="expense_categoty_id" class="form-label required  fs-6 fw-bold text-dark mb-3">التصنيف </label>
+    <div>
+        <select class="form-select fw-bold  " data-control="select2" id="expense_categoty_id" name="expense_categoty_id"
+            dir="rtl">
+            <option value="">اختر ..</option>
+            @foreach ($expense_categoty as $x)
+                <option value="{{ $x->expense_categoty_id }} ">{{ $x->expense_categoty_name }}</option>
+            @endforeach
+        </select>
+    </div>
+</div>
+
+<div class=" col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
+    <label for="expense_month_desc" class="form-label required fs-6 fw-bold text-dark mb-3">شهر الدفع
+        :</label>
+    <div class="input-group">
+        <div class="input-group-prepend"><span class="input-group-text"><i
+                    class="far fa-calendar-alt fa-fw text-dark"></i></span></div><input
+            type="text" name="expense_month_desc" id="expense_month_desc"
+            class="form-control fw-bold  text-info input_date_full_"
+            placeholder="شهر الدفع " value="" autocomplete="off">
+    </div>
+</div>
+
+
+<div class="col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
+    <label for="expense_price" class="form-label  fs-6 fw-bold text-dark mb-3">المبلغ
+    </label>
+    <div class="input-group">
+        <div class="input-group-prepend"><span class="input-group-text"><i
+                    class="far fa-id-card fa-fw text-dark"></i></span></div><input type="text" name="expense_price"
+            id="expense_price" class="form-control fw-bold text-dark text-info " data-inputmask="'alias' : 'decimal'"
+            minlenght="1" maxlength="20" placeholder="المبلغ">
+    </div>
+</div>
+
+
+
+<div class=" col-12 col-lg-10 col-md-12 col-sm-12 mb-5"><label for="expense_respon"
+        class="form-label  fs-6 fw-bold text-dark mb-3">تفصيل الصرف</label>
+    <div class="input-group">
+        <div class="input-group-prepend"><span class="input-group-text"><i
+                    class="far fa-clone fa-fw text-dark"></i></span></div><input type="text" name="expense_respon"
+            id="expense_respon" class="form-control fw-bold  text-dark" placeholder="تفصيل الصرف " autocomplete="off">
+    </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class=" col-12 col-lg-5 col-md-12 col-sm-12 mb-5">
+    <label for="expensefile" class="form-label  fs-6 fw-bold text-dark mb-3">إرفاق صورة
+        للفاتورة</label>
+    <input class="form-control custom-file-input" type="file" name='expensefile'>
+</div>
+<div class=" col-12 col-lg-7 col-md-12 col-sm-12  mb-5">
+    <label for="note" class="  form-label fs-6 fw-bold text-dark mb-3">ملاحظات
+    </label>
+    <textarea name="note" rows="1" class="form-control fw-bold" id="note" placeholder="ملاحظات"></textarea>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+<script>
+
+$('.input_date_full_').flatpickr({
+    "locale": "ar" ,
+    plugins: [
+        new monthSelectPlugin({
+          shorthand: false,
+          dateFormat: "m-Y",
+          altFormat: "F Y",
+          theme: "light",
+
+        }),
+    ],
+    onChange: function(selectedDates, dateStr, instance) {
+      },
+    onClose: function(selectedDates, dateStr, instance){},
+});
+
+
+function get_manager_name() {
+    var  shop_id  = $('#shop_id').val();
+if(shop_id!=''){
+$.ajax({
+url: " {{ route('dashboard.general.sel_shop_manager') }}",
+dataType: 'json',
+type: 'POST',
+async: false,
+'data': {
+    shop_id: shop_id,
+},
+headers: {
+'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+},
+beforeSend: function () {
+load_message();
+},
+complete: function () {
+unload_message();
+},
+success: function (resp) {
+if (resp.status == 'false') {
+$("#errorBox_worker").hide();
+DisplayToastrMessage_General("error", resp.message, 'خطأ');
+$('#manager_name').val('');
+$("#errorBox_expense").show();
+        $("#displayErrors_expense").html('');
+        $("#errorBox_expense").removeClass("bg-success");
+        $("#errorBox_expense").addClass( "bg-danger" );
+        $('#displayErrors_expense').append('<p>'+resp.message+'</p');
+}
+else{
+$('#manager_name').val(resp.manager_name);
+$("#errorBox_expense").hide();
+$("#displayErrors_expense").html('');
+    $("#errorBox_expense").removeClass("bg-danger");
+    $("#errorBox_expense").addClass("bg-success");
+    $('#displayErrors_expense').append('<p>'+resp.message+'</p');
+				}
+            }
+    });
+}
+else{
+$('#manager_name').val('');
+}
+}
+
+    $(".form-select").select2({
+
+    });
+
+    $(".shop_id").select2({
+        placeholder: 'اختر',
+
+        language: {
+            searching: function() {
+                return 'بحث';
+            },
+            loadingMore: function() {
+                return "تحميل المزيد.."
+            },
+            errorLoading: function() {
+                return "The results could not be loaded."
+            },
+            inputTooLong: function(e) {
+                var t = e.input.length - e.maximum,
+                    n = "Please delete" + t + " character";
+                return t != 1 && (n += "s"), n
+            },
+            inputTooShort: function(e) {
+                var t = e.minimum - e.input.length,
+                    n = "Please enter" + t + " or more characters";
+                return n
+            },
+            maximumSelected: function(e) {
+                var t = "You can only select" + e.maximum + " item";
+                return e.maximum != 1 && (t += "s"), t
+            },
+            noResults: function() {
+                return "No results found"
+            },
+            removeAllItems: function() {
+                return "Remove all items"
+            }
+        },
+        ajax: {
+            url: " {{ route('dashboard.general.sel_shop_list') }}",
+            dataType: "json",
+            type: "POST",
+            delay: 250,
+            async: false,
+            casesensitive: false,
+            beforeSend: function() {
+                load_message();
+            },
+            complete: function() {
+                unload_message();
+            },
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+
+            data: function(params) {
+                return {
+                    q: params.term,
+                    page: params.page || 1,
+                    job: 1,
+                };
+            },
+            processResults: function(data, params) {
+                var resData = [];
+                data.forEach(function(value) {
+                    resData.push(value);
+                });
+                var page = params.page || 1;
+
+                return {
+                    results: $.map(resData, function(item) {
+                        return {
+                            text: item.ItemName + ' - ' + item.item_code,
+                            id: item.id
+                        };
+                    }),
+                    pagination: {
+                        more: (page * 50) <= data[0].total_count
+                    }
+                };
+            },
+            cache: true,
+            escapeMarkup: function(m) {
+                return m;
+            }
+        },
+    });
+</script>
