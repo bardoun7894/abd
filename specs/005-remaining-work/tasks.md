@@ -4,6 +4,8 @@ Single source of truth for what's **still missing / to add**. Everything else (P
 
 Status key: ⬜ not started · 🟡 partial · ✅ done · 🔒 blocked on external creds
 
+> **Update (2026-07-16):** T-B1, T-B2, T-B3, T-B4, T-A2, T-D1, T-D3 **built + deployed** to MyContabo (live at http://91.230.110.187:9095), all AI features verified working live (real Gemini). **T-C1 file encryption is now ACTIVE** on all 6 AI-document modules (expense/shop/workers/vehicles/moraslat/purchase) — encrypted at rest under `storage/app/private/uploads`, served via auth-gated `documents.serve`, backward-compatible with existing plaintext files; invoice/lease pipeline deliberately untouched. Also rebranded الهنيدي → شركة صباح النور (text + logo) and fixed a pre-existing `migrate:fresh` redeclare bug. Remaining: **T-A1/T-A3 (blocked on your creds)**, T-C2 FCM, ZATCA VAT number.
+
 ---
 
 ## A. Integrations that need YOUR credentials (code buildable now, activation blocked)
