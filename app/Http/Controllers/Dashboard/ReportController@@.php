@@ -165,8 +165,8 @@ class ReportController extends Controller
         $manager_id = $request->manager_id;
         $list = Purchase::serachspenddatarep($purchase_id,$purchase_no, $purchase_dt_from, $purchase_dt_to, $purchase_respon, $manager_id);
         PDF::setHeaderCallback(function ($pdf) {
-            //         $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-            //         $comp_name_en = 'NOUR SABAH';
+            //         $comp_name_ar = 'شركة صباح النور  ';
+            //         $comp_name_en = 'Sabah Alnoor CO.';
             //         $tax_no_ar = 'برنامج المحوسب';
             //         $tax_no_en = 'Report System';
             //         $comp_det_ar = 'الرقم الضريبي :1111111';
@@ -356,8 +356,8 @@ class ReportController extends Controller
         $shop_id = $request->shop_id;
         $list = Expense::serachspenddatarep($expense_id,$expense_type_id, $expense_categoty_id, $expense_dt_from, $expense_dt_to, $manager_id, $worker_id, $shop_id);
         PDF::setHeaderCallback(function ($pdf) {
-            //         $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-            //         $comp_name_en = 'NOUR SABAH';
+            //         $comp_name_ar = 'شركة صباح النور  ';
+            //         $comp_name_en = 'Sabah Alnoor CO.';
             //         $tax_no_ar = 'برنامج المحوسب';
             //         $tax_no_en = 'Report System';
             //         $comp_det_ar = 'الرقم الضريبي :1111111';
@@ -567,8 +567,8 @@ class ReportController extends Controller
         $list = Calculate::serachspenddatarep($calculate_id,$calculate_month_m, $calculate_month_y, $shop_id,$manager_id);
 
         PDF::setHeaderCallback(function ($pdf) {
-            //         $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-            //         $comp_name_en = 'NOUR SABAH';
+            //         $comp_name_ar = 'شركة صباح النور  ';
+            //         $comp_name_en = 'Sabah Alnoor CO.';
             //         $tax_no_ar = 'برنامج المحوسب';
             //         $tax_no_en = 'Report System';
             //         $comp_det_ar = 'الرقم الضريبي :1111111';
@@ -761,8 +761,8 @@ class ReportController extends Controller
         }
         $list = Financial::serachspenddatarep($financial_id,$financial_month_m, $financial_month_y, $worker_id,$manager_id);
         PDF::setHeaderCallback(function ($pdf) {
-            //         $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-            //         $comp_name_en = 'NOUR SABAH';
+            //         $comp_name_ar = 'شركة صباح النور  ';
+            //         $comp_name_en = 'Sabah Alnoor CO.';
             //         $tax_no_ar = 'برنامج المحوسب';
             //         $tax_no_en = 'Report System';
             //         $comp_det_ar = 'الرقم الضريبي :1111111';
@@ -1334,8 +1334,8 @@ class ReportController extends Controller
         $shop_respon = $request->shop_respon;
 
         PDF::setHeaderCallback(function ($pdf) {
-            //         $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-            //         $comp_name_en = 'NOUR SABAH';
+            //         $comp_name_ar = 'شركة صباح النور  ';
+            //         $comp_name_en = 'Sabah Alnoor CO.';
             //         $tax_no_ar = 'برنامج المحوسب';
             //         $tax_no_en = 'Report System';
             //         $comp_det_ar = 'الرقم الضريبي :1111111';
@@ -1658,8 +1658,8 @@ class ReportController extends Controller
         $nation= $request->nation;
 
         PDF::setHeaderCallback(function ($pdf) {
-    //         $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-    //         $comp_name_en = 'NOUR SABAH';
+    //         $comp_name_ar = 'شركة صباح النور  ';
+    //         $comp_name_en = 'Sabah Alnoor CO.';
     //         $tax_no_ar = 'برنامج المحوسب';
     //         $tax_no_en = 'Report System';
     //         $comp_det_ar = 'الرقم الضريبي :1111111';
@@ -1726,8 +1726,8 @@ class ReportController extends Controller
         }
 
         PDF::setHeaderCallback(function ($pdf) {
-            $comp_name_ar = 'شركة عبدالله سعيد ال هنيدي للمقاولات  ';
-            $comp_name_en = 'NOUR SABAH';
+            $comp_name_ar = 'شركة صباح النور  ';
+            $comp_name_en = 'Sabah Alnoor CO.';
             $tax_no_ar = 'برنامج المحوسب';
             $tax_no_en = 'Report System';
             $comp_det_ar = 'الرقم الضريبي :1111111';
