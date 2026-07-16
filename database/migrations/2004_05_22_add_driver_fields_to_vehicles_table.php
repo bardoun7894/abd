@@ -3,7 +3,10 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class AddDriverFieldsToVehiclesTable extends Migration
+// Anonymous class (no global name) so a double require during migrate:fresh /
+// RefreshDatabase can't "Cannot redeclare" fatal. Filename is unchanged on purpose:
+// the recorded migration name must stay matched so this never re-runs on prod.
+return new class extends Migration
 {
     /**
      * Run the migrations.
@@ -40,4 +43,4 @@ class AddDriverFieldsToVehiclesTable extends Migration
             ]);
         });
     }
-}
+};
