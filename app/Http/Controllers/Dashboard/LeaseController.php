@@ -290,7 +290,18 @@ class LeaseController extends Controller
             'overdue', 'upcoming'
         );
 
-        return view('dashboard.leases.analytics', compact('page_title', 'stats', 'top_tenants', 'late_tenants'));
+        // Spec 006 T6-3 — "التوقعات المستقبلية للإيرادات" + "تحليل اتجاهات التحصيل
+        // باستخدام الذكاء الاصطناعي". Numbers are computed in PHP (LeaseForecastService);
+        // Gemini only phrases the trend narrative and gracefully falls back on failure.
+        $forecastService = app(\App\Services\LeaseForecastService::class);
+        $forecast = $forecastService->projectRevenue(6);
+        $collection_history = $forecastService->collectionHistory(6);
+        $trend = $forecastService->trendNarrative();
+
+        return view('dashboard.leases.analytics', compact(
+            'page_title', 'stats', 'top_tenants', 'late_tenants',
+            'forecast', 'collection_history', 'trend'
+        ));
     }
 
     /** Re-run AI extraction for one page (Spec 003 FR-206 "إعادة تشغيل الذكاء الاصطناعي"). */

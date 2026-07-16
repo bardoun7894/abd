@@ -127,6 +127,8 @@
                             .ai-status .text-danger{font-weight:700;}
                             @keyframes ai-spin{to{transform:rotate(360deg);}}
                             @media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
+                            .ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
+                            .ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
                             </style>
                             <div class="col-12 mb-4">
                                 <div class="card ai-card">
@@ -148,6 +150,7 @@
                                             <input type="file" id="ai_shop_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm ai-dropzone__input">
                                             <button type="button" id="ai_shop_extract_btn" class="btn btn-sm btn-primary text-nowrap"><i class="fa fa-magic me-1"></i>استخراج</button>
                                         </div>
+                                        <div id="ai_preview_shop" class="mt-2"></div>
                                         <div id="ai_shop_extract_status" class="fs-8 text-muted mt-2"></div>
                                     </div>
                                 </div>
@@ -184,6 +187,29 @@
                                             setv('rent_edt', d.expiry_date);
                                             setv('rent_name', d.owner_name);
                                         }
+                                        // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
+                                        try {
+                                            var _conf = (res.data && res.data.confidence) || {};
+                                            var _idMap = null;
+                                            if (d.document_type==='commercial_registration') { _idMap = { document_number:'comme_no', issue_date:'comme_sdt', expiry_date:'comme_edt' }; }
+                                            else if (d.document_type==='municipal_license') { _idMap = { document_number:'municip_no', issue_date:'municip_sdt', expiry_date:'municip_edt' }; }
+                                            else if (d.document_type==='lease') { _idMap = { document_number:'rent_no', issue_date:'rent_sdt', expiry_date:'rent_edt', owner_name:'rent_name' }; }
+                                            if (_idMap) {
+                                                Object.keys(_idMap).forEach(function(k){
+                                                    var el = document.getElementById(_idMap[k]);
+                                                    if (!el) return;
+                                                    var c = _conf[k];
+                                                    var old = document.getElementById('conf_hint_'+_idMap[k]); if (old) old.remove();
+                                                    el.classList.remove('ai-low-conf');
+                                                    if (typeof c === 'number' && c < 0.7) {
+                                                        el.classList.add('ai-low-conf');
+                                                        var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_idMap[k];
+                                                        h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                                                        el.parentNode.insertBefore(h, el.nextSibling);
+                                                    }
+                                                });
+                                            }
+                                        } catch(e) {}
                                         var extra='';
                                         if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
                                         if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
@@ -239,6 +265,23 @@
                                     });
                                 }
                                 enhance({inputId: 'ai_shop_document', zoneId: 'ai_shop_document_dropzone', nameId: 'ai_shop_document_filename', statusIds: ['ai_shop_extract_status']});
+                            })();
+                            </script>
+                            {{-- T6-2: document preview thumbnail (additive, does not touch analyze/prefill logic) --}}
+                            <script>
+                            (function(){
+                                var inp = document.getElementById('ai_shop_document');
+                                var box = document.getElementById('ai_preview_shop');
+                                if (!inp || !box || inp.dataset.prevBound) return; inp.dataset.prevBound='1';
+                                inp.addEventListener('change', function(){
+                                    box.innerHTML=''; var f=inp.files && inp.files[0]; if(!f) return;
+                                    if (/^image\//.test(f.type)) {
+                                        var img=document.createElement('img'); img.src=URL.createObjectURL(f);
+                                        img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
+                                    } else {
+                                        box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+                                    }
+                                });
                             })();
                             </script>
                             <div class="separator separator-content border-dark my-10 mb-8"><span

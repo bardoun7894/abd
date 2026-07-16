@@ -75,6 +75,8 @@
                                 .ai-status .text-danger{font-weight:700;}
                                 @keyframes ai-spin{to{transform:rotate(360deg);}}
                                 @media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
+                                .ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
+                                .ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
                                 </style>
                                 <div class="col-12 mb-4">
                                     <div class="card ai-card">
@@ -96,6 +98,7 @@
                                                 <input type="file" id="ai_worker_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm ai-dropzone__input">
                                                 <button type="button" id="ai_worker_extract_btn" class="btn btn-sm btn-primary text-nowrap"><i class="fa fa-magic me-1"></i>استخراج</button>
                                             </div>
+                                            <div id="ai_preview_workers" class="mt-2"></div>
                                             <div id="ai_worker_extract_status" class="fs-8 text-muted mt-2"></div>
                                         </div>
                                     </div>
@@ -117,6 +120,24 @@
                                             setv('worker_name', d.worker_name); setv('ssn', d.ssn); setv('passport_no', d.passport_no);
                                             setv('dob', d.dob); setv('doe', d.doe); setv('dop', d.dop);
                                             if(d.nation_id){ var s=document.getElementById('nation_id'); if(s){ s.value=String(d.nation_id); if(window.jQuery){ jQuery(s).trigger('change'); } } }
+                                            // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
+                                            try {
+                                                var _conf = (res.data && res.data.confidence) || {};
+                                                var _map = { worker_name:'worker_name', ssn:'ssn', passport_no:'passport_no', dob:'dob', doe:'doe', dop:'dop' };
+                                                Object.keys(_map).forEach(function(k){
+                                                    var el = document.getElementById(_map[k]);
+                                                    if (!el) return;
+                                                    var c = _conf[k];
+                                                    var old = document.getElementById('conf_hint_'+_map[k]); if (old) old.remove();
+                                                    el.classList.remove('ai-low-conf');
+                                                    if (typeof c === 'number' && c < 0.7) {
+                                                        el.classList.add('ai-low-conf');
+                                                        var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_map[k];
+                                                        h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                                                        el.parentNode.insertBefore(h, el.nextSibling);
+                                                    }
+                                                });
+                                            } catch(e) {}
                                             st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(d.nationality_name?(' — الجنسية المقترحة: '+d.nationality_name):'');
                                         }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
                                     });
@@ -169,6 +190,23 @@
                                         });
                                     }
                                     enhance({inputId: 'ai_worker_document', zoneId: 'ai_worker_document_dropzone', nameId: 'ai_worker_document_filename', statusIds: ['ai_worker_extract_status']});
+                                })();
+                                </script>
+                                {{-- T6-2: document preview thumbnail (additive, does not touch analyze/prefill logic) --}}
+                                <script>
+                                (function(){
+                                    var inp = document.getElementById('ai_worker_document');
+                                    var box = document.getElementById('ai_preview_workers');
+                                    if (!inp || !box || inp.dataset.prevBound) return; inp.dataset.prevBound='1';
+                                    inp.addEventListener('change', function(){
+                                        box.innerHTML=''; var f=inp.files && inp.files[0]; if(!f) return;
+                                        if (/^image\//.test(f.type)) {
+                                            var img=document.createElement('img'); img.src=URL.createObjectURL(f);
+                                            img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
+                                        } else {
+                                            box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+                                        }
+                                    });
                                 })();
                                 </script>
                                 <div class="mb-6 row">

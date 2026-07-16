@@ -35,6 +35,8 @@
 .ai-status .text-danger{font-weight:700;}
 @keyframes ai-spin{to{transform:rotate(360deg);}}
 @media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
+.ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
+.ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
 </style>
 @endonce
 <div class="col-12 mb-4">
@@ -57,6 +59,7 @@
                 <input type="file" id="ai_letter" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm ai-dropzone__input">
                 <button type="button" id="ai_analyze_btn" class="btn btn-sm btn-primary text-nowrap"><i class="fa fa-magic me-1"></i>تحليل</button>
             </div>
+            <div id="ai_preview_moraslat" class="mt-2"></div>
             <div id="ai_analyze_status" class="fs-8 text-muted mt-2"></div>
         </div>
     </div>
@@ -114,6 +117,24 @@
                         var s = document.getElementById('moraslat_categoty_id');
                         if (s) { s.value = String(d.moraslat_categoty_id); if (window.jQuery) { jQuery(s).trigger('change'); } }
                     }
+                    // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
+                    try {
+                        var _conf = (res.data && res.data.confidence) || {};
+                        var _map = { category: 'moraslat_categoty_id' };
+                        Object.keys(_map).forEach(function(k){
+                            var el = document.getElementById(_map[k]);
+                            if (!el) return;
+                            var c = _conf[k];
+                            var old = document.getElementById('conf_hint_'+_map[k]); if (old) old.remove();
+                            el.classList.remove('ai-low-conf');
+                            if (typeof c === 'number' && c < 0.7) {
+                                el.classList.add('ai-low-conf');
+                                var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_map[k];
+                                h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                                el.parentNode.insertBefore(h, el.nextSibling);
+                            }
+                        });
+                    } catch(e) {}
                     var msg = '<span class="text-success">تم التحليل ✓ راجع الحقول ثم احفظ</span>';
                     if (d.category_name) { msg += ' — التصنيف المقترح: ' + d.category_name; }
                     if (d.type_name) { msg += ' — نوع المراسلة المقترح: ' + d.type_name + ' (غيّره أعلاه يدوياً إن اختلف عن النوع الحالي)'; }
@@ -198,5 +219,23 @@
         });
     }
     enhance({inputId: 'ai_letter', zoneId: 'ai_letter_dropzone', nameId: 'ai_letter_filename', statusIds: ['ai_analyze_status', 'ai_draft_status']});
+})();
+</script>
+
+{{-- T6-2: document preview thumbnail (additive, does not touch analyze/prefill logic) --}}
+<script>
+(function(){
+    var inp = document.getElementById('ai_letter');
+    var box = document.getElementById('ai_preview_moraslat');
+    if (!inp || !box || inp.dataset.prevBound) return; inp.dataset.prevBound='1';
+    inp.addEventListener('change', function(){
+        box.innerHTML=''; var f=inp.files && inp.files[0]; if(!f) return;
+        if (/^image\//.test(f.type)) {
+            var img=document.createElement('img'); img.src=URL.createObjectURL(f);
+            img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
+        } else {
+            box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+        }
+    });
 })();
 </script>

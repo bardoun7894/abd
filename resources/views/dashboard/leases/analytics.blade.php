@@ -44,6 +44,52 @@
         </div>
     </div>
 
+    {{-- Spec 006 T6-3: future revenue forecast + AI collection-trend analysis --}}
+    <div class="col-xl-6">
+        <div class="card card-flush h-100">
+            <div class="card-header"><h3 class="card-title">التوقعات المستقبلية للإيرادات</h3></div>
+            <div class="card-body"><canvas id="forecastChart" height="160"></canvas></div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card card-flush h-100">
+            <div class="card-header">
+                <h3 class="card-title">تحليل الذكاء الاصطناعي للتحصيل</h3>
+            </div>
+            <div class="card-body">
+                @if ($trend['source'] === 'ai' && $trend['narrative'])
+                    <div class="d-flex align-items-start mb-4">
+                        <i class="ki-duotone ki-abstract-26 fs-2 text-primary me-2 mt-1">
+                            <span class="path1"></span><span class="path2"></span>
+                        </i>
+                        <p class="mb-0">{{ $trend['narrative'] }}</p>
+                    </div>
+                @else
+                    <div class="text-muted fs-8 mb-3">
+                        تعذّر توليد التحليل النصي بالذكاء الاصطناعي حالياً؛ إليك أرقام اتجاه التحصيل الخام:
+                    </div>
+                @endif
+                <table class="table table-row-dashed align-middle fs-7">
+                    <thead><tr class="fw-bold text-muted">
+                        <th>الشهر</th><th class="text-end">المستحق</th><th class="text-end">المحصّل</th><th class="text-end">النسبة %</th>
+                    </tr></thead>
+                    <tbody>
+                    @forelse ($collection_history as $h)
+                        <tr>
+                            <td>{{ $h['month'] }}</td>
+                            <td class="text-end">{{ number_format($h['due'], 2) }}</td>
+                            <td class="text-end">{{ number_format($h['paid'], 2) }}</td>
+                            <td class="text-end fw-bold {{ $h['rate'] >= 80 ? 'text-success' : ($h['rate'] >= 50 ? 'text-warning' : 'text-danger') }}">{{ $h['rate'] }}%</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="4" class="text-muted text-center">لا توجد بيانات كافية</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     {{-- top / late tenants --}}
     <div class="col-xl-6">
         <div class="card card-flush">
@@ -101,6 +147,17 @@
                 backgroundColor: ['#7239ea', '#50cd89', '#009ef7'] }]
         },
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+    new Chart(document.getElementById('forecastChart'), {
+        type: 'line',
+        data: {
+            labels: [@foreach ($forecast as $f)'{{ $f['month'] }}',@endforeach],
+            datasets: [
+                { label: 'المستحق المجدوَل', data: [@foreach ($forecast as $f){{ (float) $f['scheduled'] }},@endforeach], borderColor: '#7239ea', backgroundColor: 'rgba(114,57,234,0.1)', tension: 0.3 },
+                { label: 'الإيراد المتوقَّع (مرجّح بمعدل التحصيل)', data: [@foreach ($forecast as $f){{ (float) $f['projected'] }},@endforeach], borderColor: '#50cd89', backgroundColor: 'rgba(80,205,137,0.1)', tension: 0.3 }
+            ]
+        },
+        options: { plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
     });
 })();
 </script>

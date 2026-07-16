@@ -32,6 +32,8 @@
 .ai-status .text-warning{font-weight:700;}
 @keyframes ai-spin{to{transform:rotate(360deg);}}
 @media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
+.ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
+.ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
 </style>
 @endonce
 <div class="col-12 mb-4">
@@ -54,6 +56,7 @@
                 <input type="file" id="ai_invoice" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm ai-dropzone__input">
                 <button type="button" id="ai_purchase_extract_btn" class="btn btn-sm btn-primary text-nowrap"><i class="fa fa-magic me-1"></i>استخراج</button>
             </div>
+            <div id="ai_preview_purchase" class="mt-2"></div>
             <div id="ai_purchase_extract_status" class="fs-8 text-muted mt-2"></div>
         </div>
     </div>
@@ -89,6 +92,24 @@
                 setv('purchase_price', d.purchase_price);
                 setv('tax_number', d.tax_number);
                 setv('note', d.note);
+                // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
+                try {
+                    var _conf = (res.data && res.data.confidence) || {};
+                    var _map = { invoice_number:'purchase_no', invoice_date:'purchase_dt', supplier_name:'purchase_respon', total_incl_vat:'purchase_price', supplier_tax_number:'tax_number' };
+                    Object.keys(_map).forEach(function(k){
+                        var el = document.getElementById(_map[k]);
+                        if (!el) return;
+                        var c = _conf[k];
+                        var old = document.getElementById('conf_hint_'+_map[k]); if (old) old.remove();
+                        el.classList.remove('ai-low-conf');
+                        if (typeof c === 'number' && c < 0.7) {
+                            el.classList.add('ai-low-conf');
+                            var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_map[k];
+                            h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                            el.parentNode.insertBefore(h, el.nextSibling);
+                        }
+                    });
+                } catch(e) {}
                 var msg = '<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم اختر المحل/قائد المجموعة واحفظ</span>';
                 if (d.needs_review) { msg += ' — <span class="text-warning">تحتاج مراجعة يدوية لبعض الحقول</span>'; }
                 st.innerHTML = msg;
@@ -145,5 +166,23 @@
         });
     }
     enhance({inputId: 'ai_invoice', zoneId: 'ai_invoice_dropzone', nameId: 'ai_invoice_filename', statusIds: ['ai_purchase_extract_status']});
+})();
+</script>
+
+{{-- T6-2: document preview thumbnail (additive, does not touch analyze/prefill logic) --}}
+<script>
+(function(){
+    var inp = document.getElementById('ai_invoice');
+    var box = document.getElementById('ai_preview_purchase');
+    if (!inp || !box || inp.dataset.prevBound) return; inp.dataset.prevBound='1';
+    inp.addEventListener('change', function(){
+        box.innerHTML=''; var f=inp.files && inp.files[0]; if(!f) return;
+        if (/^image\//.test(f.type)) {
+            var img=document.createElement('img'); img.src=URL.createObjectURL(f);
+            img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
+        } else {
+            box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+        }
+    });
 })();
 </script>

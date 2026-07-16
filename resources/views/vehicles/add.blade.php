@@ -83,6 +83,8 @@
                 .ai-status .text-danger{font-weight:700;}
                 @keyframes ai-spin{to{transform:rotate(360deg);}}
                 @media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
+                .ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
+                .ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
                 </style>
                 <div class="card ai-card mb-4">
                     <div class="card-body py-4">
@@ -122,6 +124,24 @@
                             function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; } }
                             setv('plate_number', d.plate_number); setv('owner_name', d.owner_name); setv('model', d.model);
                             setv('license_expiry', d.license_expiry); setv('insurance_expiry', d.insurance_expiry); setv('operation_card_expiry', d.operation_card_expiry);
+                            // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
+                            try {
+                                var _conf = (res.data && res.data.confidence) || {};
+                                var _map = { plate_number:'plate_number', license_expiry:'license_expiry', insurance_expiry:'insurance_expiry', operation_card_expiry:'operation_card_expiry' };
+                                Object.keys(_map).forEach(function(k){
+                                    var el = document.getElementById(_map[k]);
+                                    if (!el) return;
+                                    var c = _conf[k];
+                                    var old = document.getElementById('conf_hint_'+_map[k]); if (old) old.remove();
+                                    el.classList.remove('ai-low-conf');
+                                    if (typeof c === 'number' && c < 0.7) {
+                                        el.classList.add('ai-low-conf');
+                                        var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_map[k];
+                                        h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                                        el.parentNode.insertBefore(h, el.nextSibling);
+                                    }
+                                });
+                            } catch(e) {}
                             st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>';
                         }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
                     });
