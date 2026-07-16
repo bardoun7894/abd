@@ -1221,19 +1221,17 @@ class ExpenseController extends Controller
         ]);
 
         $file = $request->file('receipt');
-        $dir = public_path('uploads/expense/ai');
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
-        $file->move($dir, $name);
-        $abs = $dir.'/'.$name;
-
+        $ds = app(\App\Services\DocumentStorage::class);
+        $tmp = $ds->tempWorkingCopy($file);
         try {
-            $data = app(\App\Services\ExpenseAiExtractor::class)->extract($abs);
+            $data = app(\App\Services\ExpenseAiExtractor::class)->extract($tmp);
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        } finally {
+            @unlink($tmp);
         }
+        $stored = $ds->store($file, 'expense');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'expense', 'filename' => $stored['filename']]);
 
         \App\Services\AuditLogger::log('expense', null, \App\Services\AuditLogger::EXTRACT, [
             'note' => 'استخراج إيصال مصروف بالذكاء الاصطناعي',
@@ -1249,7 +1247,7 @@ class ExpenseController extends Controller
                 'expense_categoty_id' => $data['expense_categoty_id'],
                 'category_name' => $data['category_name'],
                 'confidence' => $data['field_confidence'],
-                'receipt_url' => 'uploads/expense/ai/'.$name,
+                'receipt_url' => $fileUrl,
             ],
         ]);
     }

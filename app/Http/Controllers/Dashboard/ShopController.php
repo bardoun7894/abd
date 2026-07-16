@@ -1966,19 +1966,17 @@ class ShopController extends Controller
         ]);
 
         $file = $request->file('document');
-        $dir = public_path('uploads/shop/ai');
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
-        $file->move($dir, $name);
-        $abs = $dir.'/'.$name;
-
+        $ds = app(\App\Services\DocumentStorage::class);
+        $tmp = $ds->tempWorkingCopy($file);
         try {
-            $data = app(\App\Services\ShopAiExtractor::class)->extract($abs);
+            $data = app(\App\Services\ShopAiExtractor::class)->extract($tmp);
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        } finally {
+            @unlink($tmp);
         }
+        $stored = $ds->store($file, 'shop');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'shop', 'filename' => $stored['filename']]);
 
         \App\Services\AuditLogger::log('shop', null, \App\Services\AuditLogger::EXTRACT, [
             'note' => 'استخراج مستند محل بالذكاء الاصطناعي',
@@ -1994,7 +1992,7 @@ class ShopController extends Controller
                 'owner_name' => $data['owner_name'],
                 'rent_amount' => $data['rent_amount'],
                 'confidence' => $data['field_confidence'],
-                'document_url' => 'uploads/shop/ai/'.$name,
+                'document_url' => $fileUrl,
             ],
         ]);
     }

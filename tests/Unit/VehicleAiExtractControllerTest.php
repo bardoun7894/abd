@@ -15,6 +15,10 @@ afterEach(function () {
     if (File::isDirectory($dir)) {
         File::deleteDirectory($dir);
     }
+    $privateDir = storage_path('app/private/uploads/vehicles/ai');
+    if (File::isDirectory($privateDir)) {
+        File::deleteDirectory($privateDir);
+    }
 });
 
 function fakeVehicleDocument(): UploadedFile
@@ -60,8 +64,12 @@ it('aiExtract() returns plate number and expiry dates for the vehicle form to pr
     expect($payload['data']['license_expiry'])->toBe('2026-04-10');
     expect($payload['data']['insurance_expiry'])->toBe('2026-06-01');
     expect($payload['data']['operation_card_expiry'])->toBe('2026-08-15');
-    expect($payload['data']['document_url'])->toStartWith('uploads/vehicles/ai/');
-    expect(is_file(public_path($payload['data']['document_url'])))->toBeTrue();
+    $storedFilename = basename($payload['data']['document_url']);
+    $expectedUrl = route('dashboard.documents.serve', ['module' => 'vehicles', 'filename' => $storedFilename]);
+    expect($payload['data']['document_url'])->toBe($expectedUrl);
+
+    $privatePath = storage_path('app/private/uploads/vehicles/ai/'.$storedFilename);
+    expect(is_file($privatePath))->toBeTrue();
 });
 
 it('aiExtract() returns a 422 with an Arabic error message when Gemini extraction fails', function () {

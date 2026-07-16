@@ -638,23 +638,22 @@ if ((($x->is_read == '0'||$x->is_read == '1') and $x->moraslat_status_id =='') |
         ]);
 
         $file = $request->file('letter');
-        $dir = public_path('uploads/moraslat/ai');
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
-        $file->move($dir, $name);
-        $abs = $dir.'/'.$name;
+        $ds = app(\App\Services\DocumentStorage::class);
+        $tmp = $ds->tempWorkingCopy($file);
 
         $types = DB::table('moraslat_type')->get();
         $categories = DB::table('moraslat_categoty')->get();
         $statuses = DB::table('moraslat_status')->get();
 
         try {
-            $data = app(\App\Services\MoraslatAiExtractor::class)->analyze($abs, $types, $categories, $statuses);
+            $data = app(\App\Services\MoraslatAiExtractor::class)->analyze($tmp, $types, $categories, $statuses);
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => 'تعذّر تحليل الخطاب: '.$e->getMessage()], 422);
+        } finally {
+            @unlink($tmp);
         }
+        $stored = $ds->store($file, 'moraslat');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'moraslat', 'filename' => $stored['filename']]);
 
         \App\Services\AuditLogger::log('moraslat', null, \App\Services\AuditLogger::EXTRACT, [
             'note' => 'تحليل خطاب مراسلة بالذكاء الاصطناعي',
@@ -679,7 +678,7 @@ if ((($x->is_read == '0'||$x->is_read == '1') and $x->moraslat_status_id =='') |
                     'category' => $data['suggested_category_score'],
                     'status' => $data['suggested_status_score'],
                 ],
-                'letter_url' => 'uploads/moraslat/ai/'.$name,
+                'letter_url' => $fileUrl,
             ],
         ]);
     }

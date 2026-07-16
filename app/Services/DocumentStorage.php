@@ -87,6 +87,20 @@ class DocumentStorage
         throw new \RuntimeException("Document not found: {$module}/{$filename}");
     }
 
+    /**
+     * Write the uploaded file to a short-lived plaintext temp path WITH the
+     * original extension, so an AI extractor can read it before we store the
+     * (possibly encrypted) copy. Caller MUST @unlink the returned path.
+     */
+    public function tempWorkingCopy(UploadedFile $file): string
+    {
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $tmp = sys_get_temp_dir().'/aidoc_'.Str::random(10).'.'.$ext;
+        copy($file->getRealPath(), $tmp);
+
+        return $tmp;
+    }
+
     private function privateDir(string $module): string
     {
         return rtrim(config('documents.private_root'), '/').'/'.$module.'/ai';

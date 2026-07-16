@@ -368,23 +368,21 @@ class PurchaseController extends Controller
         ]);
 
         $file = $request->file('invoice');
-        $dir = public_path('uploads/purchase/ai');
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
-        $file->move($dir, $name);
-        $abs = $dir.'/'.$name;
-
+        $ds = app(\App\Services\DocumentStorage::class);
+        $tmp = $ds->tempWorkingCopy($file);
         try {
-            $extracted = app(\App\Services\InvoiceExtractionService::class)->extractInvoice($abs);
-            $extracted['image_path'] = 'uploads/purchase/ai/'.$name;
-            $extracted['batch_id'] = null;
-            $extracted['page_number'] = null;
-            $row = \App\Services\InvoicePurchaseMapper::buildPurchaseRow($extracted, null, null, (int) Auth::id());
+            $extracted = app(\App\Services\InvoiceExtractionService::class)->extractInvoice($tmp);
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج بيانات الفاتورة: '.$e->getMessage()], 422);
+        } finally {
+            @unlink($tmp);
         }
+        $stored = $ds->store($file, 'purchase');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'purchase', 'filename' => $stored['filename']]);
+        $extracted['image_path'] = $fileUrl;
+        $extracted['batch_id'] = null;
+        $extracted['page_number'] = null;
+        $row = \App\Services\InvoicePurchaseMapper::buildPurchaseRow($extracted, null, null, (int) Auth::id());
 
         \App\Services\AuditLogger::log('purchase', null, \App\Services\AuditLogger::EXTRACT, [
             'note' => 'استخراج فاتورة شراء بالذكاء الاصطناعي',

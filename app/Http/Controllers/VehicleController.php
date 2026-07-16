@@ -272,19 +272,17 @@ if ($licenseStatus) {
         ]);
 
         $file = $request->file('document');
-        $dir = public_path('uploads/vehicles/ai');
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
-        $file->move($dir, $name);
-        $abs = $dir.'/'.$name;
-
+        $ds = app(\App\Services\DocumentStorage::class);
+        $tmp = $ds->tempWorkingCopy($file);
         try {
-            $data = app(\App\Services\VehicleAiExtractor::class)->extract($abs);
+            $data = app(\App\Services\VehicleAiExtractor::class)->extract($tmp);
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        } finally {
+            @unlink($tmp);
         }
+        $stored = $ds->store($file, 'vehicles');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'vehicles', 'filename' => $stored['filename']]);
 
         \App\Services\AuditLogger::log('vehicle', null, \App\Services\AuditLogger::EXTRACT, [
             'note' => 'استخراج وثيقة مركبة بالذكاء الاصطناعي',
@@ -300,7 +298,7 @@ if ($licenseStatus) {
                 'insurance_expiry' => $data['insurance_expiry'],
                 'operation_card_expiry' => $data['operation_card_expiry'],
                 'confidence' => $data['field_confidence'],
-                'document_url' => 'uploads/vehicles/ai/'.$name,
+                'document_url' => $fileUrl,
             ],
         ]);
     }
