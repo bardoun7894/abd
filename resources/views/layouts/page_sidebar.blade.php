@@ -890,6 +890,55 @@
                 </div>
             </div>
             <?php } ?>
+
+            <!-- الذكاء الاصطناعي: استخراج الفواتير وعقود الإيجار (Spec 002/003) -->
+            <?php if(Perm::get_controll_access(100)){ ?>
+            <div data-kt-menu-trigger="click" class="menu-item menu-accordion @if(request()->routeIs('dashboard.invoices.*') || request()->routeIs('dashboard.leases.*')) hover show @endif">
+                <span class="menu-link">
+                    <span class="menu-icon"><i class="fa fa-robot fs-3 text-primary"></i></span>
+                    <span class="menu-title text-dark fw-bold">الذكاء الاصطناعي</span>
+                    <span class="menu-arrow"></span>
+                </span>
+                <div class="menu-sub menu-sub-accordion menu-active-bg">
+                    <div class="menu-item">
+                        <a class="menu-link @if(request()->routeIs('dashboard.invoices.index')) active @endif" href="{{ route('dashboard.invoices.index') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">استخراج الفواتير</span>
+                        </a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-link" href="{{ route('dashboard.invoices.create') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">رفع فاتورة</span>
+                        </a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-link" href="{{ route('dashboard.invoices.report') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">تقارير الفواتير</span>
+                        </a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-link @if(request()->routeIs('dashboard.leases.index')) active @endif" href="{{ route('dashboard.leases.index') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">عقود الإيجار</span>
+                        </a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-link" href="{{ route('dashboard.leases.unprocessed') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">عقود غير معالَجة</span>
+                        </a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-link" href="{{ route('dashboard.leases.analytics') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">تحليلات الإيجارات</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <?php } ?>
         </div>
     </div>
 </div>

@@ -18,3 +18,16 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+
+# --- added for AI-feature commit safety ---
+.env.bak*
+.env.*.bak
+memory_usage.txt
+*.pyc
+__pycache__/
+ai-knowledge-base/
+.specify/
+.pi/
+/database/*.sql
+/database/*.sql.gz
+/public/uploads/invoices/

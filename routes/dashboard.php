@@ -1,6 +1,6 @@
 <?php
 //use App\Http\Controllers\DashboardController;
-//use App\Http\Controllers\Dashboard\CategoriesController;
+use App\Http\Controllers\Dashboard\CategoriesController;
 use App\Http\Controllers\Dashboard\WorkersController;
 use App\Http\Controllers\Dashboard\EmpsController;
 use App\Http\Controllers\Dashboard\AccountingsController;
@@ -18,6 +18,8 @@ use App\Http\Controllers\Dashboard\MoraslatController;
 use App\Http\Controllers\Dashboard\GeneralController;
 use App\Http\Controllers\Dashboard\VacationController;
 use App\Http\Controllers\Dashboard\ReportController;
+use App\Http\Controllers\Dashboard\InvoiceController;
+use App\Http\Controllers\Dashboard\LeaseController;
 
 
 //use App\Http\Controllers\Dashboard\PhotoController;
@@ -426,6 +428,39 @@ Route::group([
         Route::post('/report/print_vacation_pdf', [ReportController::class, 'print_vacation_pdf'])->name('report.print_vacation_pdf');
         Route::resource('/report', ReportController::class);
 
+
+        // AI invoice extraction (isolated `invoices` DB)
+        Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/upload', [InvoiceController::class, 'create'])->name('invoices.create');
+        Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+        Route::get('/invoices/{id}', [InvoiceController::class, 'show'])->whereNumber('id')->name('invoices.show');
+        Route::get('/invoices/{id}/status', [InvoiceController::class, 'status'])->whereNumber('id')->name('invoices.status');
+        Route::post('/invoices/{id}/correct', [InvoiceController::class, 'correct'])->whereNumber('id')->name('invoices.correct');
+        Route::post('/invoices/{id}/push-to-purchase', [InvoiceController::class, 'pushToPurchase'])->whereNumber('id')->name('invoices.push');
+
+        // Invoice review / approval / error / reports (Spec 002 FR-107/108/109)
+        Route::get('/invoices/report', [InvoiceController::class, 'report'])->name('invoices.report');
+        Route::get('/invoices/errors/{batchId?}', [InvoiceController::class, 'error'])->whereNumber('batchId')->name('invoices.error');
+        Route::get('/invoices/{id}/review', [InvoiceController::class, 'review'])->whereNumber('id')->name('invoices.review');
+        Route::post('/invoices/{id}/approve', [InvoiceController::class, 'approve'])->whereNumber('id')->name('invoices.approve');
+        Route::post('/invoices/{id}/reject', [InvoiceController::class, 'reject'])->whereNumber('id')->name('invoices.reject');
+        Route::post('/invoices/{id}/reprocess', [InvoiceController::class, 'reprocess'])->whereNumber('id')->name('invoices.reprocess');
+        Route::post('/invoices/{id}/draft', [InvoiceController::class, 'draft'])->whereNumber('id')->name('invoices.draft');
+        Route::post('/invoices/{id}/manual-entry', [InvoiceController::class, 'manualEntry'])->whereNumber('id')->name('invoices.manual-entry');
+        Route::get('/invoices/{id}/file/{name}', [InvoiceController::class, 'file'])->whereNumber('id')->name('invoices.file');
+
+        // AI lease extraction (Spec 003)
+        Route::get('/leases', [LeaseController::class, 'index'])->name('leases.index');
+        Route::get('/leases/create', [LeaseController::class, 'create'])->name('leases.create');
+        Route::post('/leases', [LeaseController::class, 'store'])->name('leases.store');
+        Route::get('/leases-unprocessed', [LeaseController::class, 'unprocessed'])->name('leases.unprocessed');
+        Route::get('/leases/analytics', [LeaseController::class, 'analytics'])->name('leases.analytics');
+        Route::get('/leases/{id}', [LeaseController::class, 'show'])->whereNumber('id')->name('leases.show');
+        Route::get('/leases/{id}/status', [LeaseController::class, 'status'])->whereNumber('id')->name('leases.status');
+        Route::post('/leases/{id}/correct', [LeaseController::class, 'correct'])->whereNumber('id')->name('leases.correct');
+        Route::post('/leases/{id}/approve', [LeaseController::class, 'approve'])->whereNumber('id')->name('leases.approve');
+        Route::post('/leases/{id}/reprocess', [LeaseController::class, 'reprocess'])->whereNumber('id')->name('leases.reprocess');
+        Route::get('/leases/{id}/file/{name}', [LeaseController::class, 'file'])->whereNumber('id')->name('leases.file');
 
     });
 

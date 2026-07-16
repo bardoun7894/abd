@@ -33,6 +33,8 @@ class Kernel extends ConsoleKernel
      $schedule->command('testing:cron')->lastDayOfMonth('15:00')->runInBackground();
      $schedule->command('worker:cron')->lastDayOfMonth('15:00')->runInBackground();
 
+     // Spec 003 FR-204 — daily lease due/expiry alert scan (in-app + email + SMS).
+     $schedule->command('leases:scan-alerts')->dailyAt('06:00')->runInBackground();
 
     }
 

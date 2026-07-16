@@ -733,6 +733,23 @@ class ExpenseController extends Controller
                     'create_user' => Auth::user()->id,
                 ]);
 
+                // If initial payment is provided, create expense_detail record
+                $expense_month_pay = $request->expense_month_pay;
+                if ($result2 != '' && $expense_month_pay != '' && $expense_month_pay > 0) {
+                    $expense_price = $request->expense_price ?? 0;
+                    $expense_month_remain = $expense_price - $expense_month_pay;
+
+                    DB::table('expense_detail')->insert([
+                        'expense_id' => $result2,
+                        'expense_month_val' => $expense_price,
+                        'expense_month_pay' => $expense_month_pay,
+                        'expense_month_remain' => $expense_month_remain,
+                        'note' => 'دفعة أولية',
+                        'created_at' => Carbon::now(),
+                        'create_user' => Auth::user()->id,
+                    ]);
+                }
+
                 if ($result2 != '') {
                     $result['status'] = $result2;
                     $result['message_out'] = 'تم الحفظ بنجاح';
@@ -815,28 +832,34 @@ class ExpenseController extends Controller
 
     public function updstore(Request $request)
     {
-        if (Perm::get_function_access(61)) {
+        $result = ['status' => false, 'message' => '', 'message_out' => ''];
+        
+        try {
+            if (!Perm::get_function_access(61)) {
+                $result['message_out'] = 'لا تملك صلاحية';
+                return response()->json($result);
+            }
+            
             $id = $request->expense_id_db;
-            $expense_type_id =   $request->expense_type_id;
+            $expense_type_id = trim($request->expense_type_id);
+            $manager_id = '';
+            
             if ($expense_type_id == 1) {
                 $manager_db = DB::table('shop')->select('manager_id')->where('shop_id', $request->shop_id)->first();
                 if ($manager_db) {
                     $manager_id = $manager_db->manager_id;
-                } else {
-                    $manager_id = '';
                 }
             }
             if ($expense_type_id == 3) {
                 $manager_db = DB::table('workers')->select('manager_id')->where('worker_id', $request->worker_id)->first();
                 if ($manager_db) {
                     $manager_id = $manager_db->manager_id;
-                } else {
-                    $manager_id = '';
                 }
             }
             if ($expense_type_id == 2) {
                 $manager_id = $request->manager_id;
             }
+            
             $request->merge([
                 'manager_id' =>  $manager_id,
             ]);
@@ -853,8 +876,8 @@ class ExpenseController extends Controller
                 'expense_categoty_id' => ['required'],
                 'manager_id' => ['required'],
 
-                'shop_id' => [Rule::requiredIf($request->expense_type_id == 1), 'nullable'],
-                'worker_id' => [Rule::requiredIf($request->expense_type_id == 3), 'nullable']
+                'shop_id' => [Rule::requiredIf(trim($request->expense_type_id) == 1), 'nullable'],
+                'worker_id' => [Rule::requiredIf(trim($request->expense_type_id) == 3), 'nullable']
             ]);
             $validator->setAttributeNames($attributeNames);
             if ($validator->fails()) {
@@ -862,9 +885,6 @@ class ExpenseController extends Controller
                 $result['message'] = $validator->errors();
                 $result['message_out'] = '';
             } else {
-                $ERROR_FLAG = 0;
-
-
                 $expensefile_url = '';
                 if ($request->hasFile('expensefile')) {
                     $expensefile_name = time() . '.' . $request->expensefile->extension();
@@ -877,12 +897,11 @@ class ExpenseController extends Controller
                     $expensefile_url = $request->expensefile_db;
                 }
 
-
                 $result2 = DB::table('expense')
                     ->where('expense_id', $id)
                     ->update([
-                        'expense_type_id' => $request->expense_type_id,
-                        'expense_categoty_id' => $request->expense_categoty_id,
+                        'expense_type_id' => trim($request->expense_type_id),
+                        'expense_categoty_id' => trim($request->expense_categoty_id),
                         'shop_id' => $request->shop_id,
                         'worker_id' => $request->worker_id,
                         'expense_respon' => $request->expense_respon,
@@ -893,11 +912,16 @@ class ExpenseController extends Controller
                         'updated_at' => Carbon::now(),
                         'update_user' => Auth::user()->id,
                     ]);
-                $result['status'] = $result2;
+                $result['status'] = true;
                 $result['message_out'] = 'تم الحفظ بنجاح';
             }
-            return response()->json($result);
+        } catch (\Exception $e) {
+            \Log::error('Expense updstore error: ' . $e->getMessage() . ' at line ' . $e->getLine());
+            $result['status'] = false;
+            $result['message_out'] = 'حدث خطأ: ' . $e->getMessage();
         }
+        
+        return response()->json($result);
     }
 
 

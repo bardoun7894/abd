@@ -152,7 +152,7 @@
     <script type="text/javascript" src="{{ asset('assets/module/expense_j.js') }}?t={{ config('global.ver.version_all') }}">
     </script>
     <script>
-load_expense_form({{ $x->expense_type_id }},2);
+load_expense_form({{ $expense->expense_type_id }},2);
 
         $('.input_date_').flatpickr({
             format: 'dd-mm-yyyy',

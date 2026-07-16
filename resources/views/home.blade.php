@@ -12,6 +12,12 @@
 
     @inject('Carbon', 'Carbon\Carbon')
 
+    @php
+        // Defensive default so the page never breaks if the controller hasn't (yet) supplied filters.
+        $filters = (isset($filters) && is_array($filters)) ? $filters : [];
+        $filters = array_merge(['doe_from' => '', 'doe_to' => '', 'dop_from' => '', 'dop_to' => '', 'doe_status' => '', 'dop_status' => ''], $filters);
+    @endphp
+
 
 
 
@@ -30,8 +36,56 @@
 
         <div class="col-xl-4 ">
             <div class="card card-xl-stretch mb-xl-8">
-                <div class="card-header border-0">
+                <div class="card-header border-0 d-flex justify-content-between align-items-center">
                     <h3 class="card-title fw-bolder text-info">اشعارات العمال</h3>
+                    <button class="btn btn-sm btn-light-primary py-1 px-3" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#workerHomeFilter">
+                        <i class="fa fa-filter me-1"></i> تصفية
+                    </button>
+                </div>
+                <div id="workerHomeFilter" class="collapse {{ array_filter($filters) ? 'show' : '' }} px-5 pb-2">
+                    <form method="GET" action="{{ route('home') }}" class="row g-2 mb-3">
+                        <div class="col-12"><span class="fw-bold text-gray-700 fs-8">انتهاء الإقامة</span></div>
+                        <div class="col-6">
+                            <input type="date" name="doe_from" value="{{ $filters['doe_from'] }}"
+                                class="form-control form-control-sm" placeholder="من">
+                        </div>
+                        <div class="col-6">
+                            <input type="date" name="doe_to" value="{{ $filters['doe_to'] }}"
+                                class="form-control form-control-sm" placeholder="إلى">
+                        </div>
+                        <div class="col-12">
+                            <select name="doe_status" class="form-select form-select-sm">
+                                <option value="">حالة الإقامة: الكل</option>
+                                <option value="1" {{ $filters['doe_status'] == '1' ? 'selected' : '' }}>سارية</option>
+                                <option value="2" {{ $filters['doe_status'] == '2' ? 'selected' : '' }}>منتهية</option>
+                                <option value="3" {{ $filters['doe_status'] == '3' ? 'selected' : '' }}>تنتهي خلال 30 يوم</option>
+                                <option value="4" {{ $filters['doe_status'] == '4' ? 'selected' : '' }}>غير مدخلة</option>
+                            </select>
+                        </div>
+                        <div class="col-12 mt-2"><span class="fw-bold text-gray-700 fs-8">انتهاء الجواز</span></div>
+                        <div class="col-6">
+                            <input type="date" name="dop_from" value="{{ $filters['dop_from'] }}"
+                                class="form-control form-control-sm" placeholder="من">
+                        </div>
+                        <div class="col-6">
+                            <input type="date" name="dop_to" value="{{ $filters['dop_to'] }}"
+                                class="form-control form-control-sm" placeholder="إلى">
+                        </div>
+                        <div class="col-12">
+                            <select name="dop_status" class="form-select form-select-sm">
+                                <option value="">حالة الجواز: الكل</option>
+                                <option value="1" {{ $filters['dop_status'] == '1' ? 'selected' : '' }}>سارية</option>
+                                <option value="2" {{ $filters['dop_status'] == '2' ? 'selected' : '' }}>منتهية</option>
+                                <option value="3" {{ $filters['dop_status'] == '3' ? 'selected' : '' }}>تنتهي خلال 30 يوم</option>
+                                <option value="4" {{ $filters['dop_status'] == '4' ? 'selected' : '' }}>غير مدخل</option>
+                            </select>
+                        </div>
+                        <div class="col-12 d-flex gap-2 mt-2">
+                            <button type="submit" class="btn btn-sm btn-primary flex-grow-1 py-1">تطبيق</button>
+                            <a href="{{ route('home') }}" class="btn btn-sm btn-light py-1">إعادة تعيين</a>
+                        </div>
+                    </form>
                 </div>
                 <div class="card-body pt-2 card-scroll h-300px">
                     <?php

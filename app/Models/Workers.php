@@ -756,10 +756,16 @@ if ($nation != "") {
 
 
 
-    public function scopeserachspendhome($query)
+    public function scopeserachspendhome($query, $doe_from='', $doe_to='', $dop_from='', $dop_to='', $doe_status='', $dop_status='')
     {
-        $end_dt=2;
-        $end_p_dt=2;
+        // Optional home-widget filters. Empty value = no constraint (shows all workers).
+        // Dates must already be sanitised to Y-m-d by the caller; statuses to a single 1-4.
+        $doe_from   = trim($doe_from);
+        $doe_to     = trim($doe_to);
+        $dop_from   = trim($dop_from);
+        $dop_to     = trim($dop_to);
+        $doe_status = trim($doe_status);
+        $dop_status = trim($dop_status);
 
         $rs_stmt1 = " SELECT w.*,
 
@@ -806,25 +812,41 @@ $rs_stmt1 = $rs_stmt1 . " and  w.create_user = $this->user_id ";
 
 
 
-            $rs_stmt1 = $rs_stmt1 . " and (
-        (
-            CASE
-            WHEN  w.doe BETWEEN CURDATE() and DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN '3'
-            WHEN  w.doe  <=CURDATE() THEN '2'
-            WHEN  w.doe is null THEN '4'
-            ELSE '1'
-            END) IN ($end_dt)
+            // Home worker widget lists ALL workers by default (so Excel-imported workers with
+            // still-valid documents are never hidden). The hardcoded expired-only filter was
+            // removed; instead the admin can optionally narrow by iqama (doe) and passport (dop)
+            // expiry date range and/or status. Each empty filter is skipped.
 
-           or
-            (
-                CASE
-                WHEN  w.dop BETWEEN CURDATE() and DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN '3'
-                WHEN  w.dop  <=CURDATE() THEN '2'
-                WHEN  w.dop is null THEN '4'
-                ELSE '1'
-                END) IN ($end_p_dt)
-                )
-        ";
+            // Iqama (residence / doe) expiry date range
+            if ($doe_from != "") {
+                $rs_stmt1 = $rs_stmt1 . " and w.doe >= '$doe_from' ";
+            }
+            if ($doe_to != "") {
+                $rs_stmt1 = $rs_stmt1 . " and w.doe <= '$doe_to' ";
+            }
+            // Passport (dop) expiry date range
+            if ($dop_from != "") {
+                $rs_stmt1 = $rs_stmt1 . " and w.dop >= '$dop_from' ";
+            }
+            if ($dop_to != "") {
+                $rs_stmt1 = $rs_stmt1 . " and w.dop <= '$dop_to' ";
+            }
+            // Iqama expiry status: 1=valid, 2=expired, 3=expiring<=30d, 4=not entered
+            if ($doe_status != "") {
+                $rs_stmt1 = $rs_stmt1 . " and (CASE
+                    WHEN  w.doe BETWEEN CURDATE() and DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN '3'
+                    WHEN  w.doe <=CURDATE() THEN '2'
+                    WHEN  w.doe is null THEN '4'
+                    ELSE '1' END) = '$doe_status' ";
+            }
+            // Passport expiry status (same codes)
+            if ($dop_status != "") {
+                $rs_stmt1 = $rs_stmt1 . " and (CASE
+                    WHEN  w.dop BETWEEN CURDATE() and DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN '3'
+                    WHEN  w.dop <=CURDATE() THEN '2'
+                    WHEN  w.dop is null THEN '4'
+                    ELSE '1' END) = '$dop_status' ";
+            }
 
 
 

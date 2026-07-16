@@ -42,6 +42,17 @@ return [
             'after_commit' => false,
         ],
 
+        // Isolated queue for the invoice feature — jobs live in the invoices DB.
+        // In production set QUEUE_CONNECTION=invoices (+ a cron `queue:work invoices`).
+        'invoices' => [
+            'driver' => 'database',
+            'connection' => 'invoices',
+            'table' => 'jobs',
+            'queue' => 'default',
+            'retry_after' => 1800,
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => 'localhost',

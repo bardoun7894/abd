@@ -73,6 +73,30 @@ return [
     'charset' => 'AL32UTF8',
     'prefix' => '',
 ],
+        /*
+        | Isolated connection for the AI invoice-extraction feature. Keeps every
+        | new table out of the main app schema. Defaults to a SQLite file for
+        | local testing; set INVOICES_DB_DRIVER=mysql + INVOICES_DB_DATABASE=abd_invoices
+        | in production. Migrations live in database/migrations/invoices.
+        */
+        'invoices' => [
+            'driver' => env('INVOICES_DB_DRIVER', 'sqlite'),
+            'url' => env('INVOICES_DATABASE_URL'),
+            'host' => env('INVOICES_DB_HOST', '127.0.0.1'),
+            'port' => env('INVOICES_DB_PORT', '3306'),
+            'database' => env('INVOICES_DB_DATABASE', database_path('invoices.sqlite')),
+            'username' => env('INVOICES_DB_USERNAME', 'root'),
+            'password' => env('INVOICES_DB_PASSWORD', ''),
+            'unix_socket' => env('INVOICES_DB_SOCKET', ''),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+            'strict' => false,
+            'engine' => null,
+        ],
+
         'pgsql' => [
             'driver' => 'pgsql',
             'url' => env('DATABASE_URL'),

@@ -15,6 +15,11 @@ Route::get('show_404', function () {
     return redirect('/404');
 })->name('404');
 
+// LOCAL-ONLY invoice-extraction test UI (no auth / no main DB). Gated on env('INVOICE_LOCAL_UI').
+Route::get('/local-invoices', [\App\Http\Controllers\InvoiceLocalTestController::class, 'index']);
+Route::post('/local-invoices', [\App\Http\Controllers\InvoiceLocalTestController::class, 'store']);
+Route::get('/local-invoices/{id}', [\App\Http\Controllers\InvoiceLocalTestController::class, 'show'])->whereNumber('id');
+
 
 Route::get('show_404', [HomeController::class, 'show_404'])->name('show_404');
 Route::get('show_not_allow', [HomeController::class, 'show_not_allow'])->name('show_not_allow');

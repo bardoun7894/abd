@@ -17,6 +17,7 @@
         "laravel/sanctum": "^3.2",
         "laravel/tinker": "^2.8",
         "phpoffice/phpspreadsheet": "^1.29",
+        "setasign/fpdi": "^2.6",
         "tightenco/ziggy": "^1.0",
         "yajra/laravel-oci8": "10"
     },

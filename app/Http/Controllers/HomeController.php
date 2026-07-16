@@ -36,6 +36,8 @@ class HomeController extends Controller
      //   return view('load_alerts', compact('listmoraslat','count_list'));
 
      $count_notify = Moraslat::serachspendhomecount();
+        // Spec 001 FR-007 — include unread AI alerts (lease due/expiry etc.) in the bell count.
+        $count_notify += \App\Models\AppNotification::where('user_id', \Auth::id())->where('is_read', false)->count();
         $result['count_notify'] =$count_notify;
         echo json_encode($result);
 
@@ -63,15 +65,30 @@ class HomeController extends Controller
 
 
 
-    public function index()
+    public function index(Request $request)
     {
 //        dd(Hash::make('232046'));
         $page_title = 'شركة عبدالله سعيد ال هنيدي للمقاولات';
 
+        // Home worker-widget filters (iqama + passport expiry). Sanitised here so only clean
+        // values reach the raw-SQL scope: dates must be Y-m-d, statuses a single 1-4. Anything
+        // else becomes '' (no constraint), so by default the widget shows ALL workers.
+        $cleanDate = function ($v) {
+            $v = is_string($v) ? trim($v) : '';
+            return preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) ? $v : '';
+        };
+        $cleanStatus = function ($v) {
+            return in_array($v, ['1', '2', '3', '4'], true) ? $v : '';
+        };
+        $doe_from   = $cleanDate($request->input('doe_from'));
+        $doe_to     = $cleanDate($request->input('doe_to'));
+        $dop_from   = $cleanDate($request->input('dop_from'));
+        $dop_to     = $cleanDate($request->input('dop_to'));
+        $doe_status = $cleanStatus($request->input('doe_status'));
+        $dop_status = $cleanStatus($request->input('dop_status'));
+        $filters = compact('doe_from', 'doe_to', 'dop_from', 'dop_to', 'doe_status', 'dop_status');
 
-
-
-        $listworker = Workers::serachspendhome();
+        $listworker = Workers::serachspendhome($doe_from, $doe_to, $dop_from, $dop_to, $doe_status, $dop_status);
         $listmoraslat = Moraslat::serachspendhome();
 
 
@@ -147,7 +164,7 @@ class HomeController extends Controller
         $const3 = array( "ch_data_bar","ch_data_bar2");
 
 
-        return view('home', compact('page_title', 'listworker', 'listmoraslat',  $const,  $const2,  $const3));
+        return view('home', compact('page_title', 'listworker', 'listmoraslat', 'filters',  $const,  $const2,  $const3));
 
     }
 

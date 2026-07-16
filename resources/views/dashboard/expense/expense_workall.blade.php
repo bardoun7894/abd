@@ -26,13 +26,33 @@
 
 
 <div class="col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
-    <label for="expense_price" class="form-label  fs-6 fw-bold text-dark mb-3">المبلغ
+    <label for="expense_price" class="form-label required fs-6 fw-bold text-dark mb-3">المبلغ المطلوب
     </label>
     <div class="input-group">
         <div class="input-group-prepend"><span class="input-group-text"><i
                     class="far fa-id-card fa-fw text-dark"></i></span></div><input type="text" name="expense_price"
             id="expense_price" class="form-control fw-bold text-dark text-info " data-inputmask="'alias' : 'decimal'"
-            minlenght="1" maxlength="20" placeholder="المبلغ">
+            minlenght="1" maxlength="20" placeholder="المبلغ المطلوب" oninput="calc_expense_price()">
+    </div>
+</div>
+<div class="col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
+    <label for="expense_month_pay" class="form-label required fs-6 fw-bold text-dark mb-3">المبلغ المدفوع
+    </label>
+    <div class="input-group">
+        <div class="input-group-prepend"><span class="input-group-text"><i
+                    class="far fa-id-card fa-fw text-dark"></i></span></div><input type="text" name="expense_month_pay"
+            id="expense_month_pay" class="form-control fw-bold text-dark text-info " data-inputmask="'alias' : 'decimal'"
+            minlenght="1" maxlength="20" placeholder="المبلغ المدفوع" oninput="calc_expense_price()">
+    </div>
+</div>
+<div class="col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
+    <label for="expense_month_remain" class="form-label required fs-6 fw-bold text-dark mb-3">المبلغ المتبقي
+    </label>
+    <div class="input-group">
+        <div class="input-group-prepend"><span class="input-group-text"><i
+                    class="far fa-id-card fa-fw text-dark"></i></span></div><input type="text" name="expense_month_remain"
+            id="expense_month_remain" class="form-control fw-bold text-dark text-info form-control-solid" data-inputmask="'alias' : 'decimal'"
+            minlenght="1" maxlength="20" placeholder="المبلغ المتبقي" readonly>
     </div>
 </div>
 
@@ -94,6 +114,24 @@
 
 
 <script>
+    function calc_expense_price() {
+        var expense_price_v = parseFloat($('#expense_price').val());
+        var expense_month_pay_v = parseFloat($('#expense_month_pay').val());
+        var expense_month_remain_v = parseFloat($('#expense_month_remain').val());
+        if (isNaN(expense_price_v)) {
+            expense_price_v = 0;
+            $('#expense_price').val(0);
+        }
+        if (isNaN(expense_month_pay_v)) {
+            expense_month_pay_v = 0;
+            $('#expense_month_pay').val(0);
+        }
+        expense_month_remain_v = expense_price_v - expense_month_pay_v;
+        if (!isNaN(expense_month_remain_v)) {
+            $('#expense_month_remain').val(expense_month_remain_v);
+        }
+    }
+
     $(".form-select").select2({
 
     });
