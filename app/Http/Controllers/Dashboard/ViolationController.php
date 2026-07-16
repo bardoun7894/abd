@@ -540,4 +540,70 @@ $opt .= '<a class="btn btn-sm btn-dark btn-icon btn-icon-sm  violation_note_hist
 
         }
     }
+
+    /**
+     * Spec 005 T-B1 — classify a free-text violation note into a suggested side
+     * (matched against the real `violation_side` taxonomy) + severity + suggested
+     * action. Text-only, no file involved.
+     */
+    public function aiClassify(Request $request)
+    {
+        $request->validate([
+            'note' => 'required|string|max:4000',
+        ]);
+
+        try {
+            $sides = DB::table('violation_side')->get();
+            $data = app(\App\Services\ViolationAiExtractor::class)->classify($request->note, $sides);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر تصنيف المخالفة: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('violation', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'تصنيف مخالفة بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'side' => $data['side'],
+                'side_id' => $data['side_id'],
+                'severity' => $data['severity'],
+                'suggested_action' => $data['suggested_action'],
+            ],
+        ]);
+    }
+
+    /**
+     * Spec 005 T-B1 — draft a formal Arabic violation-notice letter from violation
+     * fields (name, violation type, date, note). Text-only, no file involved.
+     */
+    public function aiDraft(Request $request)
+    {
+        $request->validate([
+            'name' => 'nullable|string|max:255',
+            'violation_type' => 'nullable|string|max:255',
+            'date' => 'nullable|string|max:50',
+            'note' => 'nullable|string|max:4000',
+        ]);
+
+        try {
+            $data = app(\App\Services\ViolationAiExtractor::class)->draftNotice(
+                $request->only(['name', 'violation_type', 'date', 'note'])
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّرت صياغة الإنذار: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('violation', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'صياغة إنذار مخالفة بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'draft' => $data['draft'],
+            ],
+        ]);
+    }
 }

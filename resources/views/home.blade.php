@@ -29,6 +29,8 @@
 
     <div class="row gy-5 g-xl-8">
 
+        @include('home._ai_insight_card')
+
         <?php
         if (
         Perm::get_function_access(12) || Perm::get_function_access(13) || Perm::get_function_access(15) || Perm::get_function_access(14) ||

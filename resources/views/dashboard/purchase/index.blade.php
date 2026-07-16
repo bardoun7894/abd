@@ -51,6 +51,7 @@
                         <div class="mb-0">
                             <div class="row gx-5 mb-5">
 
+                                @include('dashboard.purchase._ai_widget')
 
                                 <div class="col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
                                     <label for="purchase_no" class="form-label required fs-6 fw-bold text-dark mb-3">رقم

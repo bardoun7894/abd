@@ -49,7 +49,7 @@
                         <div class="mb-0">
                             <div class="row gx-5 mb-5">
 
-
+                                @include('dashboard.violation._ai_widget')
 
 
                                 <div class="col-12 col-lg-4 col-md-12 col-sm-12 mb-5">

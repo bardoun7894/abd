@@ -65,6 +65,12 @@
         </div>
     @endif
 
+    <div class="d-flex justify-content-end mb-2 d-print-none">
+        <button type="button" class="btn btn-sm btn-light-primary" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i> طباعة / حفظ PDF (مع رمز ZATCA)
+        </button>
+    </div>
+
     <div class="table-responsive">
         <table class="table table-striped gy-5 gs-5 align-middle">
             <thead>
@@ -80,12 +86,23 @@
                     <th>جودة الصورة</th>
                     <th>حالة</th>
                     <th>المرفق</th>
+                    <th class="d-print-table-cell">رمز ZATCA</th>
                 </tr>
             </thead>
             <tbody id="rows"></tbody>
         </table>
     </div>
-    <div class="text-muted fs-7">تلميح: انقر على أي خلية لتعديل قيمتها، ثم انقر خارجها للحفظ. اضغط صورة المرفق لتكبيرها. الصفوف الصفراء تحتاج مراجعة.</div>
+    <div class="text-muted fs-7 d-print-none">تلميح: انقر على أي خلية لتعديل قيمتها، ثم انقر خارجها للحفظ. اضغط صورة المرفق لتكبيرها. الصفوف الصفراء تحتاج مراجعة.</div>
+
+    <style>
+        /* Print/PDF output (browser "Print to PDF") keeps the ZATCA Phase-1 QR
+           column and hides interactive-only chrome — no server PDF template
+           exists yet for this AI-extraction results screen (see InvoiceController). */
+        @media print {
+            .d-print-none { display: none !important; }
+            table.table { font-size: 10px; }
+        }
+    </style>
 
     <div id="invLb" style="position:fixed;inset:0;z-index:1090;display:none;place-items:center;background:rgba(0,0,0,.85);padding:30px" onclick="this.style.display='none'">
         <img id="invLbImg" src="" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 30px 80px -20px #000">
@@ -115,6 +132,16 @@
             return '<span class="text-muted">—</span>';
         }
 
+        function zatcaQr(v) {
+            if (v.zatca_qr_image) {
+                return '<img src="' + v.zatca_qr_image + '" title="' + esc(v.zatca_qr) + '" alt="ZATCA QR" style="height:60px;width:60px">';
+            }
+            if (v.zatca_qr) { // fallback: raw TLV base64 text (image render unavailable)
+                return '<span class="text-muted fs-9" style="word-break:break-all;max-width:140px;display:inline-block" title="' + esc(v.zatca_qr) + '">' + esc(v.zatca_qr) + '</span>';
+            }
+            return '<span class="text-muted">—</span>';
+        }
+
         function render(d) {
             $('#st').text(d.status);
             $('#bar').css('width', d.percent + '%').text(d.percent + '%');
@@ -138,9 +165,10 @@
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')
                     + '<td>' + qualityBadge(v.image_quality) + '</td>'
-                    + '<td>' + flag + '</td><td>' + attachment(v) + '</td></tr>';
+                    + '<td>' + flag + '</td><td>' + attachment(v) + '</td>'
+                    + '<td>' + zatcaQr(v) + '</td></tr>';
             });
-            $('#rows').html(html || '<tr><td colspan="11" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
+            $('#rows').html(html || '<tr><td colspan="12" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
         }
 
         function poll() {

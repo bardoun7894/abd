@@ -224,6 +224,8 @@ Route::group([
 
         Route::post('/violation/del_violation_det', [violationController::class, 'del_violation_det'])->name('violation.del_violation_det');
         Route::post('/violation/upd_violation_det', [violationController::class, 'upd_violation_det'])->name('violation.upd_violation_det');
+        Route::post('/violation/ai-classify', [violationController::class, 'aiClassify'])->name('violation.ai_classify');
+        Route::post('/violation/ai-draft', [violationController::class, 'aiDraft'])->name('violation.ai_draft');
 
 
 
@@ -324,6 +326,7 @@ Route::group([
         Route::post('/calculate/ajax_search_remark', [purchaseController::class, 'ajax_search_remark'])->name('purchase.ajax_search_remark');
         Route::post('/purchase/del_remark', [purchaseController::class, 'del_remark'])->name('purchase.del_remark');
         Route::post('/purchase/change_remark', [purchaseController::class, 'change_remark'])->name('purchase.change_remark');
+        Route::post('/purchase/ai-extract', [purchaseController::class, 'aiExtract'])->name('purchase.ai_extract');
 
 
         Route::post('/expense/tbl', [expenseController::class, 'tbl'])->name('expense.tbl');
@@ -428,6 +431,8 @@ Route::group([
         Route::post('/report/print_vacation_xlsx', [ReportController::class, 'print_vacation_xlsx'])->name('report.print_vacation_xlsx');
         Route::post('/report/print_vacation_pdf', [ReportController::class, 'print_vacation_pdf'])->name('report.print_vacation_pdf');
         Route::resource('/report', ReportController::class);
+        Route::post('/report/ai-narrate', [ReportController::class, 'aiNarrate'])->name('report.ai_narrate');
+        Route::post('/report/ai-ask', [ReportController::class, 'aiAsk'])->name('report.ai_ask');
 
 
         // AI invoice extraction (isolated `invoices` DB)
@@ -468,6 +473,8 @@ Route::group([
         Route::post('/workers/ai-extract', [WorkersController::class, 'aiExtract'])->name('workers.ai_extract');
         Route::post('/moraslat/ai-analyze', [MoraslatController::class, 'aiAnalyze'])->name('moraslat.ai_analyze');
         Route::post('/moraslat/ai-draft', [MoraslatController::class, 'aiDraft'])->name('moraslat.ai_draft');
+
+        Route::get('/documents/{module}/{filename}', [\App\Http\Controllers\DocumentController::class, 'serve'])->name('documents.serve')->where('filename', '.*');
 
     });
 

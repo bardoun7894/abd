@@ -169,7 +169,9 @@ return [
         App\Providers\RouteServiceProvider::class,
         Elibyy\TCPDF\ServiceProvider::class,
         Jenssegers\Agent\AgentServiceProvider::class,
-        Barryvdh\Debugbar\ServiceProvider::class,
+        // Debugbar is a dev-only package; it auto-registers via package discovery when
+        // installed. Do NOT hardcode it here — a prod `composer install --no-dev` omits
+        // the package and this line would fatal on boot. (Spec 005 T-D1)
     ])->toArray(),
 
     /*
@@ -188,7 +190,7 @@ return [
         'Perm' => App\Helpers\Perm::class,
         'PDF' => Elibyy\TCPDF\Facades\TCPDF::class,
         'Agent' => Jenssegers\Agent\Facades\Agent::class,
-        'Debugbar' => Barryvdh\Debugbar\Facades\Debugbar::class,
+        // 'Debugbar' alias removed — dev-only, auto-discovered. (Spec 005 T-D1)
     ])->toArray(),
 
 ];

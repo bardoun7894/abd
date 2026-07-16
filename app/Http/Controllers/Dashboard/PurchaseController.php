@@ -353,4 +353,56 @@ class PurchaseController extends Controller
             return response()->json($result);
         }
     }
+
+    /**
+     * T-B4 — AI prefill for the purchase (invoice) add form. Reuses the existing
+     * invoice-extraction pipeline (InvoiceExtractionService::extractInvoice +
+     * InvoicePurchaseMapper::buildPurchaseRow) rather than rebuilding it. Nothing
+     * is saved here — the user reviews the prefilled fields and submits the normal
+     * add form, which writes to the real `purchase` table via store().
+     */
+    public function aiExtract(Request $request)
+    {
+        $request->validate([
+            'invoice' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        $file = $request->file('invoice');
+        $dir = public_path('uploads/purchase/ai');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $file->move($dir, $name);
+        $abs = $dir.'/'.$name;
+
+        try {
+            $extracted = app(\App\Services\InvoiceExtractionService::class)->extractInvoice($abs);
+            $extracted['image_path'] = 'uploads/purchase/ai/'.$name;
+            $extracted['batch_id'] = null;
+            $extracted['page_number'] = null;
+            $row = \App\Services\InvoicePurchaseMapper::buildPurchaseRow($extracted, null, null, (int) Auth::id());
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج بيانات الفاتورة: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('purchase', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج فاتورة شراء بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'purchase_no' => $row['purchase_no'],
+                'purchase_dt' => $row['purchase_dt'],
+                'purchase_respon' => $row['purchase_respon'],
+                'purchase_price' => $row['purchase_price'],
+                'tax_number' => $row['tax_number'],
+                'note' => $row['note'],
+                'needs_review' => $extracted['needs_review'] ?? false,
+                'confidence' => $extracted['confidence'] ?? null,
+                'invoice_file_url' => $extracted['image_path'],
+            ],
+        ]);
+    }
 }

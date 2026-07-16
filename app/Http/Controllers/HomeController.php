@@ -163,8 +163,15 @@ class HomeController extends Controller
 
         $const3 = array( "ch_data_bar","ch_data_bar2");
 
+        // Spec 005 T-B3 — home AI insight card. Never throws: HomeInsightService::insight()
+        // catches its own Gemini failures and returns fallback=>true with raw numbers.
+        try {
+            $insight = app(\App\Services\HomeInsightService::class)->insight();
+        } catch (\Throwable $e) {
+            $insight = ['summary' => null, 'deltas' => [], 'fallback' => true];
+        }
 
-        return view('home', compact('page_title', 'listworker', 'listmoraslat', 'filters',  $const,  $const2,  $const3));
+        return view('home', compact('page_title', 'listworker', 'listmoraslat', 'filters', 'insight', $const,  $const2,  $const3));
 
     }
 

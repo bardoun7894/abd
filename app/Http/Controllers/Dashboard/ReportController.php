@@ -1960,15 +1960,79 @@ class ReportController extends Controller
 
     public function index()
     {
-        $sel_worker = "1";
-        $sub_add_worker = "1";
-        $page_title = 'ادخال بيانات العمال';
-        $work_place = DB::table('work_place')->get();
-        $nation = DB::table('nation')->get();
-        $job = DB::table('job')->get();
-        $const = array("work_place", "job", "nation", "sel_worker", "page_title");
-        return view('dashboard.workers.index', compact($const));
+        // NOTE: previously returned view('dashboard.workers.index') by mistake — this
+        // route (dashboard.report.index / GET /dashboard/report) has no menu link and no
+        // other view/test depends on it, so pointing it at the real reports page is safe.
+        $page_title = 'اسأل بياناتك — تقارير الذكاء الاصطناعي';
+        return view('dashboard.report.index', compact('page_title'));
     }
 
+    /**
+     * Spec 005 T-B2 — NL period summary. Computes aggregates in PHP (fixed whitelist,
+     * no raw rows sent to Gemini) then asks Gemini to phrase an Arabic narrative.
+     */
+    public function aiNarrate(Request $request)
+    {
+        $request->validate([
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date',
+        ]);
+
+        $service = app(\App\Services\ReportsNlService::class);
+        $aggregates = $service->periodAggregates($request->date_from, $request->date_to);
+
+        try {
+            $result = $service->narrate($aggregates);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر توليد الملخص: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('report', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'ملخص تقارير بالذكاء الاصطناعي (اسأل بياناتك)',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'summary' => $result['summary'],
+                'aggregates' => $aggregates,
+            ],
+        ]);
+    }
+
+    /**
+     * Spec 005 T-B2 — SAFE ask-your-data. The model NEVER generates SQL and NEVER sees
+     * raw rows; it only phrases an Arabic answer around the fixed whitelist of PHP-computed
+     * aggregates (ReportsNlService::ALLOWED_METRICS).
+     */
+    public function aiAsk(Request $request)
+    {
+        $request->validate([
+            'question' => 'required|string|max:500',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date',
+        ]);
+
+        $service = app(\App\Services\ReportsNlService::class);
+        $aggregates = $service->periodAggregates($request->date_from, $request->date_to);
+
+        try {
+            $result = $service->answer($request->question, $aggregates);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر توليد الإجابة: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('report', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'سؤال بياناتك بالذكاء الاصطناعي: '.$request->question,
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'answer' => $result['answer'],
+                'metrics_used' => $result['metrics_used'],
+            ],
+        ]);
+    }
 
 }

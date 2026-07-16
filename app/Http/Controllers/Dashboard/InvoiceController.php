@@ -11,6 +11,7 @@ use App\Models\InvoiceItem;
 use App\Models\Shop;
 use App\Services\AuditLogger;
 use App\Services\InvoicePurchaseMapper;
+use App\Services\ZatcaQrGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -372,24 +373,37 @@ class InvoiceController extends Controller
         $batch = $this->findOwned($id);
         $total = max(1, (int) $batch->total_pages);
 
-        $invoices = $batch->invoices()->orderBy('page_number')->get()->map(fn (Invoice $i) => [
-            'id' => $i->id,
-            'page_number' => $i->page_number,
-            'supplier_name' => $i->supplier_name,
-            'supplier_tax_number' => $i->supplier_tax_number,
-            'invoice_number' => $i->invoice_number,
-            'invoice_date' => $i->invoice_date?->format('Y-m-d'),
-            'amount_before_vat' => $i->amount_before_vat,
-            'vat_amount' => $i->vat_amount,
-            'total_incl_vat' => $i->total_incl_vat,
-            'needs_review' => (bool) $i->needs_review,
-            'validation_notes' => $i->validation_notes,
-            'status' => $i->status,
-            'image_path' => $i->image_path,
-            'image_url' => $this->imageUrl($batch->id, $i->image_path),
-            'image_quality' => $i->image_quality,
-            'purchase_id' => $i->purchase_id,
-        ]);
+        $invoices = $batch->invoices()->orderBy('page_number')->get()->map(function (Invoice $i) use ($batch) {
+            // ZATCA Phase-1 QR — only for invoices that have a total (i.e.
+            // extraction actually produced numbers worth encoding).
+            $zatcaQr = null;
+            $zatcaQrImage = null;
+            if ($i->total_incl_vat !== null) {
+                $zatcaQr = $this->zatcaQr()->qrBase64($i);
+                $zatcaQrImage = $this->zatcaQrImageDataUri($zatcaQr);
+            }
+
+            return [
+                'id' => $i->id,
+                'page_number' => $i->page_number,
+                'supplier_name' => $i->supplier_name,
+                'supplier_tax_number' => $i->supplier_tax_number,
+                'invoice_number' => $i->invoice_number,
+                'invoice_date' => $i->invoice_date?->format('Y-m-d'),
+                'amount_before_vat' => $i->amount_before_vat,
+                'vat_amount' => $i->vat_amount,
+                'total_incl_vat' => $i->total_incl_vat,
+                'needs_review' => (bool) $i->needs_review,
+                'validation_notes' => $i->validation_notes,
+                'status' => $i->status,
+                'image_path' => $i->image_path,
+                'image_url' => $this->imageUrl($batch->id, $i->image_path),
+                'image_quality' => $i->image_quality,
+                'purchase_id' => $i->purchase_id,
+                'zatca_qr' => $zatcaQr, // base64 TLV payload (Phase-1)
+                'zatca_qr_image' => $zatcaQrImage, // data:image/png;base64,... rendered via TCPDF 2D barcode
+            ];
+        });
 
         return response()->json([
             'status' => $batch->status,
@@ -469,6 +483,33 @@ class InvoiceController extends Controller
             }
         }
         abort(404);
+    }
+
+    private function zatcaQr(): ZatcaQrGenerator
+    {
+        return app(ZatcaQrGenerator::class);
+    }
+
+    /**
+     * Render a ZATCA Phase-1 TLV base64 payload as a QR PNG (data URI) using
+     * TCPDF's built-in 2D barcode generator — used for both the on-screen
+     * invoice view and the printed/PDF output (same Blade template).
+     * Returns null (never throws) if the barcode/image backend is unavailable,
+     * so a rendering failure never breaks the results page.
+     */
+    private function zatcaQrImageDataUri(string $base64Tlv): ?string
+    {
+        try {
+            $barcode = new \TCPDF2DBarcode($base64Tlv, 'QRCODE,M');
+            $png = $barcode->getBarcodePngData(4, 4);
+            if ($png === false || $png === null) {
+                return null;
+            }
+
+            return 'data:image/png;base64,'.base64_encode($png);
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     private function findOwned($id): InvoiceBatch
