@@ -1950,5 +1950,52 @@ class ShopController extends Controller
 
     }
 
+    /**
+     * Spec 004 B2 — AI prefill for the shop document screen (upd_file.blade.php).
+     * Accepts a scanned commercial-registration / municipal-license / lease document
+     * (image/PDF), runs OCR, and returns the fields for the screen to fill (document
+     * type, number, issue + expiry dates, owner/establishment name, and — for a
+     * lease — the rent amount). Nothing is saved here — the user confirms in the
+     * normal upd_file form, which writes to the real shop_comme / shop_municip /
+     * shop_rent tables via updfile().
+     */
+    public function aiExtract(Request $request)
+    {
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
 
+        $file = $request->file('document');
+        $dir = public_path('uploads/shop/ai');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $file->move($dir, $name);
+        $abs = $dir.'/'.$name;
+
+        try {
+            $data = app(\App\Services\ShopAiExtractor::class)->extract($abs);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('shop', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج مستند محل بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'document_type' => $data['document_type'],
+                'document_number' => $data['document_number'],
+                'issue_date' => $data['issue_date'],
+                'expiry_date' => $data['expiry_date'],
+                'owner_name' => $data['owner_name'],
+                'rent_amount' => $data['rent_amount'],
+                'confidence' => $data['field_confidence'],
+                'document_url' => 'uploads/shop/ai/'.$name,
+            ],
+        ]);
+    }
 }

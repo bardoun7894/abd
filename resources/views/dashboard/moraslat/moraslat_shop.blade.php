@@ -1,3 +1,5 @@
+@include('dashboard.moraslat._ai_widget')
+
 <div class="col-12 col-lg-3 col-md-12 col-sm-12 mb-5">
     <label for="shop_id" class="form-label required fs-6 fw-bold text-dark mb-3">اسم المحل</label>
     <div>

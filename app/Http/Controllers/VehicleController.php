@@ -257,4 +257,51 @@ if ($licenseStatus) {
         // إعادة توجيه المستخدم مع رسالة نجاح
         return back()->with('alert.success', 'تم حذف المركبة بنجاح.');
     }
+
+    /**
+     * Spec 004 B4 — AI prefill for the vehicle add/edit form. Accepts a vehicle
+     * document (استمارة/رخصة سير, insurance, or operating card — image/PDF), runs
+     * OCR, and returns the fields for the screen to fill (plate number, expiry
+     * dates, owner/model). Nothing is saved here — the user confirms in the normal
+     * vehicle form, which writes to the real `vehicles` table.
+     */
+    public function aiExtract(HttpRequest $request)
+    {
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        $file = $request->file('document');
+        $dir = public_path('uploads/vehicles/ai');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $file->move($dir, $name);
+        $abs = $dir.'/'.$name;
+
+        try {
+            $data = app(\App\Services\VehicleAiExtractor::class)->extract($abs);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('vehicle', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج وثيقة مركبة بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'plate_number' => $data['plate_number'],
+                'owner_name' => $data['owner_name'],
+                'model' => $data['model'],
+                'license_expiry' => $data['license_expiry'],
+                'insurance_expiry' => $data['insurance_expiry'],
+                'operation_card_expiry' => $data['operation_card_expiry'],
+                'confidence' => $data['field_confidence'],
+                'document_url' => 'uploads/vehicles/ai/'.$name,
+            ],
+        ]);
+    }
 }

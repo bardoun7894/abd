@@ -102,6 +102,58 @@
                     </div>
                     <div class="mb-0">
                         <div class="row gx-5 mb-5">
+                            <div class="col-12 mb-4">
+                                <div class="card bg-light-primary border border-primary border-dashed">
+                                    <div class="card-body py-4">
+                                        <label class="fw-bold text-primary mb-2"><i class="fa fa-robot me-1"></i> استخراج بالذكاء الاصطناعي — ارفع صورة أو PDF من السجل التجاري / رخصة البلدية / عقد الإيجار</label>
+                                        <div class="d-flex gap-2 align-items-center">
+                                            <input type="file" id="ai_shop_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm">
+                                            <button type="button" id="ai_shop_extract_btn" class="btn btn-sm btn-primary text-nowrap">استخراج</button>
+                                        </div>
+                                        <div id="ai_shop_extract_status" class="fs-8 text-muted mt-2"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <script>
+                            (function(){
+                                var btn=document.getElementById('ai_shop_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
+                                btn.addEventListener('click', function(){
+                                    var f=document.getElementById('ai_shop_document'); var st=document.getElementById('ai_shop_extract_status');
+                                    if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف المستند أولاً</span>'; return; }
+                                    var fd=new FormData(); fd.append('document', f.files[0]); fd.append('_token','{{ csrf_token() }}');
+                                    st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
+                                    fetch('{{ route('dashboard.shop.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
+                                    .then(function(r){return r.json();}).then(function(res){
+                                        btn.disabled=false;
+                                        if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
+                                        var d=res.data;
+                                        function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
+                                        var typeLabel='';
+                                        if(d.document_type==='commercial_registration'){
+                                            typeLabel='السجل التجاري';
+                                            setv('comme_no', d.document_number);
+                                            setv('comme_sdt', d.issue_date);
+                                            setv('comme_edt', d.expiry_date);
+                                        } else if(d.document_type==='municipal_license'){
+                                            typeLabel='رخصة البلدية';
+                                            setv('municip_no', d.document_number);
+                                            setv('municip_sdt', d.issue_date);
+                                            setv('municip_edt', d.expiry_date);
+                                        } else if(d.document_type==='lease'){
+                                            typeLabel='عقد الإيجار';
+                                            setv('rent_no', d.document_number);
+                                            setv('rent_sdt', d.issue_date);
+                                            setv('rent_edt', d.expiry_date);
+                                            setv('rent_name', d.owner_name);
+                                        }
+                                        var extra='';
+                                        if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
+                                        if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
+                                        st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
+                                    }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
+                                });
+                            })();
+                            </script>
                             <div class="separator separator-content border-dark my-10 mb-8"><span
                                     class="w-150px fw-bold text-danger">معلومات السجل التجاري</span></div>
                                     <input name="shop_comme_id" id="shop_comme_id" value="{{ $shop->shop_comme_id }}" im-insert="true"

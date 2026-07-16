@@ -1207,4 +1207,50 @@ class ExpenseController extends Controller
         // }
         return response()->json($result);
     }
+
+    /**
+     * Spec 004 B1 — AI prefill for the expense form. Accepts a receipt (image/PDF),
+     * runs OCR, and returns the fields for the screen to fill (amount, vendor, date,
+     * description, suggested category). Nothing is saved here — the user confirms in
+     * the normal expense form, which writes to the real `expense` table.
+     */
+    public function aiExtract(Request $request)
+    {
+        $request->validate([
+            'receipt' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        $file = $request->file('receipt');
+        $dir = public_path('uploads/expense/ai');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $file->move($dir, $name);
+        $abs = $dir.'/'.$name;
+
+        try {
+            $data = app(\App\Services\ExpenseAiExtractor::class)->extract($abs);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('expense', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج إيصال مصروف بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'expense_price' => $data['expense_price'],
+                'expense_respon' => $data['vendor'],
+                'date' => $data['date'],
+                'note' => $data['description'],
+                'expense_categoty_id' => $data['expense_categoty_id'],
+                'category_name' => $data['category_name'],
+                'confidence' => $data['field_confidence'],
+                'receipt_url' => 'uploads/expense/ai/'.$name,
+            ],
+        ]);
+    }
 }

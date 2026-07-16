@@ -625,6 +625,95 @@ if ((($x->is_read == '0'||$x->is_read == '1') and $x->moraslat_status_id =='') |
     }
 
 
+    /**
+     * Spec 004 C1 — AI OCR + summarize + classify for a scanned correspondence letter.
+     * Returns fields to PREFILL the moraslat add form (نص المعاملة / ملاحظات / التصنيف
+     * المقترح / نوع المراسلة المقترح). Nothing is saved here — the user confirms via the
+     * normal store()/updstore() flow, exactly like ExpenseController::aiExtract().
+     */
+    public function aiAnalyze(Request $request)
+    {
+        $request->validate([
+            'letter' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        $file = $request->file('letter');
+        $dir = public_path('uploads/moraslat/ai');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $file->move($dir, $name);
+        $abs = $dir.'/'.$name;
+
+        $types = DB::table('moraslat_type')->get();
+        $categories = DB::table('moraslat_categoty')->get();
+        $statuses = DB::table('moraslat_status')->get();
+
+        try {
+            $data = app(\App\Services\MoraslatAiExtractor::class)->analyze($abs, $types, $categories, $statuses);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر تحليل الخطاب: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('moraslat', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'تحليل خطاب مراسلة بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'summary' => $data['summary'],
+                'subject' => $data['extracted_subject'],
+                'sender' => $data['sender'],
+                'date' => $data['date'],
+                'key_points' => $data['key_points'],
+                'moraslat_type_id' => $data['suggested_type_id'],
+                'type_name' => $data['suggested_type_name'],
+                'moraslat_categoty_id' => $data['suggested_category_id'],
+                'category_name' => $data['suggested_category_name'],
+                'moraslat_status_id' => $data['suggested_status_id'],
+                'status_name' => $data['suggested_status_name'],
+                'confidence' => [
+                    'type' => $data['suggested_type_score'],
+                    'category' => $data['suggested_category_score'],
+                    'status' => $data['suggested_status_score'],
+                ],
+                'letter_url' => 'uploads/moraslat/ai/'.$name,
+            ],
+        ]);
+    }
+
+    /**
+     * Spec 004 C1 — draft a formal Arabic reply from the letter's subject/summary text.
+     * Text-only (no file). Purely a convenience draft for the user to copy/adapt — the
+     * moraslat schema has no dedicated "reply" column, so nothing is saved here either.
+     */
+    public function aiDraft(Request $request)
+    {
+        $request->validate([
+            'context' => 'required|string|max:5000',
+        ]);
+
+        try {
+            $data = app(\App\Services\MoraslatAiExtractor::class)->draftReply($request->context);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّرت صياغة الرد: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('moraslat', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'صياغة رد على مراسلة بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'draft' => $data['draft'],
+            ],
+        ]);
+    }
+
+
     public function updopenstore(Request $request)
     {
         $id = $request->moraslat_id;

@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/destroy_vehicle/{id}',[VehicleController::class,"destroy"])->name("vehicles.destroy");
     Route::get('/edit_vehicle/{id}',[VehicleController::class,"add"])->name("vehicles.edit");
     Route::post('/update_vehicle/{id}',[VehicleController::class,"update"])->name("update_vehicle");
+    Route::post('/vehicles/ai-extract',[VehicleController::class,"aiExtract"])->name("vehicles.ai_extract"); // Spec 004 B4
 
 
 });

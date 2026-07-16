@@ -31,3 +31,5 @@ ai-knowledge-base/
 /database/*.sql
 /database/*.sql.gz
 /public/uploads/invoices/
+/public/uploads/
+*.bak

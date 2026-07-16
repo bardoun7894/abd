@@ -1,4 +1,38 @@
 
+<div class="col-12 mb-4">
+    <div class="card bg-light-primary border border-primary border-dashed">
+        <div class="card-body py-4">
+            <label class="fw-bold text-primary mb-2"><i class="fa fa-robot me-1"></i> استخراج بالذكاء الاصطناعي — ارفع صورة أو PDF للإيصال</label>
+            <div class="d-flex gap-2 align-items-center">
+                <input type="file" id="ai_receipt" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm">
+                <button type="button" id="ai_extract_btn" class="btn btn-sm btn-primary text-nowrap">استخراج</button>
+            </div>
+            <div id="ai_extract_status" class="fs-8 text-muted mt-2"></div>
+        </div>
+    </div>
+</div>
+<script>
+(function(){
+    var btn=document.getElementById('ai_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
+    btn.addEventListener('click', function(){
+        var f=document.getElementById('ai_receipt'); var st=document.getElementById('ai_extract_status');
+        if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف الإيصال أولاً</span>'; return; }
+        var fd=new FormData(); fd.append('receipt', f.files[0]); fd.append('_token','{{ csrf_token() }}');
+        st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
+        fetch('{{ route('dashboard.expense.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
+        .then(function(r){return r.json();}).then(function(res){
+            btn.disabled=false;
+            if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
+            var d=res.data;
+            function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
+            setv('expense_price', d.expense_price); setv('expense_respon', d.expense_respon); setv('note', d.note); setv('expense_month_desc', d.date);
+            if(d.expense_categoty_id){ var s=document.getElementById('expense_categoty_id'); if(s){ s.value=String(d.expense_categoty_id); if(window.jQuery){ jQuery(s).trigger('change'); } } }
+            st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(d.category_name?(' — التصنيف المقترح: '+d.category_name):'');
+        }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
+    });
+})();
+</script>
+
 <div class="col-12 col-lg-3 col-md-12 col-sm-12 mb-5">
     <label for="expense_categoty_id" class="form-label required  fs-6 fw-bold text-dark mb-3">التصنيف</label>
     <div>

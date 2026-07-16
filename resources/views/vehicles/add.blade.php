@@ -57,6 +57,39 @@
             <div class="form-group">
                 <h2 class="mb-4 section-title">{{ isset($vehicle) ? "تعديل بيانات المركبة" : "إضافة مركبة جديدة" }}</h2>
 
+                <!-- استخراج بالذكاء الاصطناعي -->
+                <div class="card bg-light-primary border border-primary border-dashed mb-4">
+                    <div class="card-body py-4">
+                        <label class="fw-bold text-primary mb-2"><i class="fa fa-robot me-1"></i> استخراج بالذكاء الاصطناعي — ارفع صورة أو PDF لاستمارة/رخصة السير أو التأمين أو كرت التشغيل</label>
+                        <div class="d-flex gap-2 align-items-center">
+                            <input type="file" id="ai_vehicle_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm">
+                            <button type="button" id="ai_vehicle_extract_btn" class="btn btn-sm btn-primary text-nowrap">استخراج</button>
+                        </div>
+                        <div id="ai_vehicle_extract_status" class="fs-8 text-muted mt-2"></div>
+                    </div>
+                </div>
+                <script>
+                (function(){
+                    var btn=document.getElementById('ai_vehicle_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
+                    btn.addEventListener('click', function(){
+                        var f=document.getElementById('ai_vehicle_document'); var st=document.getElementById('ai_vehicle_extract_status');
+                        if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف الوثيقة أولاً</span>'; return; }
+                        var fd=new FormData(); fd.append('document', f.files[0]); fd.append('_token','{{ csrf_token() }}');
+                        st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
+                        fetch('{{ route("vehicles.ai_extract") }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
+                        .then(function(r){return r.json();}).then(function(res){
+                            btn.disabled=false;
+                            if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
+                            var d=res.data;
+                            function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; } }
+                            setv('plate_number', d.plate_number); setv('owner_name', d.owner_name); setv('model', d.model);
+                            setv('license_expiry', d.license_expiry); setv('insurance_expiry', d.insurance_expiry); setv('operation_card_expiry', d.operation_card_expiry);
+                            st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>';
+                        }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
+                    });
+                })();
+                </script>
+
                 <!-- بيانات أساسية -->
                 <fieldset class="section-fieldset">
                     <legend class="section-legend section-title">بيانات أساسية</legend>

@@ -50,6 +50,40 @@
                         </div>
                         <div class="mb-0">
                             <div class="mb-5 row gx-5">
+                                <div class="col-12 mb-4">
+                                    <div class="card bg-light-primary border border-primary border-dashed">
+                                        <div class="card-body py-4">
+                                            <label class="fw-bold text-primary mb-2"><i class="fa fa-robot me-1"></i> استخراج بالذكاء الاصطناعي — ارفع صورة أو PDF للإقامة / الجواز / الهوية</label>
+                                            <div class="d-flex gap-2 align-items-center">
+                                                <input type="file" id="ai_worker_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm">
+                                                <button type="button" id="ai_worker_extract_btn" class="btn btn-sm btn-primary text-nowrap">استخراج</button>
+                                            </div>
+                                            <div id="ai_worker_extract_status" class="fs-8 text-muted mt-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <script>
+                                (function(){
+                                    var btn=document.getElementById('ai_worker_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
+                                    btn.addEventListener('click', function(){
+                                        var f=document.getElementById('ai_worker_document'); var st=document.getElementById('ai_worker_extract_status');
+                                        if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف الوثيقة أولاً</span>'; return; }
+                                        var fd=new FormData(); fd.append('document', f.files[0]); fd.append('_token','{{ csrf_token() }}');
+                                        st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
+                                        fetch('{{ route('dashboard.workers.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
+                                        .then(function(r){return r.json();}).then(function(res){
+                                            btn.disabled=false;
+                                            if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
+                                            var d=res.data;
+                                            function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
+                                            setv('worker_name', d.worker_name); setv('ssn', d.ssn); setv('passport_no', d.passport_no);
+                                            setv('dob', d.dob); setv('doe', d.doe); setv('dop', d.dop);
+                                            if(d.nation_id){ var s=document.getElementById('nation_id'); if(s){ s.value=String(d.nation_id); if(window.jQuery){ jQuery(s).trigger('change'); } } }
+                                            st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(d.nationality_name?(' — الجنسية المقترحة: '+d.nationality_name):'');
+                                        }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
+                                    });
+                                })();
+                                </script>
                                 <div class="mb-6 row">
                                     <!--begin::Label-->
                                     <label class="col-lg-4 col-form-label fw-bold fs-6 text-dark">صورة الشخصية

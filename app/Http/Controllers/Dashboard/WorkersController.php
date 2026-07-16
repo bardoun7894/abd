@@ -1664,4 +1664,53 @@ dd($worker_health);*/
     {
         //
     }
+
+    /**
+     * Spec 004 B3 — AI prefill for the worker-add form. Accepts a Saudi Iqama /
+     * passport / national ID scan (image/PDF), runs OCR, and returns the fields for
+     * the screen to fill (worker_name, ssn, passport_no, dob, doe, dop, suggested
+     * nationality). Nothing is saved here — the user confirms in the normal worker
+     * form, which writes to the real `workers` table.
+     */
+    public function aiExtract(Request $request)
+    {
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        $file = $request->file('document');
+        $dir = public_path('uploads/workers/ai');
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $name = \Illuminate\Support\Str::random(8).'_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'jpg');
+        $file->move($dir, $name);
+        $abs = $dir.'/'.$name;
+
+        try {
+            $data = app(\App\Services\WorkerAiExtractor::class)->extract($abs);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        }
+
+        \App\Services\AuditLogger::log('worker', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج وثيقة هوية عامل بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'worker_name' => $data['worker_name'],
+                'ssn' => $data['ssn'],
+                'passport_no' => $data['passport_no'],
+                'dob' => $data['dob'],
+                'doe' => $data['doe'],
+                'dop' => $data['dop'],
+                'nation_id' => $data['nation_id'],
+                'nationality_name' => $data['nationality_name'],
+                'confidence' => $data['field_confidence'],
+                'document_url' => 'uploads/workers/ai/'.$name,
+            ],
+        ]);
+    }
 }

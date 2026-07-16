@@ -348,6 +348,7 @@ Route::group([
         Route::post('/expense/del_remark', [expenseController::class, 'del_remark'])->name('expense.del_remark');
         Route::post('/expense/change_remark', [expenseController::class, 'change_remark'])->name('expense.change_remark');
         Route::post('/expense/load_expense_form', [expenseController::class, 'load_expense_form'])->name('expense.load_expense_form');
+        Route::post('/expense/ai-extract', [expenseController::class, 'aiExtract'])->name('expense.ai_extract'); // Spec 004 B1
         //دفعات
         Route::post('/expense/ajax_search_expense_detail', [expenseController::class, 'ajax_search_expense_detail'])->name('expense.ajax_search_expense_detail');
         Route::post('/expense/upd_statement', [expenseController::class, 'upd_statement'])->name('expense.upd_statement');
@@ -461,6 +462,12 @@ Route::group([
         Route::post('/leases/{id}/approve', [LeaseController::class, 'approve'])->whereNumber('id')->name('leases.approve');
         Route::post('/leases/{id}/reprocess', [LeaseController::class, 'reprocess'])->whereNumber('id')->name('leases.reprocess');
         Route::get('/leases/{id}/file/{name}', [LeaseController::class, 'file'])->whereNumber('id')->name('leases.file');
+
+        // Spec 004 — AI extraction embedded in existing module screens
+        Route::post('/shop/ai-extract', [ShopController::class, 'aiExtract'])->name('shop.ai_extract');
+        Route::post('/workers/ai-extract', [WorkersController::class, 'aiExtract'])->name('workers.ai_extract');
+        Route::post('/moraslat/ai-analyze', [MoraslatController::class, 'aiAnalyze'])->name('moraslat.ai_analyze');
+        Route::post('/moraslat/ai-draft', [MoraslatController::class, 'aiDraft'])->name('moraslat.ai_draft');
 
     });
 
