@@ -58,12 +58,50 @@
                 <h2 class="mb-4 section-title">{{ isset($vehicle) ? "تعديل بيانات المركبة" : "إضافة مركبة جديدة" }}</h2>
 
                 <!-- استخراج بالذكاء الاصطناعي -->
-                <div class="card bg-light-primary border border-primary border-dashed mb-4">
+                <style>
+                .ai-card{position:relative;border:1px solid rgba(0,158,247,.18);border-radius:.95rem;background:linear-gradient(180deg,rgba(0,158,247,.06) 0%,rgba(255,255,255,0) 65%);overflow:hidden;transition:box-shadow .2s ease;}
+                .ai-card::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,#009ef7,#7239ea);}
+                .ai-card:hover{box-shadow:0 .5rem 1.5rem rgba(0,158,247,.12);}
+                .ai-card-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.75rem;}
+                .ai-icon-badge{display:inline-flex;align-items:center;justify-content:center;width:2.35rem;height:2.35rem;border-radius:.65rem;background:linear-gradient(135deg,#009ef7,#7239ea);color:#fff;font-size:1rem;flex:0 0 auto;box-shadow:0 .35rem .85rem rgba(0,158,247,.35);}
+                .ai-card-title{font-weight:700;margin:0;}
+                .ai-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:700;line-height:1;padding:.35rem .6rem;border-radius:50rem;color:#fff;background:linear-gradient(135deg,#009ef7,#7239ea);letter-spacing:.02em;white-space:nowrap;}
+                .ai-dropzone{position:relative;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;border:1.5px dashed rgba(0,158,247,.45);border-radius:.75rem;padding:.85rem 1rem;background:rgba(0,158,247,.04);transition:border-color .15s ease,background-color .15s ease;}
+                .ai-dropzone.is-dragover{border-color:#009ef7;background:rgba(0,158,247,.1);}
+                .ai-dropzone__label{display:flex;align-items:center;gap:.6rem;flex:1 1 220px;min-width:0;cursor:pointer;margin:0;}
+                .ai-dropzone__icon{font-size:1.3rem;color:#009ef7;flex:0 0 auto;}
+                .ai-dropzone__text{display:flex;flex-direction:column;gap:.1rem;min-width:0;}
+                .ai-dropzone__hint{font-weight:600;font-size:.85rem;}
+                .ai-dropzone__filename{font-size:.76rem;color:#7e8299;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+                .ai-dropzone__filename.has-file{color:#009ef7;font-weight:600;}
+                .ai-dropzone__input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+                .ai-dropzone .btn{flex:0 0 auto;}
+                .ai-status{font-size:.8rem;min-height:1.1rem;}
+                .ai-status.is-loading{display:inline-flex;align-items:center;gap:.45rem;color:#009ef7;font-weight:600;}
+                .ai-status.is-loading::before{content:"";width:.8rem;height:.8rem;border-radius:50%;border:2px solid currentColor;border-inline-end-color:transparent;animation:ai-spin .7s linear infinite;flex:0 0 auto;}
+                .ai-status .text-success{font-weight:700;}
+                .ai-status .text-danger{font-weight:700;}
+                @keyframes ai-spin{to{transform:rotate(360deg);}}
+                @media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
+                </style>
+                <div class="card ai-card mb-4">
                     <div class="card-body py-4">
-                        <label class="fw-bold text-primary mb-2"><i class="fa fa-robot me-1"></i> استخراج بالذكاء الاصطناعي — ارفع صورة أو PDF لاستمارة/رخصة السير أو التأمين أو كرت التشغيل</label>
-                        <div class="d-flex gap-2 align-items-center">
-                            <input type="file" id="ai_vehicle_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm">
-                            <button type="button" id="ai_vehicle_extract_btn" class="btn btn-sm btn-primary text-nowrap">استخراج</button>
+                        <div class="ai-card-head">
+                            <span class="ai-icon-badge"><i class="fa fa-robot"></i></span>
+                            <h3 class="ai-card-title fs-6 text-primary">استخراج بالذكاء الاصطناعي</h3>
+                            <span class="ai-pill"><i class="fa fa-magic"></i> ذكاء اصطناعي</span>
+                        </div>
+                        <p class="text-muted fs-8 mb-3">ارفع صورة أو PDF لاستمارة/رخصة السير أو التأمين أو كرت التشغيل ليتم استخراج بياناتها تلقائياً</p>
+                        <div class="ai-dropzone" id="ai_vehicle_document_dropzone">
+                            <label for="ai_vehicle_document" class="ai-dropzone__label">
+                                <i class="fa fa-cloud-upload-alt ai-dropzone__icon"></i>
+                                <span class="ai-dropzone__text">
+                                    <span class="ai-dropzone__hint">اسحب الملف أو اضغط للاختيار</span>
+                                    <span class="ai-dropzone__filename" id="ai_vehicle_document_filename"></span>
+                                </span>
+                            </label>
+                            <input type="file" id="ai_vehicle_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm ai-dropzone__input">
+                            <button type="button" id="ai_vehicle_extract_btn" class="btn btn-sm btn-primary text-nowrap"><i class="fa fa-magic me-1"></i>استخراج</button>
                         </div>
                         <div id="ai_vehicle_extract_status" class="fs-8 text-muted mt-2"></div>
                     </div>
@@ -87,6 +125,55 @@
                             st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>';
                         }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
                     });
+                })();
+                </script>
+                <script>
+                (function(){
+                    function enhance(opts){
+                        var input = opts.inputId ? document.getElementById(opts.inputId) : null;
+                        var zone = opts.zoneId ? document.getElementById(opts.zoneId) : null;
+                        var nameEl = opts.nameId ? document.getElementById(opts.nameId) : null;
+                        if (input && !input.dataset.aiUx) {
+                            input.dataset.aiUx = '1';
+                            input.addEventListener('change', function(){
+                                if (!nameEl) { return; }
+                                if (input.files && input.files.length) {
+                                    nameEl.textContent = input.files[0].name;
+                                    nameEl.classList.add('has-file');
+                                } else {
+                                    nameEl.textContent = '';
+                                    nameEl.classList.remove('has-file');
+                                }
+                            });
+                        }
+                        if (zone && input && !zone.dataset.aiUx) {
+                            zone.dataset.aiUx = '1';
+                            ['dragenter', 'dragover'].forEach(function(evt){
+                                zone.addEventListener(evt, function(e){ e.preventDefault(); zone.classList.add('is-dragover'); });
+                            });
+                            ['dragleave', 'drop'].forEach(function(evt){
+                                zone.addEventListener(evt, function(e){ e.preventDefault(); zone.classList.remove('is-dragover'); });
+                            });
+                            zone.addEventListener('drop', function(e){
+                                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                                    input.files = e.dataTransfer.files;
+                                    input.dispatchEvent(new Event('change'));
+                                }
+                            });
+                        }
+                        (opts.statusIds || []).forEach(function(id){
+                            var el = document.getElementById(id);
+                            if (!el || el.dataset.aiWatch) { return; }
+                            el.dataset.aiWatch = '1';
+                            el.classList.add('ai-status');
+                            var mo = new MutationObserver(function(){
+                                var loading = /^جارٍ/.test((el.textContent || '').trim());
+                                el.classList.toggle('is-loading', loading);
+                            });
+                            mo.observe(el, {childList: true, characterData: true, subtree: true});
+                        });
+                    }
+                    enhance({inputId: 'ai_vehicle_document', zoneId: 'ai_vehicle_document_dropzone', nameId: 'ai_vehicle_document_filename', statusIds: ['ai_vehicle_extract_status']});
                 })();
                 </script>
 
