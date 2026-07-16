@@ -23,13 +23,22 @@ class Settings
     /** @return array<string,?string> all settings as key => value */
     public static function all(): array
     {
-        return Cache::remember(self::CACHE_KEY, 300, function () {
-            try {
-                return DB::table('app_settings')->pluck('svalue', 'skey')->toArray();
-            } catch (\Throwable $e) {
-                return [];
-            }
-        });
+        // Prefer the cache, but never let a cache miss/unwritable-cache or a
+        // missing table 500 the page — fall back to a direct DB read, then [].
+        try {
+            return Cache::remember(self::CACHE_KEY, 300, fn () => self::readFromDb());
+        } catch (\Throwable $e) {
+            return self::readFromDb();
+        }
+    }
+
+    private static function readFromDb(): array
+    {
+        try {
+            return DB::table('app_settings')->pluck('svalue', 'skey')->toArray();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     public static function get(string $key, $default = null)
