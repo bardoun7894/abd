@@ -1,0 +1,16 @@
+[Unit]
+Description=abd Laravel queue worker (AI invoice/lease processing)
+After=network.target mysql.service
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/abd
+ExecStart=/usr/bin/php /var/www/abd/artisan queue:work database --sleep=3 --tries=3 --timeout=600 --max-time=3600
+StandardOutput=append:/var/www/abd/storage/logs/queue-worker.log
+StandardError=append:/var/www/abd/storage/logs/queue-worker.log
+
+[Install]
+WantedBy=multi-user.target
