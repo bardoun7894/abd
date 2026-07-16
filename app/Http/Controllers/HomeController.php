@@ -68,7 +68,7 @@ class HomeController extends Controller
     public function index(Request $request)
     {
 //        dd(Hash::make('232046'));
-        $page_title = 'شركة عبدالله سعيد ال هنيدي للمقاولات';
+        $page_title = 'شركة صباح النور';
 
         // Home worker-widget filters (iqama + passport expiry). Sanitised here so only clean
         // values reach the raw-SQL scope: dates must be Y-m-d, statuses a single 1-4. Anything

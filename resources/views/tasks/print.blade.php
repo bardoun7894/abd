@@ -105,7 +105,7 @@
 
         <div class="print-header">
             <img src="{{asset('assets/media/logos/logo.jpg')}}" alt="شعار الشركة" class="print-logo">
-            <h1 class="print-title">شركة عبدالله سعيد ال هنيدي للمقاولات</h1>
+            <h1 class="print-title">شركة صباح النور</h1>
             <h2>{{ $schedule->title }}</h2>
         </div>
 
@@ -165,7 +165,7 @@
 
         <div class="footer">
             <p>تم إنشاء هذا التقرير بتاريخ: {{ now()->format('Y-m-d H:i') }}</p>
-            <p>شركة عبدالله سعيد ال هنيدي للمقاولات - جميع الحقوق محفوظة &copy; {{ date('Y') }}</p>
+            <p>شركة صباح النور - جميع الحقوق محفوظة &copy; {{ date('Y') }}</p>
         </div>
     </div>
 </body>

@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="ar" style="direction: rtl;">
 	<head><base href="../../../">
-		<title>شركة عبدالله سعيد ال هنيدي للمقاولات</title>
-		<meta name="description" content="شركة عبدالله سعيد ال هنيدي للمقاولات" />
-		<meta name="keywords" content="شركة عبدالله سعيد ال هنيدي للمقاولات" />
+		<title>شركة صباح النور</title>
+		<meta name="description" content="شركة صباح النور" />
+		<meta name="keywords" content="شركة صباح النور" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta charset="utf-8" />
 		<meta property="og:locale" content="en_US" />
 		<meta property="og:type" content="article" />
-		<meta property="og:title" content="شركة عبدالله سعيد ال هنيدي للمقاولات" />
+		<meta property="og:title" content="شركة صباح النور" />
 		<meta property="og:url" content="" />
-		<meta property="og:site_name" content="شركة عبدالله سعيد ال هنيدي للمقاولات" />
+		<meta property="og:site_name" content="شركة صباح النور" />
 		<link rel="canonical" href="" />
 		<link rel="shortcut icon" href="{{asset('assets/media/logos/logo.png')}}" />
 		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700" />

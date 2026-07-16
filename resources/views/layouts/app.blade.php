@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html  lang="ar" direction="rtl" style="direction: rtl;">
 <head><base href="../../">
-<title>شركة عبدالله سعيد ال هنيدي للمقاولات || النظام المالي - @yield('title','لوحة التحكم')</title>
-<meta name="description" content="شركة عبدالله سعيد ال هنيدي للمقاولات || النظام المالي" />
+<title>شركة صباح النور || النظام المالي - @yield('title','لوحة التحكم')</title>
+<meta name="description" content="شركة صباح النور || النظام المالي" />
 <meta name="keywords" content="" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="utf-8" />
 <meta property="og:locale:alternate" content="ar_SA" />
-<meta property="og:type" content="شركة عبدالله سعيد ال هنيدي للمقاولات || النظام المالي" />
-<meta property="og:title" content="شركة عبدالله سعيد ال هنيدي للمقاولات || النظام المالي" />
+<meta property="og:type" content="شركة صباح النور || النظام المالي" />
+<meta property="og:title" content="شركة صباح النور || النظام المالي" />
 <meta property="og:url" content="{{ url('/') }}" />
 <meta property="og:site_name" content="" />
 <link rel="canonical" href="" />
@@ -147,7 +147,7 @@
                         <div data-kt-swapper="true" data-kt-swapper-mode="prepend" data-kt-swapper-parent="{default: '#kt_content_container', 'lg': '#kt_toolbar_container'}" class="flex-wrap mb-5 page-title d-flex align-items-center me-3 mb-lg-0" style='background-color: #083da6;' >
                                <h1 class="my-1 d-flex align-items-center text-light fs-7" style="color: #ffb822 !important;">@yield('module','المحوسب')</h1>
                             <span class="mx-2 border-gray-200 h-20px border-start ms-3"></span>
-                            <h1 class="my-1 d-flex align-items-center text-light fs-8">@yield('sub',"شركة عبدالله سعيد ال هنيدي للمقاولات || النظام المالي")</h1>
+                            <h1 class="my-1 d-flex align-items-center text-light fs-8">@yield('sub',"شركة صباح النور || النظام المالي")</h1>
                             <span class="mx-2 border-gray-200 h-20px border-start ms-3"></span>
                             <ul class="my-1 breadcrumb breadcrumb-separatorless fs-8">
                                 <li class="breadcrumb-item text-muted">
@@ -166,7 +166,7 @@
             <div class="py-4 footer d-flex flex-lg-column" id="kt_footer">
                 <div class="container-fluid d-flex flex-column flex-md-row align-items-center justify-content-between">
                     <div class="order-2 text-dark order-md-1">
-                        <a href="#" target="_blank" class="text-hover-primary fw-bolder text-dark">تم التطوير لدى شركة عبدالله سعيد ال هنيدي للمقاولات</a>
+                        <a href="#" target="_blank" class="text-hover-primary fw-bolder text-dark">تم التطوير لدى شركة صباح النور</a>
                         <span class="me-1 fw-bolder text-dark">© {{date("Y")}}</span>
                     </div>
                 </div>
