@@ -33,6 +33,11 @@ Route::group([
 ],
     function () {
         Route::get('/', [HomeController::class, 'index'])->name('home');
+
+        // Spec 005 — admin API-key / integration settings (super-admin only)
+        Route::get('/settings', [\App\Http\Controllers\Dashboard\SettingsController::class, 'index'])->name('settings.index');
+        Route::post('/settings/update', [\App\Http\Controllers\Dashboard\SettingsController::class, 'update'])->name('settings.update');
+
         Route::resource('/categories', CategoriesController::class);
 
         Route::get('/workers/index', [WorkersController::class, 'index'])->name('workers.index');

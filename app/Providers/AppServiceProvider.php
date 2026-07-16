@@ -27,5 +27,13 @@ class AppServiceProvider extends ServiceProvider
         if (!defined('K_PATH_IMAGES')) {
             define('K_PATH_IMAGES', public_path('assets/media/logos/'));
         }
+
+        // Spec 005 — let admin-editable DB settings override API-key config
+        // (Gemini/ZATCA). Wrapped so a missing table never breaks boot.
+        try {
+            \App\Services\Settings::applyToConfig();
+        } catch (\Throwable $e) {
+            // settings table not available yet — keep env/config defaults
+        }
     }
 }

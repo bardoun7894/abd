@@ -939,6 +939,19 @@
                 </div>
             </div>
             <?php } ?>
+
+            {{-- Spec 005 — API-key settings, super-admin only (emp_job == 1) --}}
+            @if ((int) (Auth()->user()->emp_job ?? 0) === 1)
+                <div class="menu-item">
+                    <a class="menu-link @if (Route::currentRouteName() == 'dashboard.settings.index') active @endif"
+                       href="{{ route('dashboard.settings.index') }}">
+                        <span class="menu-icon">
+                            <i class="fas fa-key" style="font-size:20px"></i>
+                        </span>
+                        <span class="menu-title text-dark">إعدادات مفاتيح الـ API</span>
+                    </a>
+                </div>
+            @endif
         </div>
     </div>
 </div>

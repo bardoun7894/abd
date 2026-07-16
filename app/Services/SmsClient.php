@@ -36,10 +36,11 @@ class SmsClient
 
     public function __construct()
     {
-        $this->provider = env('SMS_PROVIDER');
-        $this->apiKey = env('SMS_API_KEY');
-        $this->sender = env('SMS_SENDER');
-        $this->baseUrl = env('SMS_BASE_URL');
+        // Prefer admin-editable DB settings (Spec 005), fall back to .env.
+        $this->provider = Settings::get('sms_provider', env('SMS_PROVIDER'));
+        $this->apiKey = Settings::get('sms_api_key', env('SMS_API_KEY'));
+        $this->sender = Settings::get('sms_sender', env('SMS_SENDER'));
+        $this->baseUrl = Settings::get('sms_base_url', env('SMS_BASE_URL'));
     }
 
     public function send(string $phone, string $text): bool
