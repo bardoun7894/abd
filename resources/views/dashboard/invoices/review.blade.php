@@ -86,6 +86,9 @@
                         </table>
 
                         @if ($invoice->validation_notes)
+                            @if (str_contains($invoice->validation_notes, 'شذوذ'))
+                                <span class="badge badge-light-danger mb-2">⚠ شذوذ</span>
+                            @endif
                             <div class="alert alert-warning py-2 px-3 fs-7">{{ $invoice->validation_notes }}</div>
                         @endif
                         @if ($invoice->error_message)

@@ -299,6 +299,15 @@ class InvoicePipeline
             $newVersion = (int) ($prior->version ?? 1) + 1;
         }
 
+        // Rule-based anomaly detection (no AI call) — runs AFTER the existing
+        // InvoiceExtractionService::validate() result and only ADDS notes on top
+        // of it; never overwrites what validate() already found.
+        $existingNotes = isset($data['validation_notes']) && is_array($data['validation_notes'])
+            ? $data['validation_notes'] : [];
+        $anomalyNotes = app(InvoiceAnomalyDetector::class)->detect($data, $batch->getConnectionName());
+        $allNotes = array_merge($existingNotes, $anomalyNotes);
+        $needsReview = (bool) ($data['needs_review'] ?? false) || ! empty($anomalyNotes);
+
         $invoice = Invoice::updateOrCreate(
             ['batch_id' => $batch->id, 'page_number' => $pageNo],
             [
@@ -315,9 +324,8 @@ class InvoicePipeline
                 'confidence' => $data['confidence'] ?? null,
                 'image_quality' => $data['image_quality'] ?? null,
                 'raw_json' => $data['raw_json'] ?? null,
-                'needs_review' => $data['needs_review'] ?? false,
-                'validation_notes' => isset($data['validation_notes']) && is_array($data['validation_notes'])
-                    ? implode(' | ', $data['validation_notes']) : null,
+                'needs_review' => $needsReview,
+                'validation_notes' => implode(' | ', $allNotes),
                 'status' => 'done',
                 // Spec 002/001 — extended fields (null-safe; absent on legacy paths).
                 'invoice_type' => $data['invoice_type'] ?? null,
