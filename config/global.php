@@ -2,7 +2,7 @@
 return [
     'ver' => [
         'version_all' => '7.8.1',
-        'version_css' => '7.8.7',
+        'version_css' => '7.8.8',
         'version_js' => '7.8.1',
     ]
 ];

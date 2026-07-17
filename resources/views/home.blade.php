@@ -359,44 +359,21 @@
 @endsection
 @section('scripts')
 <script>
+// Brand categorical palette (validated: colorblind-separable, chroma + lightness in band).
+// emerald · gold · sky · coral · plum · teal · rose — cycled only as a last resort.
+var SN_CHART_COLORS = ['#0B7A52','#C8901A','#2472C8','#E1623D','#7B4EA0','#0EA5A5','#C0497A'];
+function snPalette(n){ var out=[]; for(var i=0;i<n;i++){ out.push(SN_CHART_COLORS[i % SN_CHART_COLORS.length]); } return out; }
+
 var ctx = document.getElementById('kt_chartjs_tt');
-var primaryColor = KTUtil.getCssVariableValue('--bs-primary');
-var dangerColor = KTUtil.getCssVariableValue('--bs-danger');
-var successColor = KTUtil.getCssVariableValue('--bs-success');
-var warningColor = KTUtil.getCssVariableValue('--bs-warning');
-var infoColor = KTUtil.getCssVariableValue('--bs-info');
 var fontFamily = KTUtil.getCssVariableValue('--bs-font-sans-serif');
 const labels = <?php echo $ch_data_bar2; ?>;
 const data = {
     labels: labels,
     datasets: [{
         data: <?php echo $ch_data_bar; ?>,
-    backgroundColor: [
-        'rgb(255, 205, 86)',
-      'rgb(255, 99, 132)',
-      'rgb(54, 162, 235)',
-      'rgb(255, 205, 86)',
-      'rgba(255, 99, 132, 0.2)',
-      'rgba(255, 159, 64, 0.2)',
-      'rgba(255, 205, 86, 0.2)',
-      'rgba(75, 192, 192, 0.2)',
-      'rgba(54, 162, 235, 0.2)',
-      'rgba(153, 102, 255, 0.2)',
-      'rgba(201, 203, 207, 0.2)',
-      primaryColor,
-      successColor,
-      warningColor,
-      infoColor,
-    ],
-    borderColor: [
-      'rgb(255, 99, 132)',
-      'rgb(255, 159, 64)',
-      'rgb(255, 205, 86)',
-      'rgb(75, 192, 192)',
-      'rgb(54, 162, 235)',
-      'rgb(153, 102, 255)',
-      'rgb(201, 203, 207)'
-    ],
+        backgroundColor: snPalette((labels || []).length),
+        borderColor: '#ffffff',   // 2px surface gap between slices
+        borderWidth: 2,
     }]
 };
 const config = {
@@ -418,44 +395,16 @@ const config = {
 };
 var myChart = new Chart(ctx, config);
 var ctx2 = document.getElementById('kt_chartjs_bb');
-var primaryColor = KTUtil.getCssVariableValue('--bs-primary');
-var dangerColor = KTUtil.getCssVariableValue('--bs-danger');
-var successColor = KTUtil.getCssVariableValue('--bs-success');
-var warningColor = KTUtil.getCssVariableValue('--bs-warning');
-var infoColor = KTUtil.getCssVariableValue('--bs-info');
-var fontFamily = KTUtil.getCssVariableValue('--bs-font-sans-serif');
 const labels2 = <?php echo $ch_data_bar2; ?>;
 const data2 = {
     labels: labels2,
     datasets: [{
         data: <?php echo $ch_data_bar; ?>,
         label: 'الرسم البياني',
-    backgroundColor: [
-        'rgb(255, 205, 86)',
-      'rgb(255, 99, 132)',
-      'rgb(54, 162, 235)',
-      'rgb(255, 205, 86)',
-      'rgba(255, 99, 132, 0.2)',
-      'rgba(255, 159, 64, 0.2)',
-      'rgba(255, 205, 86, 0.2)',
-      'rgba(75, 192, 192, 0.2)',
-      'rgba(54, 162, 235, 0.2)',
-      'rgba(153, 102, 255, 0.2)',
-      'rgba(201, 203, 207, 0.2)',
-      primaryColor,
-      successColor,
-      warningColor,
-      infoColor,
-    ],
-    borderColor: [
-      'rgb(255, 99, 132)',
-      'rgb(255, 159, 64)',
-      'rgb(255, 205, 86)',
-      'rgb(75, 192, 192)',
-      'rgb(54, 162, 235)',
-      'rgb(153, 102, 255)',
-      'rgb(201, 203, 207)'
-    ],
+        backgroundColor: snPalette((labels2 || []).length),
+        borderRadius: 4,          // rounded data-ends
+        borderSkipped: false,
+        maxBarThickness: 46,
     }]
 };
 const config2 = {

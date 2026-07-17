@@ -255,13 +255,38 @@ html, body {
 .form-check-input:checked { background-color: var(--sn-emerald); border-color: var(--sn-emerald); }
 .form-control:focus, .form-select:focus { border-color: var(--sn-emerald); box-shadow: 0 0 0 .2rem var(--sn-emerald-tint); }
 
-/* active sidebar item + menu highlight */
+/* -----------------------------------------------------------------------------
+   Sidebar (aside) polish — rounded links, emerald active state with a start-side
+   accent bar, gentle hover. Logos/structure untouched.
+   -------------------------------------------------------------------------- */
+.aside .menu > .menu-item .menu-link,
+#kt_aside .menu .menu-item .menu-link {
+  border-radius: var(--sn-r-md);
+  margin-inline: .5rem;
+  transition: background-color var(--sn-dur-fast) var(--sn-ease-out), color var(--sn-dur-fast) var(--sn-ease-out);
+}
+#kt_aside .menu .menu-item .menu-link:hover {
+  background-color: var(--sn-emerald-tint) !important;
+}
 .menu-state-primary .menu-item .menu-link.active,
-.menu-active-bg .menu-item .menu-link.active {
-  background-color: var(--sn-emerald-tint);
+.menu-active-bg .menu-item .menu-link.active,
+#kt_aside .menu .menu-item .menu-link.active {
+  position: relative;
+  background-color: var(--sn-emerald-tint) !important;
+}
+/* start-side accent bar on the active item */
+#kt_aside .menu .menu-item .menu-link.active::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0; top: 18%; bottom: 18%;
+  width: 3px; border-radius: 3px;
+  background: var(--sn-emerald);
 }
 .menu-item .menu-link.active .menu-title,
-.menu-item .menu-link.active .menu-icon i { color: var(--sn-emerald-deep) !important; }
+.menu-item .menu-link.active .menu-icon i,
+#kt_aside .menu .menu-item .menu-link.active .menu-title,
+#kt_aside .menu .menu-item .menu-link.active .menu-icon i { color: var(--sn-emerald-deep) !important; }
+#kt_aside .menu .menu-item .menu-link:hover .menu-title { color: var(--sn-emerald-deep) !important; }
 
 /* pagination (Laravel Bootstrap-5 paginator, used by the log pages) */
 .page-item.active .page-link { background-color: var(--sn-emerald); border-color: var(--sn-emerald); }
@@ -283,6 +308,19 @@ html, body {
 .toolbar .breadcrumb .breadcrumb-item, .toolbar .breadcrumb .breadcrumb-item a,
 .toolbar .page-title .text-muted { color: #fff !important; }
 .toolbar .breadcrumb .breadcrumb-item:before { color: rgba(255,255,255,.5) !important; }
+
+/* Card titles were forced pink (#d3224c) at an oversized 1.675rem by dinnext, and
+   many section labels use .text-info which dinnext painted old-brand blue (#1949ea).
+   Normalize card headings to brand ink at a sane size. */
+.card .card-header .card-title,
+.card .card-header .card-title .card-label {
+  color: var(--sn-ink) !important;
+  font-size: 1.15rem !important;
+  font-weight: 700;
+}
+.card .card-header .card-title .text-info,
+.card .card-header .card-title .card-label.text-info { color: var(--sn-ink) !important; }
+.card .card-header .card-title .text-muted { color: var(--sn-ink-soft) !important; }
 .table.sn-thead thead tr,
 .table thead.sn-thead tr { background: var(--sn-emerald-tint) !important; color: var(--sn-emerald-deep) !important; }
 .table.sn-thead thead th, .table thead.sn-thead th { border-bottom: 2px solid var(--sn-emerald) !important; font-weight: 600; }
