@@ -448,6 +448,7 @@ Route::group([
         Route::get('/invoices/{id}/status', [InvoiceController::class, 'status'])->whereNumber('id')->name('invoices.status');
         Route::post('/invoices/{id}/correct', [InvoiceController::class, 'correct'])->whereNumber('id')->name('invoices.correct');
         Route::post('/invoices/{id}/push-to-purchase', [InvoiceController::class, 'pushToPurchase'])->whereNumber('id')->name('invoices.push');
+        Route::post('/invoices/{id}/rescan', [InvoiceController::class, 'rescan'])->whereNumber('id')->name('invoices.rescan');
 
         // Invoice review / approval / error / reports (Spec 002 FR-107/108/109)
         Route::get('/invoices/report', [InvoiceController::class, 'report'])->name('invoices.report');

@@ -3,6 +3,55 @@
 @section('sub', 'النتائج')
 @section('title', "$page_title")
 @section('content')
+    @if (!empty($aiSummary))
+        <div class="card mb-4 border-primary">
+            <div class="card-header">
+                <h3 class="card-title">🧠 ملخص الذكاء الاصطناعي للدفعة</h3>
+            </div>
+            <div class="card-body">
+                @if (!empty($aiSummary['narrative']))
+                    <p class="fs-6 mb-4">{{ $aiSummary['narrative'] }}</p>
+                @else
+                    <p class="text-muted fs-7 mb-4">تعذّر توليد الملخص النصي حالياً — الأرقام أدناه محسوبة مباشرة من بيانات الدفعة.</p>
+                @endif
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted fs-8">عدد الفواتير</div>
+                        <div class="fs-4 fw-bold">{{ $aiSummary['invoice_count'] }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted fs-8">عدد الموردين</div>
+                        <div class="fs-4 fw-bold">{{ $aiSummary['supplier_count'] }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted fs-8">الإجمالي شامل الضريبة</div>
+                        <div class="fs-4 fw-bold text-success">{{ number_format($aiSummary['total_incl_vat'], 2) }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-muted fs-8">قيمة الضريبة</div>
+                        <div class="fs-4 fw-bold">{{ number_format($aiSummary['vat_amount'], 2) }}</div>
+                    </div>
+                </div>
+                @if ($aiSummary['top_supplier'])
+                    <div class="mt-3 fs-7 text-muted">
+                        أكثر مورد تكراراً: <strong class="text-gray-800">{{ $aiSummary['top_supplier']['name'] }}</strong> ({{ $aiSummary['top_supplier']['count'] }} فاتورة)
+                        @if ($aiSummary['needs_review_count'] > 0)
+                            — <span class="text-warning fw-bold">{{ $aiSummary['needs_review_count'] }} تحتاج مراجعة</span>
+                        @endif
+                    </div>
+                @endif
+                @if (!empty($aiSummary['top_suppliers_by_amount']))
+                    <div class="mt-2 fs-7">
+                        <span class="text-muted">أعلى 3 موردين بالمبلغ: </span>
+                        @foreach ($aiSummary['top_suppliers_by_amount'] as $s)
+                            <span class="badge badge-light-primary me-1">{{ $s['name'] }} — {{ number_format($s['total'], 2) }}</span>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
+
     <div class="card mb-4">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
@@ -14,6 +63,13 @@
             </div>
             <div id="meta" class="text-muted mt-2 fs-7"></div>
             <div id="cost" class="mt-2 fs-7 fw-bold text-gray-700"></div>
+            <div class="mt-3 d-print-none">
+                <button type="button" id="rescanBtn" class="btn btn-sm btn-light-danger"
+                    title="يستخدم نموذجاً أقوى (وأبطأ) لإعادة قراءة الدفعة بالكامل — مفيد للصفحات غير الواضحة">
+                    🔍 إعادة الفحص بدقة أعلى
+                </button>
+                <span id="rescanResult" class="fs-7 ms-2"></span>
+            </div>
         </div>
     </div>
 
@@ -211,6 +267,25 @@
                     $('#pushResult').html('<span class="text-danger">' + esc(m) + '</span>');
                 })
                 .always(function () { $btn.prop('disabled', false).text('ترحيل كل الفواتير المؤهلة'); });
+        });
+
+        // Feature B — smart re-scan (model escalation): re-run the whole batch with a
+        // stronger Gemini model, then resume polling so progress/results refresh live.
+        $('#rescanBtn').on('click', function () {
+            var $btn = $(this).prop('disabled', true);
+            $('#rescanResult').removeClass('text-danger text-success').html('<span class="text-muted">جارٍ الجدولة…</span>');
+            $.post("{{ route('dashboard.invoices.rescan', $batch->id) }}", {})
+                .done(function (r) {
+                    $('#rescanResult').html('<span class="text-success">' + esc(r.message_out || 'تمت الجدولة') + '</span>');
+                    if (timer) { clearInterval(timer); }
+                    poll();
+                    timer = setInterval(poll, 3000);
+                })
+                .fail(function (xhr) {
+                    var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر جدولة إعادة الفحص';
+                    $('#rescanResult').html('<span class="text-danger">' + esc(m) + '</span>');
+                })
+                .always(function () { $btn.prop('disabled', false); });
         });
 
         // Image lightbox (rows render dynamically → delegated handler)

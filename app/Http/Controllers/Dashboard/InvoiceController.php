@@ -10,6 +10,7 @@ use App\Models\InvoiceBatch;
 use App\Models\InvoiceItem;
 use App\Models\Shop;
 use App\Services\AuditLogger;
+use App\Services\InvoiceBatchSummarizer;
 use App\Services\InvoicePurchaseMapper;
 use App\Services\ZatcaQrGenerator;
 use Illuminate\Http\Request;
@@ -97,7 +98,13 @@ class InvoiceController extends Controller
         $managers = $this->get_manager();
         $canPush = (bool) Perm::get_function_access(55);
 
-        return view('dashboard.invoices.show', compact('page_title', 'batch', 'shops', 'managers', 'canPush'));
+        // Feature A — batch AI summary. Only computed once the batch is finished
+        // extracting; a mid-run batch's numbers would just churn on every poll.
+        $aiSummary = $batch->status === 'done'
+            ? app(InvoiceBatchSummarizer::class)->summarize($batch->id)
+            : null;
+
+        return view('dashboard.invoices.show', compact('page_title', 'batch', 'shops', 'managers', 'canPush', 'aiSummary'));
     }
 
     /**
@@ -220,6 +227,31 @@ class InvoiceController extends Controller
         AuditLogger::log('invoice', (int) $invoice->id, AuditLogger::REPROCESS, ['batch_id' => $batch->id]);
 
         return response()->json(['status' => true, 'message_out' => 'تمت جدولة إعادة معالجة الدفعة']);
+    }
+
+    /**
+     * Feature B — smart re-scan (model escalation). Re-runs the WHOLE batch
+     * through a stronger, slower Gemini model (config('services.gemini.rescan_model'))
+     * instead of the default one — an opt-in "read it again, more carefully" for a
+     * batch with unclear scans. The pipeline upserts on (batch_id, page_number) so
+     * this refreshes every page's row in place, same as reprocess().
+     */
+    public function rescan($id)
+    {
+        $batch = $this->findOwned($id);
+
+        $hardModel = config('services.gemini.rescan_model');
+
+        $batch->forceFill(['status' => 'pending', 'error_message' => null])->save();
+
+        ProcessInvoiceBatch::dispatch($batch->id, $hardModel, config('services.gemini.default_mode', 'split'));
+
+        AuditLogger::log('invoice', null, AuditLogger::REPROCESS, [
+            'batch_id' => $batch->id,
+            'note' => 'smart re-scan with stronger model: '.$hardModel,
+        ]);
+
+        return response()->json(['status' => true, 'message_out' => 'تمت جدولة إعادة الفحص بدقة أعلى']);
     }
 
     /** Save the current field values without finalizing the invoice. */

@@ -45,6 +45,9 @@ return [
         // Default extraction mode: 'split' (page=invoice, reliable per-invoice + own image),
         // 'grouped' (split + merge pages sharing an invoice number), or 'whole' (one AI call).
         'default_mode' => env('GEMINI_INVOICE_MODE', 'split'),
+        // Stronger model used by the manual "🔍 إعادة الفحص بدقة أعلى" (smart re-scan) action —
+        // a slower/pricier model the user opts into for a better read on a low-quality batch.
+        'rescan_model' => env('GEMINI_RESCAN_MODEL', 'gemini-3-flash-preview'),
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
         'timeout' => env('GEMINI_TIMEOUT', 120),
         'retries' => env('GEMINI_RETRIES', 4),

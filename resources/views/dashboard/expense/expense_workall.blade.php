@@ -24,9 +24,36 @@
 .ai-status .text-success{font-weight:700;}
 .ai-status .text-danger{font-weight:700;}
 @keyframes ai-spin{to{transform:rotate(360deg);}}
-@media (prefers-reduced-motion: reduce){.ai-status.is-loading::before{animation:none;}}
 .ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
 .ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
+/* T6-motion: analyzing / result-reveal / low-conf pulse / dropzone affordance / card entrance (additive) */
+@keyframes ai-card-in{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.ai-card{animation:ai-card-in .4s cubic-bezier(0.22,1,0.36,1) both;}
+@keyframes ai-icon-breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+.ai-card.ai-is-analyzing .ai-icon-badge{animation:ai-icon-breathe 1.1s ease-in-out infinite;}
+@keyframes ai-status-dots{0%,100%{content:"";}25%{content:".";}50%{content:"..";}75%{content:"...";}}
+.ai-status.is-loading::after{content:"";display:inline-block;min-width:1.2em;text-align:start;animation:ai-status-dots 1.2s steps(1) infinite;}
+@keyframes ai-scan-sweep{0%{transform:translateY(-100%);opacity:0;}10%{opacity:1;}90%{opacity:1;}100%{transform:translateY(220%);opacity:0;}}
+.ai-card.ai-is-analyzing .ai-dropzone{overflow:hidden;}
+.ai-card.ai-is-analyzing .ai-dropzone::after{content:"";position:absolute;inset-inline:0;top:0;height:40%;background:linear-gradient(180deg,rgba(0,158,247,0) 0%,rgba(0,158,247,.35) 50%,rgba(0,158,247,0) 100%);pointer-events:none;animation:ai-scan-sweep 1.6s ease-in-out infinite;}
+.ai-dropzone{transition:border-color .15s ease,background-color .15s ease,transform .2s cubic-bezier(0.22,1,0.36,1),box-shadow .2s ease;}
+.ai-dropzone:hover,.ai-dropzone.is-dragover{transform:translateY(-2px);box-shadow:0 .4rem 1rem rgba(0,158,247,.18);}
+@keyframes ai-preview-in{from{opacity:0;transform:scale(.96);}to{opacity:1;transform:scale(1);}}
+[id^="ai_preview_"] img,[id^="ai_preview_"] .badge{animation:ai-preview-in .3s cubic-bezier(0.22,1,0.36,1) both;}
+@keyframes ai-field-flash{0%{background-color:rgba(0,158,247,.22);}100%{background-color:transparent;}}
+.ai-field-flash{animation:ai-field-flash .6s ease-out both;}
+@keyframes ai-check-pop{0%{opacity:0;transform:scale(.4);}60%{opacity:1;transform:scale(1.15);}100%{opacity:1;transform:scale(1);}}
+.ai-check-pop{display:inline-flex;align-items:center;justify-content:center;width:1.05rem;height:1.05rem;border-radius:50%;background:#17c653;color:#fff;font-size:.65rem;margin-inline-end:.3rem;animation:ai-check-pop .35s cubic-bezier(0.22,1,0.36,1) both;}
+@keyframes ai-low-conf-pulse{0%,100%{box-shadow:0 0 0 0 rgba(241,180,76,.55);}50%{box-shadow:0 0 0 6px rgba(241,180,76,0);}}
+.ai-low-conf{animation:ai-low-conf-pulse 1s ease-out 2;}
+@keyframes ai-chip-in{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.ai-fields-chip{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:600;color:#009ef7;background:rgba(0,158,247,.1);border-radius:50rem;padding:.15rem .55rem;margin-inline-start:.4rem;animation:ai-chip-in .25s cubic-bezier(0.22,1,0.36,1) both;}
+@keyframes ai-btn-in{from{opacity:0;transform:scale(.85);}to{opacity:1;transform:scale(1);}}
+.ai-reanalyze-btn{animation:ai-btn-in .25s cubic-bezier(0.22,1,0.36,1) both;margin-inline-start:.4rem;}
+@media (prefers-reduced-motion: reduce){
+.ai-status.is-loading::before{animation:none;}
+.ai-card,.ai-card.ai-is-analyzing .ai-icon-badge,.ai-status.is-loading::after,.ai-card.ai-is-analyzing .ai-dropzone::after,.ai-dropzone,.ai-dropzone:hover,.ai-dropzone.is-dragover,[id^="ai_preview_"] img,[id^="ai_preview_"] .badge,.ai-field-flash,.ai-check-pop,.ai-low-conf,.ai-fields-chip,.ai-reanalyze-btn{animation:none !important;transition:none !important;transform:none !important;}
+}
 </style>
 @endonce
 <div class="col-12 mb-4">
@@ -158,6 +185,60 @@
             box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
         }
     });
+})();
+</script>
+
+{{-- T6-motion: analyzing state class + result-reveal (field flash / check pop / fields chip) + optional
+     re-analyze button. Additive — watches the same status element with a NEW, separate
+     MutationObserver; does not touch the existing fetch/prefill/observer above. --}}
+<script>
+(function(){
+    function aiMotion(opts){
+        var el = document.getElementById(opts.statusId);
+        if (!el || el.dataset.motionWatch) { return; }
+        el.dataset.motionWatch = '1';
+        var card = el.closest('.ai-card');
+        var btn = opts.analyzeBtnId ? document.getElementById(opts.analyzeBtnId) : null;
+        var mo = new MutationObserver(function(){
+            var text = (el.textContent || '').trim();
+            var loading = /^جارٍ/.test(text);
+            if (card) { card.classList.toggle('ai-is-analyzing', loading); }
+            if (loading) { return; }
+            var success = el.querySelector('.text-success');
+            if (!success) { return; }
+            var n = 0, delay = 0;
+            (opts.fieldIds || []).forEach(function(fid){
+                var fEl = document.getElementById(fid);
+                if (!fEl || !fEl.value) { return; }
+                n++;
+                fEl.classList.remove('ai-field-flash'); void fEl.offsetWidth;
+                fEl.style.animationDelay = delay + 'ms';
+                fEl.classList.add('ai-field-flash');
+                delay += 40;
+            });
+            if (!success.querySelector('.ai-check-pop')) {
+                var chk = document.createElement('span'); chk.className = 'ai-check-pop'; chk.textContent = '✓';
+                success.insertBefore(chk, success.firstChild);
+            }
+            var oldChip = el.querySelector('.ai-fields-chip'); if (oldChip) { oldChip.remove(); }
+            if (n > 0) {
+                var chip = document.createElement('span'); chip.className = 'ai-fields-chip';
+                chip.textContent = 'تم استخراج ' + n + ' حقول — راجع المميّزة';
+                el.appendChild(chip);
+            }
+            if (btn && !btn.dataset.reanalyzeAdded) {
+                btn.dataset.reanalyzeAdded = '1';
+                var rbtn = document.createElement('button');
+                rbtn.type = 'button';
+                rbtn.className = 'btn btn-sm btn-light-primary text-nowrap ai-reanalyze-btn';
+                rbtn.innerHTML = '<i class="fa fa-rotate-right me-1"></i>إعادة التحليل';
+                rbtn.addEventListener('click', function(){ btn.click(); });
+                btn.insertAdjacentElement('afterend', rbtn);
+            }
+        });
+        mo.observe(el, {childList: true, characterData: true, subtree: true});
+    }
+    aiMotion({statusId: 'ai_extract_status', fieldIds: ['expense_price', 'expense_respon', 'note', 'expense_month_desc', 'expense_categoty_id'], analyzeBtnId: 'ai_extract_btn'});
 })();
 </script>
 
