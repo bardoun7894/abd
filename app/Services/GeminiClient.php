@@ -86,16 +86,88 @@ class GeminiClient
         }
 
         $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
+
+        return $this->decodeJsonResponse($resp->json());
+    }
+
+    /**
+     * Robustly pull the JSON payload out of a Gemini generateContent response.
+     * Thinking models return multiple parts (thought parts first) and can also
+     * truncate into degenerate output. Strategy: scan all parts, skip thought
+     * parts, strip markdown fences, then balanced-brace salvage.
+     */
+    protected function decodeJsonResponse($json): array
+    {
+        $parts = (array) data_get($json, 'candidates.0.content.parts', []);
+        $texts = [];
+        foreach ($parts as $part) {
+            if (! empty($part['thought'])) {
+                continue;
+            }
+            if (isset($part['text']) && is_string($part['text'])) {
+                $texts[] = $part['text'];
+            }
         }
-        $decoded = json_decode($text, true);
-        if (! is_array($decoded)) {
-            throw new RuntimeException('Gemini returned non-JSON: '.$text);
+        if ($texts === []) {
+            $fallback = data_get($json, 'candidates.0.content.parts.0.text');
+            if (is_string($fallback)) {
+                $texts[] = $fallback;
+            }
+        }
+        if ($texts === []) {
+            throw new RuntimeException('Gemini returned no content: '.json_encode($json));
         }
 
-        return $decoded;
+        foreach ($texts as $text) {
+            $decoded = $this->tryDecodeJson($text);
+            if ($decoded !== null) {
+                return $decoded;
+            }
+        }
+
+        throw new RuntimeException('Gemini returned non-JSON: '.substr($texts[0], 0, 2000));
+    }
+
+    /** Decode one text part: direct, fence-stripped, then balanced-brace salvage. */
+    private function tryDecodeJson(string $text): ?array
+    {
+        $text = trim($text);
+        if (preg_match('/```(?:json)?\s*(.*?)```/s', $text, $m)) {
+            $text = trim($m[1]);
+        }
+        $decoded = json_decode($text, true);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+        $start = strpos($text, '{');
+        if ($start === false) {
+            return null;
+        }
+        $depth = 0;
+        $inStr = false;
+        $esc = false;
+        $len = strlen($text);
+        for ($i = $start; $i < $len; $i++) {
+            $c = $text[$i];
+            if ($inStr) {
+                if ($esc) { $esc = false; }
+                elseif ($c === '\\') { $esc = true; }
+                elseif ($c === '"') { $inStr = false; }
+                continue;
+            }
+            if ($c === '"') { $inStr = true; }
+            elseif ($c === '{') { $depth++; }
+            elseif ($c === '}') {
+                $depth--;
+                if ($depth === 0) {
+                    $candidate = substr($text, $start, $i - $start + 1);
+                    $decoded = json_decode($candidate, true);
+                    return is_array($decoded) ? $decoded : null;
+                }
+            }
+        }
+
+        return null;
     }
 
     public function mimeFor(string $path): string

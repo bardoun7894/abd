@@ -7,7 +7,7 @@
     <div class="table-responsive">
         <table class="table table-striped gy-5 gs-5 align-middle">
             <thead>
-                <tr class="fw-bold fs-6 text-gray-800 border-bottom-2 border-gray-800" style="background-color:#ffb822 !important;">
+                <tr class="fw-bold fs-6 text-gray-800 border-bottom-2 border-gray-800 sn-thead">
                     <th>#</th>
                     <th>الدفعة</th>
                     <th>رقم العقد</th>
