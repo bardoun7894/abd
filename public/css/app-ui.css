@@ -275,6 +275,14 @@ html, body {
       table header into the brand tint with `.sn-thead`.
    -------------------------------------------------------------------------- */
 .card { border-radius: var(--sn-r-lg); box-shadow: var(--sn-shadow-sm); border-color: var(--sn-line); }
+
+/* The page-title toolbar band was painted old-brand blue (#083da6) by the dinnext
+   override. Rebrand it to the emerald identity. */
+.toolbar { background: linear-gradient(90deg, var(--sn-emerald-deep), var(--sn-emerald)) !important; }
+.toolbar .page-title .page-heading, .toolbar .page-title,
+.toolbar .breadcrumb .breadcrumb-item, .toolbar .breadcrumb .breadcrumb-item a,
+.toolbar .page-title .text-muted { color: #fff !important; }
+.toolbar .breadcrumb .breadcrumb-item:before { color: rgba(255,255,255,.5) !important; }
 .table.sn-thead thead tr,
 .table thead.sn-thead tr { background: var(--sn-emerald-tint) !important; color: var(--sn-emerald-deep) !important; }
 .table.sn-thead thead th, .table thead.sn-thead th { border-bottom: 2px solid var(--sn-emerald) !important; font-weight: 600; }

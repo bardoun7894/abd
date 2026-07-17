@@ -9,8 +9,8 @@
 @endphp
 @once
 <style>
-.ai-insight-card{position:relative;border:0;border-radius:1rem;overflow:hidden;box-shadow:0 .5rem 1.5rem rgba(0,158,247,.15);}
-.ai-insight-card__header{position:relative;padding:1.5rem 1.75rem;background:linear-gradient(135deg,#009ef7 0%,#7239ea 100%);color:#fff;overflow:hidden;}
+.ai-insight-card{position:relative;border:0;border-radius:1rem;overflow:hidden;box-shadow:0 .5rem 1.5rem rgba(14,107,79,.15);}
+.ai-insight-card__header{position:relative;padding:1.5rem 1.75rem;background:linear-gradient(135deg,#0E6B4F 0%,#0A4F3A 100%);color:#fff;overflow:hidden;}
 .ai-insight-card__header::after{content:"";position:absolute;inset-inline-end:-2rem;top:-2rem;width:8rem;height:8rem;border-radius:50%;background:rgba(255,255,255,.12);}
 .ai-insight-card__header-row{position:relative;display:flex;align-items:center;gap:.85rem;}
 .ai-icon-badge--light{display:inline-flex;align-items:center;justify-content:center;width:2.75rem;height:2.75rem;border-radius:.75rem;background:rgba(255,255,255,.18);color:#fff;font-size:1.2rem;flex:0 0 auto;backdrop-filter:blur(2px);}
