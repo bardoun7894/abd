@@ -195,7 +195,92 @@ html, body {
 }
 
 /* -----------------------------------------------------------------------------
-   5. Global motion guard. Anything this layer animates must die here too.
+   5. Brand recolor — retire Metronic's stock blue (#009EF7) for Sabah Alnoor
+      emerald across all 74 views at once.
+
+      Metronic 8 hardcodes #009EF7 into its compiled component classes instead of
+      routing them through --bs-primary, so overriding the var alone isn't enough.
+      We override the var (helps the few var-based rules like .text-primary #1) AND
+      the specific high-traffic component classes, matching Metronic's own selector
+      specificity + !important exactly so these win on cascade order.
+
+      Semantic colors (success/danger/warning/info) are deliberately untouched —
+      only the brand/primary identity changes.
+   -------------------------------------------------------------------------- */
+:root {
+  --bs-primary: var(--sn-emerald);
+  --bs-primary-rgb: 14, 107, 79;                 /* #0E6B4F */
+  --bs-primary-active: var(--sn-emerald-deep);
+  --bs-link-color: var(--sn-emerald);
+  --bs-link-hover-color: var(--sn-emerald-deep);
+}
+
+/* solid primary buttons.
+   NOTE: assets/fonts/dinnext/styles.rtl.css is the OLD Abdullah brand layer (blue
+   #1949ea) and sets .btn.btn-primary background with !important. It also carries
+   essential layout rules, so it can't be removed — we out-!important it here. */
+.btn.btn-primary {
+  border-color: var(--sn-emerald) !important;
+  background-color: var(--sn-emerald) !important;
+}
+.btn-check:checked + .btn.btn-primary,
+.btn-check:active + .btn.btn-primary,
+.btn.btn-primary:focus:not(.btn-active),
+.btn.btn-primary:hover:not(.btn-active),
+.btn.btn-primary:active:not(.btn-active) {
+  border-color: var(--sn-emerald-deep) !important;
+  background-color: var(--sn-emerald-deep) !important;
+}
+
+/* soft / light primary buttons + surfaces */
+.btn.btn-light-primary { color: var(--sn-emerald); border-color: var(--sn-emerald-tint); background-color: var(--sn-emerald-tint); }
+.btn-check:checked + .btn.btn-light-primary,
+.btn-check:active + .btn.btn-light-primary,
+.btn.btn-light-primary:focus:not(.btn-active),
+.btn.btn-light-primary:hover:not(.btn-active),
+.btn.btn-light-primary:active:not(.btn-active) {
+  color: #fff; border-color: var(--sn-emerald) !important; background-color: var(--sn-emerald) !important;
+}
+.bg-light-primary { background-color: var(--sn-emerald-tint) !important; }
+.badge-light-primary { color: var(--sn-emerald-deep); background-color: var(--sn-emerald-tint); }
+.badge-primary { background-color: var(--sn-emerald); }
+
+/* text + links */
+.text-primary { color: var(--sn-emerald) !important; }
+.text-hover-primary:hover, a.text-hover-primary:hover, .text-hover-primary:hover i { color: var(--sn-emerald) !important; }
+.link-primary { color: var(--sn-emerald); }
+.link-primary:hover, .link-primary:focus { color: var(--sn-emerald-deep); }
+
+/* form controls */
+.form-check-input:checked { background-color: var(--sn-emerald); border-color: var(--sn-emerald); }
+.form-control:focus, .form-select:focus { border-color: var(--sn-emerald); box-shadow: 0 0 0 .2rem var(--sn-emerald-tint); }
+
+/* active sidebar item + menu highlight */
+.menu-state-primary .menu-item .menu-link.active,
+.menu-active-bg .menu-item .menu-link.active {
+  background-color: var(--sn-emerald-tint);
+}
+.menu-item .menu-link.active .menu-title,
+.menu-item .menu-link.active .menu-icon i { color: var(--sn-emerald-deep) !important; }
+
+/* pagination (Laravel Bootstrap-5 paginator, used by the log pages) */
+.page-item.active .page-link { background-color: var(--sn-emerald); border-color: var(--sn-emerald); }
+.page-link { color: var(--sn-emerald); }
+.page-link:hover { color: var(--sn-emerald-deep); background-color: var(--sn-emerald-tint); }
+
+/* -----------------------------------------------------------------------------
+   6. Surface warmth + table polish (subtle, global).
+      Softer card radius/shadow and a calm table header — replaces the ad-hoc
+      inline #ffb822 yellow headers scattered across 11 views. Views can opt a
+      table header into the brand tint with `.sn-thead`.
+   -------------------------------------------------------------------------- */
+.card { border-radius: var(--sn-r-lg); box-shadow: var(--sn-shadow-sm); border-color: var(--sn-line); }
+.table.sn-thead thead tr,
+.table thead.sn-thead tr { background: var(--sn-emerald-tint) !important; color: var(--sn-emerald-deep) !important; }
+.table.sn-thead thead th, .table thead.sn-thead th { border-bottom: 2px solid var(--sn-emerald) !important; font-weight: 600; }
+
+/* -----------------------------------------------------------------------------
+   7. Global motion guard. Anything this layer animates must die here too.
    -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
