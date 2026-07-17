@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -306,9 +307,11 @@ class LeaseExtractionService
         $maxAttempts = (int) config('services.gemini.retries', 4);
         $attempt = 0;
         $resp = null;
+        $lastStatus = null;
+        $lastBody = null;
         while (true) {
             $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))
+            $resp = Http::timeout((int) config('services.gemini.page_timeout', 120))
                 ->acceptJson()
                 ->post($url, $body);
 
@@ -317,15 +320,39 @@ class LeaseExtractionService
             }
 
             $status = $resp->status();
+            $lastStatus = $status;
+            $lastBody = $resp->body();
             if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
+                Log::warning('Gemini transient HTTP error; retrying', [
+                    'model' => $model,
+                    'status' => $status,
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'operation' => 'lease_extraction',
+                ]);
                 usleep((int) ((2 ** $attempt) * 500_000));
                 continue;
             }
 
+            Log::error('Gemini HTTP request failed after retries', [
+                'model' => $model,
+                'status' => $status,
+                'attempt' => $attempt,
+                'max_attempts' => $maxAttempts,
+                'operation' => 'lease_extraction',
+                'response' => substr($lastBody, 0, 1000),
+            ]);
             throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
         }
 
         $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
+        Log::info('Gemini lease extraction completed', [
+            'model' => $model,
+            'attempts' => $attempt,
+            'operation' => 'lease_extraction',
+            'input_tokens' => $this->lastInputTokens(),
+            'output_tokens' => $this->lastOutputTokens(),
+        ]);
 
         return $this->decodeJsonResponse($resp->json());
     }

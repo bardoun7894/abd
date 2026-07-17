@@ -4,7 +4,9 @@
 // aggregate math, the metric whitelist gate, and the prompt-shape builders.
 uses(Tests\TestCase::class);
 
+use App\Services\GeminiClient;
 use App\Services\ReportsNlService;
+use Mockery;
 
 it('builds rounded metrics with a derived net_total', function () {
     $svc = app(ReportsNlService::class);
@@ -81,4 +83,37 @@ it('drops disallowed metrics before they ever reach the ask prompt', function ()
 
     expect($prompt)->toContain('40');
     expect($prompt)->not->toContain('99999');
+});
+
+it('delegates narrate() to GeminiClient::generateText() and trims the result', function () {
+    $mock = Mockery::mock(GeminiClient::class);
+    $mock->shouldReceive('generateText')
+        ->once()
+        ->withArgs(function (string $prompt, ?string $model) {
+            return str_contains($prompt, '100')
+                && str_contains($prompt, '40')
+                && str_contains($prompt, 'JSON')
+                && $model === 'gemini-test';
+        })
+        ->andReturn(' ملخص عربي. ');
+    $this->app->instance(GeminiClient::class, $mock);
+
+    $svc = app(ReportsNlService::class);
+    $result = $svc->narrate(['income_total' => 100.0, 'expense_total' => 40.0], 'gemini-test');
+
+    expect($result)->toBe(['summary' => 'ملخص عربي.']);
+});
+
+it('delegates answer() to GeminiClient::generateText() and returns the used metrics', function () {
+    $mock = Mockery::mock(GeminiClient::class);
+    $mock->shouldReceive('generateText')
+        ->once()
+        ->andReturn('الإجابة هي 40.');
+    $this->app->instance(GeminiClient::class, $mock);
+
+    $svc = app(ReportsNlService::class);
+    $result = $svc->answer('كم المصروفات؟', ['expense_total' => 40.0]);
+
+    expect($result['answer'])->toBe('الإجابة هي 40.');
+    expect($result['metrics_used'])->toBe(['expense_total' => 40.0]);
 });

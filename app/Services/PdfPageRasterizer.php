@@ -35,15 +35,22 @@ class PdfPageRasterizer
         }
 
         $dpi = $dpi ?: (int) config('services.gemini.raster_dpi', 200);
+        $timeout = (int) config('services.gemini.page_timeout', 120);
         $prefix = $outDir.'/page';
 
         $cmd = sprintf(
-            'pdftoppm -png -r %d %s %s 2>&1',
+            'timeout %d pdftoppm -png -r %d %s %s 2>&1',
+            $timeout,
             $dpi,
             escapeshellarg($pdfPath),
             escapeshellarg($prefix)
         );
-        exec($cmd, $output, $code);
+        $output = [];
+        $code = 0;
+        $this->exec($cmd, $output, $code);
+        if ($code === 124) {
+            throw new PdfSplitException('pdftoppm timed out after '.$timeout.' seconds');
+        }
         if ($code !== 0) {
             throw new PdfSplitException('pdftoppm failed: '.implode("\n", $output));
         }
@@ -56,5 +63,11 @@ class PdfPageRasterizer
         }
 
         return array_values($files);
+    }
+
+    /** Wrapper around PHP exec so tests can intercept the shell call. */
+    protected function exec(string $cmd, array &$output, int &$code): void
+    {
+        exec($cmd, $output, $code);
     }
 }

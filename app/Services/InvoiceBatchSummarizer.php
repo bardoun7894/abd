@@ -6,8 +6,6 @@ use App\Models\Invoice;
 use App\Models\InvoiceBatch;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -17,9 +15,8 @@ use Throwable;
  * aggregates and never invents, joins, or derives its own figures. Same
  * safety model as ReportsNlService / HomeInsightService.
  *
- * Text-only Gemini call — GeminiClient::extract() requires an inline file part and is
- * frozen/shared, so callGeminiText() below is copied verbatim from
- * MoraslatAiExtractor::callGeminiText() (same retry/backoff/error handling).
+ * Text-only Gemini calls are delegated to GeminiClient::generateText() so retry/backoff
+ * logic lives in one place.
  */
 class InvoiceBatchSummarizer
 {
@@ -105,7 +102,7 @@ class InvoiceBatchSummarizer
         try {
             $key = $this->cacheKey($batchId, $batch?->processed_pages);
             $narrative = Cache::remember($key, now()->addHours(6), function () use ($aggregates, $model) {
-                return trim($this->callGeminiText($this->narratePrompt($aggregates), $model));
+                return trim(app(GeminiClient::class)->generateText($this->narratePrompt($aggregates), $model));
             });
         } catch (Throwable $e) {
             // Graceful fallback — the results page must never break because Gemini is down.
@@ -127,56 +124,5 @@ class InvoiceBatchSummarizer
         return "أنت محلل مالي مختصر. لديك الأرقام الإجمالية التالية لدفعة فواتير بصيغة JSON فقط، ولا يوجد لديك أي بيانات أخرى (لا تخترع أرقاماً ولا تفترض بيانات غير موجودة هنا):\n"
             .json_encode($aggregates, JSON_UNESCAPED_UNICODE)."\n"
             .'اكتب ملخصاً سردياً بالعربية من جملتين إلى ثلاث جمل يوضح هذه الأرقام بأسلوب واضح لصاحب العمل، مع الإشارة إلى أهم مورد وعدد الفواتير التي تحتاج مراجعة إن وُجدت. أجب بنص عادي فقط دون أي تنسيق JSON.';
-    }
-
-    /**
-     * Minimal text-only Gemini call — copied verbatim from
-     * MoraslatAiExtractor::callGeminiText() (GeminiClient is file-input only and frozen).
-     */
-    private function callGeminiText(string $prompt, ?string $model = null): string
-    {
-        $key = config('services.gemini.key');
-        if (empty($key)) {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-        $model = $model ?: config('services.gemini.default_model');
-        $base = rtrim(config('services.gemini.base_url'), '/');
-
-        $body = [
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                ],
-            ]],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'responseMimeType' => 'text/plain',
-            ],
-        ];
-
-        $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
-        $attempt = 0;
-        while (true) {
-            $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
-            if ($resp->successful()) {
-                break;
-            }
-            $status = $resp->status();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                usleep((int) ((2 ** $attempt) * 500_000));
-
-                continue;
-            }
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
-        }
-
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
-        }
-
-        return $text;
     }
 }

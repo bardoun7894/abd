@@ -5,8 +5,6 @@ namespace App\Services;
 use DateTimeInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -17,9 +15,8 @@ use Throwable;
  * Gemini failure the caller gets the raw deltas with summary=null/fallback=true and must
  * render the numbers instead of the narrative.
  *
- * Text-only Gemini call — GeminiClient::extract() requires an inline file part and is
- * frozen/shared, so callGeminiText() below is copied verbatim from
- * MoraslatAiExtractor::callGeminiText() (same retry/backoff/error handling).
+ * Text-only Gemini calls are delegated to GeminiClient::generateText() so retry/backoff
+ * logic lives in one place.
  */
 class HomeInsightService
 {
@@ -118,7 +115,7 @@ class HomeInsightService
 
         try {
             $summary = Cache::remember($this->cacheKey(), now()->addHours(6), function () use ($deltas, $model) {
-                return trim($this->callGeminiText($this->buildPrompt($deltas), $model));
+                return trim(app(GeminiClient::class)->generateText($this->buildPrompt($deltas), $model));
             });
         } catch (Throwable $e) {
             // Graceful fallback — the home page must never break because Gemini is down.
@@ -126,56 +123,5 @@ class HomeInsightService
         }
 
         return ['summary' => $summary, 'deltas' => $deltas, 'fallback' => $fallback];
-    }
-
-    /**
-     * Minimal text-only Gemini call — copied verbatim from
-     * MoraslatAiExtractor::callGeminiText() (GeminiClient is file-input only and frozen).
-     */
-    private function callGeminiText(string $prompt, ?string $model = null): string
-    {
-        $key = config('services.gemini.key');
-        if (empty($key)) {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-        $model = $model ?: config('services.gemini.default_model');
-        $base = rtrim(config('services.gemini.base_url'), '/');
-
-        $body = [
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                ],
-            ]],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'responseMimeType' => 'text/plain',
-            ],
-        ];
-
-        $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
-        $attempt = 0;
-        while (true) {
-            $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
-            if ($resp->successful()) {
-                break;
-            }
-            $status = $resp->status();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                usleep((int) ((2 ** $attempt) * 500_000));
-
-                continue;
-            }
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
-        }
-
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
-        }
-
-        return $text;
     }
 }

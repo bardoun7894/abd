@@ -2,9 +2,6 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
-
 /**
  * Spec 004 C1 — AI for the MORASLAT (correspondence) module. Two capabilities:
  *
@@ -16,10 +13,8 @@ use RuntimeException;
  *      Nothing is saved here — the user confirms in the real moraslat form.
  *
  *  (b) draftReply(): given the letter's summary/subject, drafts a formal Arabic reply.
- *      This call is TEXT-ONLY (no file), so it cannot reuse GeminiClient::extract(), which
- *      requires an inline file part. GeminiClient is shared and frozen (do not modify), so
- *      this class makes its own minimal text-only Gemini HTTP call here, mirroring
- *      GeminiClient's retry/backoff/error handling.
+ *      This call is TEXT-ONLY (no file) and delegates to GeminiClient::generateText() so
+ *      retry/backoff logic lives in one place.
  */
 class MoraslatAiExtractor
 {
@@ -75,7 +70,8 @@ class MoraslatAiExtractor
      */
     public function draftReply(string $context, ?string $model = null): array
     {
-        $text = $this->callGeminiText($this->draftPrompt($context), $model);
+        $text = $this->gemini->generateText($this->draftPrompt($context), $model);
+        $this->lastDraftUsage = $this->gemini->lastUsage;
 
         return [
             'draft' => trim($text),
@@ -173,59 +169,6 @@ class MoraslatAiExtractor
         }
 
         return $names;
-    }
-
-    /**
-     * Minimal text-only Gemini call (no inline file), mirroring GeminiClient::extract()'s
-     * retry/backoff/error handling. GeminiClient itself is file-input only, so it can't be
-     * reused as-is for a plain-text draft; this keeps the shared client untouched.
-     */
-    private function callGeminiText(string $prompt, ?string $model = null): string
-    {
-        $key = config('services.gemini.key');
-        if (empty($key)) {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-        $model = $model ?: config('services.gemini.default_model');
-        $base = rtrim(config('services.gemini.base_url'), '/');
-
-        $body = [
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                ],
-            ]],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'responseMimeType' => 'text/plain',
-            ],
-        ];
-
-        $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
-        $attempt = 0;
-        while (true) {
-            $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
-            if ($resp->successful()) {
-                break;
-            }
-            $status = $resp->status();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                usleep((int) ((2 ** $attempt) * 500_000));
-
-                continue;
-            }
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
-        }
-
-        $this->lastDraftUsage = (array) data_get($resp->json(), 'usageMetadata', []);
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
-        }
-
-        return $text;
     }
 
     // ---- small pure normalizers ----

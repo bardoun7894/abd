@@ -2,9 +2,6 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
-
 /**
  * Spec 005 T-B1 — AI for the VIOLATION (مخالفات) module. Two text-only capabilities:
  *
@@ -20,10 +17,8 @@ use RuntimeException;
  *  (b) draftNotice(): drafts a formal Arabic violation-notice letter from violation fields
  *      (name, violation type, date, note).
  *
- *  Both calls are TEXT-ONLY (no file), so — like MoraslatAiExtractor::draftReply() — they
- *  cannot reuse GeminiClient::extract() (file-input only). GeminiClient is shared and
- *  frozen (do not modify), so this class makes its own minimal text-only Gemini HTTP call,
- *  copied verbatim from MoraslatAiExtractor::callGeminiText().
+ *  Both calls are TEXT-ONLY (no file) and delegate to GeminiClient::generateText() so
+ *  retry/backoff logic lives in one place.
  */
 class ViolationAiExtractor
 {
@@ -43,9 +38,10 @@ class ViolationAiExtractor
      * @return array{side:?string, side_id:?int, side_score:float, severity:?string,
      *               suggested_action:?string}
      */
-    public function classify(string $note, iterable $sides = [], iterable $severities = []): array
+    public function classify(string $note, iterable $sides = [], iterable $severities = [], ?string $model = null): array
     {
-        $raw = $this->callGeminiText($this->classifyPrompt($note), null);
+        $raw = $this->gemini->generateText($this->classifyPrompt($note), $model);
+        $this->lastDraftUsage = $this->gemini->lastUsage;
         $decoded = json_decode($this->stripCodeFence($raw), true);
         if (! is_array($decoded)) {
             $decoded = [];
@@ -71,7 +67,8 @@ class ViolationAiExtractor
      */
     public function draftNotice(array $fields, ?string $model = null): array
     {
-        $text = $this->callGeminiText($this->draftPrompt($fields), $model);
+        $text = $this->gemini->generateText($this->draftPrompt($fields), $model);
+        $this->lastDraftUsage = $this->gemini->lastUsage;
 
         return [
             'draft' => trim($text),
@@ -175,61 +172,6 @@ class ViolationAiExtractor
             ."نوع المخالفة: {$type}\n"
             ."تاريخ المخالفة: {$date}\n"
             .'ملاحظات/سبب المخالفة: '.$this->arabicDigits($note);
-    }
-
-    /**
-     * Minimal text-only Gemini call (no inline file), mirroring GeminiClient::extract()'s
-     * retry/backoff/error handling. GeminiClient itself is file-input only, so it can't be
-     * reused as-is for plain-text generation; this keeps the shared client untouched.
-     *
-     * Copied verbatim from MoraslatAiExtractor::callGeminiText() per the frozen-file rule.
-     */
-    private function callGeminiText(string $prompt, ?string $model = null): string
-    {
-        $key = config('services.gemini.key');
-        if (empty($key)) {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-        $model = $model ?: config('services.gemini.default_model');
-        $base = rtrim(config('services.gemini.base_url'), '/');
-
-        $body = [
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                ],
-            ]],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'responseMimeType' => 'text/plain',
-            ],
-        ];
-
-        $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
-        $attempt = 0;
-        while (true) {
-            $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
-            if ($resp->successful()) {
-                break;
-            }
-            $status = $resp->status();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                usleep((int) ((2 ** $attempt) * 500_000));
-
-                continue;
-            }
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
-        }
-
-        $this->lastDraftUsage = (array) data_get($resp->json(), 'usageMetadata', []);
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
-        }
-
-        return $text;
     }
 
     /** Strip ```json ... ``` / ``` ... ``` code fences some models still wrap JSON in. */

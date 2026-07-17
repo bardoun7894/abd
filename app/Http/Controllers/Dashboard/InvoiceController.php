@@ -228,6 +228,13 @@ class InvoiceController extends Controller
         $batch = $invoice->batch;
         $this->authorizeBatch($batch);
 
+        if ($batch->status === 'processing') {
+            return response()->json([
+                'status' => false,
+                'message_out' => 'الدفعة قيد المعالجة بالفعل، يرجى الانتظار',
+            ], 409);
+        }
+
         $invoice->forceFill(['status' => 'pending', 'error_message' => null])->save();
         $batch->forceFill(['status' => 'processing', 'error_message' => null])->save();
 

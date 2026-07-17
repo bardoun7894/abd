@@ -24,7 +24,11 @@ class SettingsController extends Controller
             'الذكاء الاصطناعي (Gemini)' => [
                 ['key' => 'gemini_api_key', 'label' => 'مفتاح Gemini API', 'secret' => true],
                 ['key' => 'gemini_model', 'label' => 'موديل Gemini', 'secret' => false, 'placeholder' => 'gemini-flash-lite-latest'],
+                ['key' => 'gemini_rescan_model', 'label' => 'موديل إعادة الفحص', 'secret' => false, 'placeholder' => 'gemini-3-flash-preview'],
                 ['key' => 'gemini_thinking', 'label' => 'مستوى التفكير', 'secret' => false, 'placeholder' => 'minimal | low | medium | high'],
+                ['key' => 'gemini_thinking_hard', 'label' => 'التفكير العميق', 'secret' => false, 'placeholder' => 'low | medium | high'],
+                ['key' => 'gemini_timeout', 'label' => 'مهلة Gemini (ثانية)', 'secret' => false, 'placeholder' => '120'],
+                ['key' => 'gemini_retries', 'label' => 'عدد محاولات إعادة الاتصال', 'secret' => false, 'placeholder' => '4'],
             ],
             'الرسائل النصية (SMS)' => [
                 ['key' => 'sms_provider', 'label' => 'مزوّد الرسائل', 'secret' => false, 'placeholder' => 'taqnyat'],
