@@ -411,8 +411,13 @@ class InvoiceController extends Controller
             $zatcaQr = null;
             $zatcaQrImage = null;
             if ($i->total_incl_vat !== null) {
-                $zatcaQr = $this->zatcaQr()->qrBase64($i);
-                $zatcaQrImage = $this->zatcaQrImageDataUri($zatcaQr);
+                $qr = $this->zatcaQr()->qrBase64($i);
+                // qrBase64 returns '' when ZATCA seller identity isn't configured
+                // (config/zatca.php seller_name + vat_number) — skip the QR then.
+                if ($qr !== '') {
+                    $zatcaQr = $qr;
+                    $zatcaQrImage = $this->zatcaQrImageDataUri($qr);
+                }
             }
 
             return [

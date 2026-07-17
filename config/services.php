@@ -34,7 +34,10 @@ return [
     // Google Gemini — used by the AI invoice-extraction feature.
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
-        'default_model' => env('GEMINI_DEFAULT_MODEL', 'gemini-3.5-flash'),
+        // Default to the stable, generally-available model. gemini-3.5-flash is
+        // real but returns 429/quota on limited-tier keys — using it as the code
+        // default made every AI path fail closed when app_settings was empty.
+        'default_model' => env('GEMINI_DEFAULT_MODEL', 'gemini-flash-lite-latest'),
         'thinking_level' => env('GEMINI_THINKING_LEVEL', 'minimal'), // minimal|low|medium|high (Gemini 3.x) — clear scans
         // Adaptive thinking: re-read a BAD scan with deeper thinking. Clear scans stay on the
         // cheap level above; only invoices flagged for review trigger this second pass.

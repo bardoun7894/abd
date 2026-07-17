@@ -66,7 +66,7 @@ Route::get('profile', function () {
 
 require __DIR__ . '/auth.php';
 require __DIR__ . '/dashboard.php';
-Route::get('/zatca',[ZatcaController::class,"index"]);
+Route::get('/zatca', [ZatcaController::class, 'index'])->middleware('auth')->name('zatca.index');
 Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
 Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
 Route::get('/tasks/{task}/subtasks', [TaskController::class, 'getSubtasks'])->name('tasks.subtasks');

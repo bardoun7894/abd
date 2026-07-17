@@ -40,8 +40,25 @@ class ZatcaQrGenerator
      * data and always come from config('zatca.*') — never hardcoded and
      * never taken from the (supplier) invoice fields.
      */
+    /**
+     * Seller identity must be set (via config/zatca.php or the Settings screen)
+     * before a legally-meaningful QR can be produced. Guards against silently
+     * emitting a QR with a blank seller name / VAT number.
+     */
+    public function isConfigured(): bool
+    {
+        return trim((string) config('zatca.seller_name', '')) !== ''
+            && trim((string) config('zatca.vat_number', '')) !== '';
+    }
+
     public function qrBase64(Invoice $invoice): string
     {
+        // No seller identity configured → return empty so the invoice view shows
+        // no QR (—) rather than an invalid QR with a blank seller/VAT.
+        if (! $this->isConfigured()) {
+            return '';
+        }
+
         $sellerName = (string) config('zatca.seller_name', '');
         $vatNumber = (string) config('zatca.vat_number', '');
 

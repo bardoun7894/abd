@@ -85,15 +85,15 @@ it('builds the 5-tag QR payload for an invoice using config seller/VAT + invoice
     expect($tags[5])->toBe('15.00');
 });
 
-it('never hardcodes seller name/VAT — falls back to empty config values', function () {
+it('never hardcodes seller name/VAT — and emits NO QR when identity is unconfigured', function () {
     config()->set('zatca.seller_name', '');
     config()->set('zatca.vat_number', '');
 
     $invoice = new Invoice();
     $invoice->forceFill(['total_incl_vat' => 50, 'vat_amount' => 7.5]);
 
-    $qr = $this->svc->qrBase64($invoice);
-    $bytes = base64_decode($qr);
-
-    expect(ord($bytes[1]))->toBe(0); // seller name tag length = 0
+    // Guard: with no seller identity configured, produce no QR at all rather
+    // than a QR carrying a blank seller name / VAT number.
+    expect($this->svc->isConfigured())->toBeFalse()
+        ->and($this->svc->qrBase64($invoice))->toBe('');
 });

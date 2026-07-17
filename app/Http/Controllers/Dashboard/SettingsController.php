@@ -23,7 +23,7 @@ class SettingsController extends Controller
         return [
             'الذكاء الاصطناعي (Gemini)' => [
                 ['key' => 'gemini_api_key', 'label' => 'مفتاح Gemini API', 'secret' => true],
-                ['key' => 'gemini_model', 'label' => 'موديل Gemini', 'secret' => false, 'placeholder' => 'gemini-3.5-flash'],
+                ['key' => 'gemini_model', 'label' => 'موديل Gemini', 'secret' => false, 'placeholder' => 'gemini-flash-lite-latest'],
                 ['key' => 'gemini_thinking', 'label' => 'مستوى التفكير', 'secret' => false, 'placeholder' => 'minimal | low | medium | high'],
             ],
             'الرسائل النصية (SMS)' => [
