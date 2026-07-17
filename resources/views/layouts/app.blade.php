@@ -147,14 +147,14 @@
             <div class="content d-flex flex-column flex-column-fluid" id="kt_content">
                 <div class="toolbar" id="kt_toolbar">
                     <div id="kt_toolbar_container" class="container-fluid d-flex flex-stack">
-                        <div data-kt-swapper="true" data-kt-swapper-mode="prepend" data-kt-swapper-parent="{default: '#kt_content_container', 'lg': '#kt_toolbar_container'}" class="flex-wrap mb-5 page-title d-flex align-items-center me-3 mb-lg-0" style='background-color: #083da6;' >
-                               <h1 class="my-1 d-flex align-items-center text-light fs-7" style="color: #ffb822 !important;">@yield('module','المحوسب')</h1>
-                            <span class="mx-2 border-gray-200 h-20px border-start ms-3"></span>
-                            <h1 class="my-1 d-flex align-items-center text-light fs-8">@yield('sub',"شركة صباح النور || النظام المالي")</h1>
-                            <span class="mx-2 border-gray-200 h-20px border-start ms-3"></span>
-                            <ul class="my-1 breadcrumb breadcrumb-separatorless fs-8">
-                                <li class="breadcrumb-item text-muted">
-                                     <span class="text-muted text-hover-primary">@yield('title',' ')</span>
+                        <div data-kt-swapper="true" data-kt-swapper-mode="prepend" data-kt-swapper-parent="{default: '#kt_content_container', 'lg': '#kt_toolbar_container'}" class="flex-wrap mb-5 page-title d-flex align-items-center me-3 mb-lg-0">
+                               <h1 class="my-1 d-flex align-items-center fs-6 fw-bolder" style="color: #ffb822;">@yield('module','المحوسب')</h1>
+                            <span class="mx-2 h-20px border-start border-white border-opacity-25 ms-3"></span>
+                            <h1 class="my-1 d-flex align-items-center text-white fs-7 fw-bold">@yield('sub',"شركة صباح النور || النظام المالي")</h1>
+                            <span class="mx-2 h-20px border-start border-white border-opacity-25 ms-3"></span>
+                            <ul class="my-1 breadcrumb breadcrumb-separatorless fs-7">
+                                <li class="breadcrumb-item">
+                                     <span class="text-white text-opacity-75">@yield('title',' ')</span>
                                 </li>
                             </ul>
                         </div>
