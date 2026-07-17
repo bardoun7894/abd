@@ -1,52 +1,68 @@
 <x-guest-layout>
-    <form method="POST" action="{{ route('register') }}">
+    <div class="sn-auth__brandmark sn-anim">
+        <svg class="sn-mark"><use href="#sn-logo-mark"/></svg>
+        <div>
+            <b>شركة صباح النور</b>
+            <span>Sabah Alnoor Co.</span>
+        </div>
+    </div>
+
+    <h1 class="sn-auth__title sn-anim d1">إنشاء حساب جديد</h1>
+    <p class="sn-auth__subtitle sn-anim d1">أدخل بياناتك لإنشاء حساب في نظام إدارة الشركة.</p>
+
+    @if ($errors->any())
+        <div class="sn-auth__error sn-shake sn-anim d2">{{ $errors->first() }}</div>
+    @endif
+
+    <form method="POST" action="{{ route('register') }}" data-sn-indicator class="w-100">
         @csrf
 
-        <!-- Name -->
-        <div>
-            <x-input-label for="name" :value="__('Name')" />
-            <x-text-input id="name" class="block mt-1 w-full" type="text" name="name" :value="old('name')" required autofocus autocomplete="name" />
-            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+        <div class="sn-field sn-anim d2">
+            <label for="name">الاسم</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true"><i class="fs-4 bi bi-person"></i></span>
+                <input id="name" type="text" name="name" value="{{ old('name') }}" placeholder="الاسم الكامل"
+                       required autofocus autocomplete="name" />
+            </div>
         </div>
 
-        <!-- Email Address -->
-        <div class="mt-4">
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+        <div class="sn-field sn-anim d3">
+            <label for="email">البريد الإلكتروني</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true"><i class="fs-4 bi bi-envelope"></i></span>
+                <input id="email" type="email" name="email" value="{{ old('email') }}" placeholder="أدخل بريدك الإلكتروني"
+                       required autocomplete="username" dir="ltr" />
+            </div>
         </div>
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="new-password" />
-
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
+        <div class="sn-field sn-anim d4">
+            <label for="password">كلمة المرور</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true"><i class="fs-4 bi bi-lock"></i></span>
+                <input id="password" type="password" name="password" placeholder="كلمة المرور"
+                       required autocomplete="new-password" />
+                <button type="button" class="sn-input__reveal" aria-label="إظهار كلمة المرور" data-sn-reveal="password">
+                    <i class="fs-4 bi bi-eye"></i>
+                </button>
+            </div>
         </div>
 
-        <!-- Confirm Password -->
-        <div class="mt-4">
-            <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
-
-            <x-text-input id="password_confirmation" class="block mt-1 w-full"
-                            type="password"
-                            name="password_confirmation" required autocomplete="new-password" />
-
-            <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
+        <div class="sn-field sn-anim d5">
+            <label for="password_confirmation">تأكيد كلمة المرور</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true"><i class="fs-4 bi bi-lock"></i></span>
+                <input id="password_confirmation" type="password" name="password_confirmation"
+                       placeholder="أعد إدخال كلمة المرور" required autocomplete="new-password" />
+            </div>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800" href="{{ route('login') }}">
-                {{ __('Already registered?') }}
-            </a>
-
-            <x-primary-button class="ml-4">
-                {{ __('Register') }}
-            </x-primary-button>
-        </div>
+        <button type="submit" class="sn-btn sn-anim d6">
+            <span class="indicator-label">إنشاء الحساب</span>
+            <span class="indicator-progress">انتظر... <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+        </button>
     </form>
+
+    <div class="sn-auth__support sn-anim d7">
+        لديك حساب بالفعل؟ <a href="{{ route('login') }}">تسجيل الدخول</a>
+    </div>
 </x-guest-layout>

@@ -1,31 +1,31 @@
 <x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Thanks for signing up! Before getting started, could you verify your email address by clicking on the link we just emailed to you? If you didn\'t receive the email, we will gladly send you another.') }}
+    <div class="sn-auth__brandmark sn-anim">
+        <svg class="sn-mark"><use href="#sn-logo-mark"/></svg>
+        <div>
+            <b>شركة صباح النور</b>
+            <span>Sabah Alnoor Co.</span>
+        </div>
     </div>
+
+    <h1 class="sn-auth__title sn-anim d1">تأكيد البريد الإلكتروني</h1>
+    <p class="sn-auth__subtitle sn-anim d1">شكراً لتسجيلك! قبل البدء، الرجاء تأكيد بريدك الإلكتروني عبر الرابط الذي أرسلناه إليك. إن لم يصلك، يمكننا إرسال رابط جديد.</p>
 
     @if (session('status') == 'verification-link-sent')
-        <div class="mb-4 font-medium text-sm text-green-600 dark:text-green-400">
-            {{ __('A new verification link has been sent to the email address you provided during registration.') }}
-        </div>
+        <div class="sn-auth__status sn-anim d2">تم إرسال رابط تأكيد جديد إلى بريدك الإلكتروني.</div>
     @endif
 
-    <div class="mt-4 flex items-center justify-between">
-        <form method="POST" action="{{ route('verification.send') }}">
-            @csrf
+    <form method="POST" action="{{ route('verification.send') }}" data-sn-indicator class="w-100">
+        @csrf
+        <button type="submit" class="sn-btn sn-anim d2">
+            <span class="indicator-label">إعادة إرسال رابط التأكيد</span>
+            <span class="indicator-progress">انتظر... <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+        </button>
+    </form>
 
-            <div>
-                <x-primary-button>
-                    {{ __('Resend Verification Email') }}
-                </x-primary-button>
-            </div>
-        </form>
-
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-
-            <button type="submit" class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                {{ __('Log Out') }}
-            </button>
-        </form>
-    </div>
+    <form method="POST" action="{{ route('logout') }}" class="sn-auth__support sn-anim d3">
+        @csrf
+        <button type="submit" class="btn btn-link p-0 text-decoration-none" style="color:var(--sn-emerald);font-weight:600">
+            تسجيل الخروج
+        </button>
+    </form>
 </x-guest-layout>

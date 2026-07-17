@@ -1,35 +1,42 @@
 <x-guest-layout>
-    <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
+    <div class="sn-auth__brandmark sn-anim">
+        <svg class="sn-mark"><use href="#sn-logo-mark"/></svg>
+        <div>
+            <b>شركة صباح النور</b>
+            <span>Sabah Alnoor Co.</span>
+        </div>
     </div>
 
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+    <h1 class="sn-auth__title sn-anim d1">نسيت كلمة المرور؟</h1>
+    <p class="sn-auth__subtitle sn-anim d1">لا مشكلة. أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور.</p>
 
-    <form method="POST" action="{{ route('password.email') }}">
+    @if (session('status'))
+        <div class="sn-auth__status sn-anim d2">{{ session('status') }}</div>
+    @endif
+
+    @if ($errors->any())
+        <div class="sn-auth__error sn-shake sn-anim d2">{{ $errors->first() }}</div>
+    @endif
+
+    <form method="POST" action="{{ route('password.email') }}" data-sn-indicator class="w-100">
         @csrf
 
-        <!-- Email Address -->
-        <div>
-            <label class="form-label fs-2 fw-bolder text-dark">الايميل</label>
-
-            <x-text-input id="email" class="form-control form-control-lg form-control-solid" type="email" name="email" :value="old('email')" required autofocus />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+        <div class="sn-field sn-anim d3">
+            <label for="email">البريد الإلكتروني</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true"><i class="fs-4 bi bi-envelope"></i></span>
+                <input id="email" type="email" name="email" value="{{ old('email') }}"
+                       placeholder="أدخل بريدك الإلكتروني" required autofocus autocomplete="username" dir="ltr" />
+            </div>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <x-primary-button>
-                {{ __('Email Password Reset Link') }}
-            </x-primary-button>
-        </div>
-
-
-
-
-
-
-
-
-
+        <button type="submit" class="sn-btn sn-anim d4">
+            <span class="indicator-label">إرسال رابط إعادة التعيين</span>
+            <span class="indicator-progress">انتظر... <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+        </button>
     </form>
+
+    <div class="sn-auth__support sn-anim d5">
+        <a href="{{ route('login') }}"><i class="bi bi-arrow-right ms-1"></i> العودة لتسجيل الدخول</a>
+    </div>
 </x-guest-layout>
