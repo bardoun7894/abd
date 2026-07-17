@@ -50,64 +50,112 @@
    -------------------------------------------------------------------------- */
 
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 400; font-display: swap;
-  src: url(../fonts/plex/plex-400-arabic.woff2) format('woff2');
-  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url(../fonts/plex/plex-400-arabic.woff2) format("woff2");
+	unicode-range:
+		U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 400; font-display: swap;
-  src: url(../fonts/plex/plex-400-latin.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url(../fonts/plex/plex-400-latin.woff2) format("woff2");
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 400; font-display: swap;
-  src: url(../fonts/plex/plex-400-latin-ext.woff2) format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url(../fonts/plex/plex-400-latin-ext.woff2) format("woff2");
+	unicode-range:
+		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 500; font-display: swap;
-  src: url(../fonts/plex/plex-500-arabic.woff2) format('woff2');
-  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url(../fonts/plex/plex-500-arabic.woff2) format("woff2");
+	unicode-range:
+		U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 500; font-display: swap;
-  src: url(../fonts/plex/plex-500-latin.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url(../fonts/plex/plex-500-latin.woff2) format("woff2");
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 500; font-display: swap;
-  src: url(../fonts/plex/plex-500-latin-ext.woff2) format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url(../fonts/plex/plex-500-latin-ext.woff2) format("woff2");
+	unicode-range:
+		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 600; font-display: swap;
-  src: url(../fonts/plex/plex-600-arabic.woff2) format('woff2');
-  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url(../fonts/plex/plex-600-arabic.woff2) format("woff2");
+	unicode-range:
+		U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 600; font-display: swap;
-  src: url(../fonts/plex/plex-600-latin.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url(../fonts/plex/plex-600-latin.woff2) format("woff2");
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 600; font-display: swap;
-  src: url(../fonts/plex/plex-600-latin-ext.woff2) format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url(../fonts/plex/plex-600-latin-ext.woff2) format("woff2");
+	unicode-range:
+		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 700; font-display: swap;
-  src: url(../fonts/plex/plex-700-arabic.woff2) format('woff2');
-  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url(../fonts/plex/plex-700-arabic.woff2) format("woff2");
+	unicode-range:
+		U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 700; font-display: swap;
-  src: url(../fonts/plex/plex-700-latin.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url(../fonts/plex/plex-700-latin.woff2) format("woff2");
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 700; font-display: swap;
-  src: url(../fonts/plex/plex-700-latin-ext.woff2) format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+	font-family: "IBM Plex Sans Arabic";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url(../fonts/plex/plex-700-latin-ext.woff2) format("woff2");
+	unicode-range:
+		U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
 /* -----------------------------------------------------------------------------
@@ -117,50 +165,55 @@
       warm paper/ink/gold set matches the agricultural identity of the logo.
    -------------------------------------------------------------------------- */
 :root {
-  /* brand */
-  --sn-emerald:      #0E6B4F;
-  --sn-emerald-deep: #0A4F3A;
-  --sn-emerald-soft: #1A7A4C;
-  --sn-emerald-tint: #E4EFE9;
-  --sn-gold:         #C19A45;
-  --sn-amber:        #B5780A;
-  --sn-amber-tint:   #F6ECD4;
-  --sn-rust:         #A93B2C;
-  --sn-rust-tint:    #F4E2DC;
-  --sn-sky:          #1F6FA8;
+	/* brand */
+	--sn-emerald: #0e6b4f;
+	--sn-emerald-deep: #0a4f3a;
+	--sn-emerald-soft: #1a7a4c;
+	--sn-emerald-tint: #e4efe9;
+	--sn-gold: #c19a45;
+	--sn-amber: #b5780a;
+	--sn-amber-tint: #f6ecd4;
+	--sn-rust: #a93b2c;
+	--sn-rust-tint: #f4e2dc;
+	--sn-sky: #1f6fa8;
 
-  /* surface / ink */
-  --sn-paper:   #F4EEE1;
-  --sn-paper-2: #FBF7EE;
-  --sn-card:    #FFFDF8;
-  --sn-ink:     #23201A;
-  --sn-ink-soft:#6E6557;
-  --sn-line:    #E4DBC8;
+	/* surface / ink */
+	--sn-paper: #f4eee1;
+	--sn-paper-2: #fbf7ee;
+	--sn-card: #fffdf8;
+	--sn-ink: #23201a;
+	--sn-ink-soft: #6e6557;
+	--sn-line: #e4dbc8;
 
-  /* radii */
-  --sn-r-sm: 8px;
-  --sn-r-md: 12px;
-  --sn-r-lg: 18px;
-  --sn-r-pill: 50rem;
+	/* radii */
+	--sn-r-sm: 8px;
+	--sn-r-md: 12px;
+	--sn-r-lg: 18px;
+	--sn-r-pill: 50rem;
 
-  /* elevation */
-  --sn-shadow-sm: 0 1px 2px rgba(35,32,26,.04);
-  --sn-shadow-md: 0 1px 2px rgba(35,32,26,.04), 0 12px 30px -12px rgba(35,32,26,.18);
-  --sn-shadow-lg: 0 20px 60px -20px rgba(35,32,26,.28);
+	/* elevation */
+	--sn-shadow-sm: 0 1px 2px rgba(35, 32, 26, 0.04);
+	--sn-shadow-md:
+		0 1px 2px rgba(35, 32, 26, 0.04), 0 12px 30px -12px rgba(35, 32, 26, 0.18);
+	--sn-shadow-lg: 0 20px 60px -20px rgba(35, 32, 26, 0.28);
 
-  /* motion — --sn-ease-out is the easing the existing .ai-* layer ALREADY uses.
+	/* motion — --sn-ease-out is the easing the existing .ai-* layer ALREADY uses.
      Adopting it as a token makes deduping that layer a rename, not a redesign. */
-  --sn-dur-fast: 120ms;
-  --sn-dur-base: 220ms;
-  --sn-dur-slow: 420ms;
-  --sn-ease-out: cubic-bezier(.22, 1, .36, 1);
+	--sn-dur-fast: 120ms;
+	--sn-dur-base: 220ms;
+	--sn-dur-slow: 420ms;
+	--sn-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* type */
-  --sn-font: 'IBM Plex Sans Arabic', 'DIN Next LT Arabic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	/* type */
+	--sn-font:
+		"IBM Plex Sans Arabic", "DIN Next LT Arabic", system-ui, -apple-system,
+		"Segoe UI", sans-serif;
 
-  /* Metronic drives its typography off this. Redefining it here — later in the
+	/* Metronic drives its typography off this. Redefining it here — later in the
      cascade, equal specificity — retires Poppins app-wide with no !important. */
-  --bs-font-sans-serif: 'IBM Plex Sans Arabic', 'DIN Next LT Arabic', system-ui, -apple-system, sans-serif;
+	--bs-font-sans-serif:
+		"IBM Plex Sans Arabic", "DIN Next LT Arabic", system-ui, -apple-system,
+		sans-serif;
 }
 
 /* -----------------------------------------------------------------------------
@@ -174,10 +227,11 @@
       weights) and icon references. Removing the link would silently break container
       widths across all 74 live views.
    -------------------------------------------------------------------------- */
-html, body {
-  font-family: var(--sn-font) !important;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+html,
+body {
+	font-family: var(--sn-font) !important;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
 /* -----------------------------------------------------------------------------
@@ -189,9 +243,11 @@ html, body {
       flip to Arabic-Indic mid-app.
    -------------------------------------------------------------------------- */
 .sn-num {
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  letter-spacing: 0;
+	font-variant-numeric: tabular-nums lining-nums;
+	font-feature-settings:
+		"tnum" 1,
+		"lnum" 1;
+	letter-spacing: 0;
 }
 
 /* -----------------------------------------------------------------------------
@@ -208,11 +264,11 @@ html, body {
       only the brand/primary identity changes.
    -------------------------------------------------------------------------- */
 :root {
-  --bs-primary: var(--sn-emerald);
-  --bs-primary-rgb: 14, 107, 79;                 /* #0E6B4F */
-  --bs-primary-active: var(--sn-emerald-deep);
-  --bs-link-color: var(--sn-emerald);
-  --bs-link-hover-color: var(--sn-emerald-deep);
+	--bs-primary: var(--sn-emerald);
+	--bs-primary-rgb: 14, 107, 79; /* #0E6B4F */
+	--bs-primary-active: var(--sn-emerald-deep);
+	--bs-link-color: var(--sn-emerald);
+	--bs-link-hover-color: var(--sn-emerald-deep);
 }
 
 /* solid primary buttons.
@@ -220,44 +276,77 @@ html, body {
    #1949ea) and sets .btn.btn-primary background with !important. It also carries
    essential layout rules, so it can't be removed — we out-!important it here. */
 .btn.btn-primary {
-  border-color: var(--sn-emerald) !important;
-  background-color: var(--sn-emerald) !important;
+	border-color: var(--sn-emerald) !important;
+	background-color: var(--sn-emerald) !important;
 }
 .btn-check:checked + .btn.btn-primary,
 .btn-check:active + .btn.btn-primary,
 .btn.btn-primary:focus:not(.btn-active),
 .btn.btn-primary:hover:not(.btn-active),
 .btn.btn-primary:active:not(.btn-active) {
-  border-color: var(--sn-emerald-deep) !important;
-  background-color: var(--sn-emerald-deep) !important;
+	border-color: var(--sn-emerald-deep) !important;
+	background-color: var(--sn-emerald-deep) !important;
 }
 
 /* soft / light primary buttons + surfaces */
-.btn.btn-light-primary { color: var(--sn-emerald); border-color: var(--sn-emerald-tint); background-color: var(--sn-emerald-tint); }
+.btn.btn-light-primary {
+	color: var(--sn-emerald);
+	border-color: var(--sn-emerald-tint);
+	background-color: var(--sn-emerald-tint);
+}
 .btn-check:checked + .btn.btn-light-primary,
 .btn-check:active + .btn.btn-light-primary,
 .btn.btn-light-primary:focus:not(.btn-active),
 .btn.btn-light-primary:hover:not(.btn-active),
 .btn.btn-light-primary:active:not(.btn-active) {
-  color: #fff; border-color: var(--sn-emerald) !important; background-color: var(--sn-emerald) !important;
+	color: #fff;
+	border-color: var(--sn-emerald) !important;
+	background-color: var(--sn-emerald) !important;
 }
-.bg-light-primary { background-color: var(--sn-emerald-tint) !important; }
-.badge-light-primary { color: var(--sn-emerald-deep); background-color: var(--sn-emerald-tint); }
-.badge-primary { background-color: var(--sn-emerald); }
+.bg-light-primary {
+	background-color: var(--sn-emerald-tint) !important;
+}
+.badge-light-primary {
+	color: var(--sn-emerald-deep);
+	background-color: var(--sn-emerald-tint);
+}
+.badge-primary {
+	background-color: var(--sn-emerald);
+}
 
 /* text + links */
-.text-primary { color: var(--sn-emerald) !important; }
+.text-primary {
+	color: var(--sn-emerald) !important;
+}
 /* dinnext repurposed .text-info as the old-brand blue accent (#1949ea) app-wide —
    headings, the user name, menu links. Rebrand it to emerald. (Semantic surfaces
    like badge-info / alert-info keep their own colors.) */
-.text-info { color: var(--sn-emerald) !important; }
-.text-hover-primary:hover, a.text-hover-primary:hover, .text-hover-primary:hover i { color: var(--sn-emerald) !important; }
-.link-primary { color: var(--sn-emerald); }
-.link-primary:hover, .link-primary:focus { color: var(--sn-emerald-deep); }
+.text-info {
+	color: var(--sn-emerald) !important;
+}
+.text-hover-primary:hover,
+a.text-hover-primary:hover,
+.text-hover-primary:hover i {
+	color: var(--sn-emerald) !important;
+}
+.link-primary {
+	color: var(--sn-emerald);
+}
+.link-primary:hover,
+.link-primary:focus {
+	color: var(--sn-emerald-deep);
+}
 
 /* form controls */
-.form-check-input:checked { background-color: var(--sn-emerald); border-color: var(--sn-emerald); }
-.form-control:focus, .form-select:focus { border-color: var(--sn-emerald); box-shadow: 0 0 0 .2rem var(--sn-emerald-tint); }
+.form-check-input:checked {
+	background-color: var(--sn-emerald);
+	border-color: var(--sn-emerald);
+}
+.form-control:focus,
+.form-select:focus {
+	border-color: var(--sn-emerald);
+	box-shadow: 0 0 0 0.2rem var(--sn-emerald-tint);
+}
 
 /* -----------------------------------------------------------------------------
    Sidebar (aside) polish — rounded links, emerald active state with a start-side
@@ -265,37 +354,54 @@ html, body {
    -------------------------------------------------------------------------- */
 .aside .menu > .menu-item .menu-link,
 #kt_aside .menu .menu-item .menu-link {
-  border-radius: var(--sn-r-md);
-  margin-inline: .5rem;
-  transition: background-color var(--sn-dur-fast) var(--sn-ease-out), color var(--sn-dur-fast) var(--sn-ease-out);
+	border-radius: var(--sn-r-md);
+	margin-inline: 0.5rem;
+	transition:
+		background-color var(--sn-dur-fast) var(--sn-ease-out),
+		color var(--sn-dur-fast) var(--sn-ease-out);
 }
 #kt_aside .menu .menu-item .menu-link:hover {
-  background-color: var(--sn-emerald-tint) !important;
+	background-color: var(--sn-emerald-tint) !important;
 }
 .menu-state-primary .menu-item .menu-link.active,
 .menu-active-bg .menu-item .menu-link.active,
 #kt_aside .menu .menu-item .menu-link.active {
-  position: relative;
-  background-color: var(--sn-emerald-tint) !important;
+	position: relative;
+	background-color: var(--sn-emerald-tint) !important;
 }
 /* start-side accent bar on the active item */
 #kt_aside .menu .menu-item .menu-link.active::before {
-  content: "";
-  position: absolute;
-  inset-inline-start: 0; top: 18%; bottom: 18%;
-  width: 3px; border-radius: 3px;
-  background: var(--sn-emerald);
+	content: "";
+	position: absolute;
+	inset-inline-start: 0;
+	top: 18%;
+	bottom: 18%;
+	width: 3px;
+	border-radius: 3px;
+	background: var(--sn-emerald);
 }
 .menu-item .menu-link.active .menu-title,
 .menu-item .menu-link.active .menu-icon i,
 #kt_aside .menu .menu-item .menu-link.active .menu-title,
-#kt_aside .menu .menu-item .menu-link.active .menu-icon i { color: var(--sn-emerald-deep) !important; }
-#kt_aside .menu .menu-item .menu-link:hover .menu-title { color: var(--sn-emerald-deep) !important; }
+#kt_aside .menu .menu-item .menu-link.active .menu-icon i {
+	color: var(--sn-emerald-deep) !important;
+}
+#kt_aside .menu .menu-item .menu-link:hover .menu-title {
+	color: var(--sn-emerald-deep) !important;
+}
 
 /* pagination (Laravel Bootstrap-5 paginator, used by the log pages) */
-.page-item.active .page-link { background-color: var(--sn-emerald); border-color: var(--sn-emerald); }
-.page-link { color: var(--sn-emerald); }
-.page-link:hover { color: var(--sn-emerald-deep); background-color: var(--sn-emerald-tint); }
+.page-item.active .page-link {
+	background-color: var(--sn-emerald);
+	border-color: var(--sn-emerald);
+}
+.page-link {
+	color: var(--sn-emerald);
+}
+.page-link:hover {
+	color: var(--sn-emerald-deep);
+	background-color: var(--sn-emerald-tint);
+}
 
 /* -----------------------------------------------------------------------------
    6. Surface warmth + table polish (subtle, global).
@@ -303,42 +409,71 @@ html, body {
       inline #ffb822 yellow headers scattered across 11 views. Views can opt a
       table header into the brand tint with `.sn-thead`.
    -------------------------------------------------------------------------- */
-.card { border-radius: var(--sn-r-lg); box-shadow: var(--sn-shadow-sm); border-color: var(--sn-line); }
+.card {
+	border-radius: var(--sn-r-lg);
+	box-shadow: var(--sn-shadow-sm);
+	border-color: var(--sn-line);
+}
 
 /* The page-title toolbar band was painted old-brand blue (#083da6) by the dinnext
    override. Rebrand it to the emerald identity. */
-.toolbar { background: linear-gradient(90deg, var(--sn-emerald-deep), var(--sn-emerald)) !important; }
-.toolbar .page-title .page-heading, .toolbar .page-title,
-.toolbar .breadcrumb .breadcrumb-item, .toolbar .breadcrumb .breadcrumb-item a,
-.toolbar .page-title .text-muted { color: #fff !important; }
-.toolbar .breadcrumb .breadcrumb-item:before { color: rgba(255,255,255,.5) !important; }
+.toolbar {
+	background: linear-gradient(
+		90deg,
+		var(--sn-emerald-deep),
+		var(--sn-emerald)
+	) !important;
+}
+.toolbar .page-title .page-heading,
+.toolbar .page-title,
+.toolbar .breadcrumb .breadcrumb-item,
+.toolbar .breadcrumb .breadcrumb-item a,
+.toolbar .page-title .text-muted {
+	color: #fff !important;
+}
+.toolbar .breadcrumb .breadcrumb-item:before {
+	color: rgba(255, 255, 255, 0.5) !important;
+}
 
 /* Card titles were forced pink (#d3224c) at an oversized 1.675rem by dinnext, and
    many section labels use .text-info which dinnext painted old-brand blue (#1949ea).
    Normalize card headings to brand ink at a sane size. */
 .card .card-header .card-title,
 .card .card-header .card-title .card-label {
-  color: var(--sn-ink) !important;
-  font-size: 1.15rem !important;
-  font-weight: 700;
+	color: var(--sn-ink) !important;
+	font-size: 1.15rem !important;
+	font-weight: 700;
 }
 .card .card-header .card-title .text-info,
-.card .card-header .card-title .card-label.text-info { color: var(--sn-ink) !important; }
-.card .card-header .card-title .text-muted { color: var(--sn-ink-soft) !important; }
+.card .card-header .card-title .card-label.text-info {
+	color: var(--sn-ink) !important;
+}
+.card .card-header .card-title .text-muted {
+	color: var(--sn-ink-soft) !important;
+}
 .table.sn-thead thead tr,
-.table thead.sn-thead tr { background: var(--sn-emerald-tint) !important; color: var(--sn-emerald-deep) !important; }
-.table.sn-thead thead th, .table thead.sn-thead th { border-bottom: 2px solid var(--sn-emerald) !important; font-weight: 600; }
+.table thead.sn-thead tr {
+	background: var(--sn-emerald-tint) !important;
+	color: var(--sn-emerald-deep) !important;
+}
+.table.sn-thead thead th,
+.table thead.sn-thead th {
+	border-bottom: 2px solid var(--sn-emerald) !important;
+	font-weight: 600;
+}
 
 /* -----------------------------------------------------------------------------
    7. Global motion guard. Anything this layer animates must die here too.
    -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: .001ms !important;
-    scroll-behavior: auto !important;
-  }
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+	}
 }
 
 /* -----------------------------------------------------------------------------
@@ -347,31 +482,76 @@ html, body {
       animations. Killed globally by the section-7 prefers-reduced-motion guard.
    -------------------------------------------------------------------------- */
 .card {
-  transition: box-shadow var(--sn-dur-base) var(--sn-ease-out);
+	transition: box-shadow var(--sn-dur-base) var(--sn-ease-out);
 }
 .card:hover {
-  box-shadow: var(--sn-shadow-md);
+	box-shadow: var(--sn-shadow-md);
 }
 
 /* list-row hover inside scrollable widget bodies */
 .sn-row-hover {
-  transition: background-color var(--sn-dur-fast) var(--sn-ease-out);
+	transition: background-color var(--sn-dur-fast) var(--sn-ease-out);
 }
 .sn-row-hover:hover {
-  background-color: var(--sn-emerald-tint) !important;
+	background-color: var(--sn-emerald-tint) !important;
 }
 
 /* RTL-safe status accents for the vacations widget (border-inline-start, never
    border-left). Colors stay semantic — emerald ongoing, amber upcoming, muted ended. */
-.sn-accent-success { border-inline-start: 4px solid var(--sn-emerald); }
-.sn-accent-warning { border-inline-start: 4px solid var(--sn-amber); }
-.sn-accent-muted   { border-inline-start: 4px solid var(--sn-line); }
+.sn-accent-success {
+	border-inline-start: 4px solid var(--sn-emerald);
+}
+.sn-accent-warning {
+	border-inline-start: 4px solid var(--sn-amber);
+}
+.sn-accent-muted {
+	border-inline-start: 4px solid var(--sn-line);
+}
 
 /* pulse reserved for the overdue-tasks counter badge ONLY */
 @keyframes sn-badge-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: .55; }
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.55;
+	}
 }
 .sn-badge-pulse {
-  animation: sn-badge-pulse 1.6s var(--sn-ease-out) infinite;
+	animation: sn-badge-pulse 1.6s var(--sn-ease-out) infinite;
+}
+
+/* -----------------------------------------------------------------------------
+   9. Lease review table (unprocessed) — fixed layout, controlled column sizes.
+      Notes column gets the flex space and clamps long text; actions stay on one
+      line; no physical properties (RTL-safe).
+   -------------------------------------------------------------------------- */
+.sn-lease-review {
+  table-layout: fixed;
+  width: 100%;
+}
+.sn-lease-review .sn-col-id       { width: 3.5rem; }
+.sn-lease-review .sn-col-batch    { width: 5rem; }
+.sn-lease-review .sn-col-contract { width: 11rem; }
+.sn-lease-review .sn-col-tenant   { width: 16rem; }
+.sn-lease-review .sn-col-status   { width: 7.5rem; }
+.sn-lease-review .sn-col-notes    { width: auto; }
+.sn-lease-review .sn-col-actions  { width: 12rem; }
+
+.sn-lease-review td {
+  vertical-align: middle;
+  padding-block: .85rem;
+}
+.sn-lease-review .sn-notes-cell {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.7;
+  word-break: break-word;
+}
+@media (max-width: 991.98px) {
+  .sn-lease-review .sn-col-contract,
+  .sn-lease-review .sn-col-tenant { width: auto; }
 }
