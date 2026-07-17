@@ -3,13 +3,6 @@
 @section('sub', 'الرئيسية')
 @section('title', "$page_title")
 @section('content')
-    <style>
-        .mol_home_ a {
-            font-size: 16px !important;
-        }
-    </style>
-
-
     @inject('Carbon', 'Carbon\Carbon')
 
     @php
@@ -17,14 +10,6 @@
         $filters = (isset($filters) && is_array($filters)) ? $filters : [];
         $filters = array_merge(['doe_from' => '', 'doe_to' => '', 'dop_from' => '', 'dop_to' => '', 'doe_status' => '', 'dop_status' => ''], $filters);
     @endphp
-
-
-
-
-
-
-
-
 
 
     <div class="row gy-5 g-xl-8">
@@ -141,10 +126,10 @@
                             <a href="#"
                                 class=" fw-bolder text-hover-primary fs-6 text-primary">{{ $x->worker_name }}</a>
                                 <?php if ($x->doe_desc == '2') { ?>
-                            <span class=" d-block fw-bold text-danger ">{{ $doe_desc_char }} - {{ $udoe_desc }}</span>
+                            <span class="badge badge-light-danger fw-bold mt-1">{{ $doe_desc_char }} - {{ $udoe_desc }}</span>
                             <?php } ?>
                             <?php if ($x->dop_desc == '2') { ?>
-                            <span class=" d-block fw-bold text-danger ">{{ $dop_desc_char }} - {{ $udop_desc }}</span>
+                            <span class="badge badge-light-danger fw-bold mt-1">{{ $dop_desc_char }} - {{ $udop_desc }}</span>
                             <?php } ?>
 
                             <span class=" d-block fw-bold text-dark">{{ $x->ssn }}</span>
@@ -156,14 +141,6 @@
             </div>
         </div>
         <?php        } ?>
-
-
-
-
-
-
-
-
 
 
         <?php if(Perm::get_function_access(50) || Perm::get_function_access(51) || Perm::get_function_access(52) || Perm::get_function_access(53) || Perm::get_function_access(54)){?>
@@ -195,7 +172,7 @@
                     $moraslat_status_name='جديدة';
                 }
                         ?>
-                    <div class="d-flex align-items-center @if ($x->create_user == Auth::user()->id) bg-light-success rounded p-5 mb-7 @else bg-light-danger rounded p-5 mb-7  @endif ">
+                    <div class="d-flex align-items-center @if ($x->create_user == Auth::user()->id) bg-light rounded p-4 mb-4 border-start border-4 border-success @else bg-light rounded p-4 mb-4 border-start border-4 border-danger @endif ">
                         <span class="svg-icon @if ($x->create_user == Auth::user()->id) svg-icon-success me-5 @else svg-icon-danger me-5  @endif ">
                             <span class="svg-icon svg-icon-1">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
@@ -231,8 +208,11 @@
 
         <div class="col-xl-4">
             <div class="card card-xl-stretch mb-5 mb-xl-8">
-                <div class="card-body pt-5 card-scroll h-300px">
-                    <div class="fs-4 fw-bold text-info mb-7">احصائية مصاريف العمال -{{$Carbon::now()->format('Y')}}</div>
+                <div class="card-header border-0">
+                    <h3 class="card-title fw-bolder text-info">احصائية المصاريف -{{$Carbon::now()->format('Y')}}</h3>
+                </div>
+                <div class="card-body pt-2 card-scroll h-300px">
+                    <div class="fs-5 fw-bold text-info mb-7">مصاريف العمال</div>
                     <div class="fs-6 d-flex justify-content-between mb-4">
                         <div class="fw-bold">اجمالي المبلغ المطلوب</div>
                         <div class="d-flex fw-bolder">
@@ -270,7 +250,7 @@
                     </div>
                     <div class="separator separator-dotted  pt-5 border-danger my-2 "></div>
 
-                    <div class="fs-4 fw-bold text-info mb-7">احصائية مصاريف المحلات -{{$Carbon::now()->format('Y')}}</div>
+                    <div class="fs-5 fw-bold text-info mb-7">مصاريف المحلات</div>
                     <div class="fs-6 d-flex justify-content-between mb-4">
                         <div class="fw-bold">اجمالي المبلغ المطلوب</div>
                         <div class="d-flex fw-bolder">
@@ -333,7 +313,7 @@
             <div class="card card-xl-stretch mb-5 mb-xl-8">
                 <div class="card-header border-0 pt-5">
                     <h3 class="card-title align-items-start flex-column">
-                        <span class="card-label fw-bolder text-info">العمال حسب المجموعات</span>
+                        <span class="card-label fw-bolder text-info">العمال حسب المجموعات — أعمدة</span>
                     </h3>
                 </div>
                 <div class="card-body pt-5 card-scroll h-400px">
@@ -342,7 +322,6 @@
             </div>
         </div>
         <?php } ?>
-
 
 
     </div>
