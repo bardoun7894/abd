@@ -9,6 +9,9 @@
         // Defensive default so the page never breaks if the controller hasn't (yet) supplied filters.
         $filters = (isset($filters) && is_array($filters)) ? $filters : [];
         $filters = array_merge(['doe_from' => '', 'doe_to' => '', 'dop_from' => '', 'dop_to' => '', 'doe_status' => '', 'dop_status' => ''], $filters);
+        $listtasks = $listtasks ?? collect();
+        $overdue_tasks_count = $overdue_tasks_count ?? 0;
+        $listvacations = $listvacations ?? collect();
     @endphp
 
 
@@ -198,6 +201,103 @@
 
 <?php } ?>
 
+                </div>
+            </div>
+        </div>
+        <?php } ?>
+
+
+        <?php if (Perm::get_function_access(88)) { ?>
+
+        <div class="col-xl-4">
+            <div class="card card-xl-stretch mb-xl-8">
+                <div class="card-header border-0 d-flex justify-content-between align-items-center">
+                    <h3 class="card-title fw-bolder text-info">المهام</h3>
+                    <?php if ($overdue_tasks_count > 0) { ?>
+                    <span class="badge badge-danger sn-badge-pulse">{{ $overdue_tasks_count }} متأخرة</span>
+                    <?php } ?>
+                </div>
+                <div class="card-body pt-2 card-scroll h-300px">
+                    <?php
+                    $today = \Carbon\Carbon::today();
+                    foreach ($listtasks as $t) {
+                        $due = $t->due_date ? \Carbon\Carbon::parse($t->due_date) : null;
+                        if ($due && $due->lt($today)) {
+                            $task_badge = '<span class="badge badge-light-danger fw-bold">متأخرة</span>';
+                        } elseif ($due && $due->isToday()) {
+                            $task_badge = '<span class="badge badge-light-warning fw-bold">تستحق اليوم</span>';
+                        } else {
+                            $task_badge = '<span class="badge badge-light-primary fw-bold">قادمة</span>';
+                        }
+                    ?>
+                    <div class="d-flex align-items-center bg-light rounded p-4 mb-4 sn-row-hover">
+                        <div class="flex-grow-1 me-2">
+                            <span class="fw-bolder text-gray-800 fs-6 d-block">{{ $t->note ?: 'مهمة #' . $t->id }}</span>
+                            <span class="fw-bold text-dark fs-8">
+                                {{ optional($t->worker)->worker_name }}
+                                @if(optional($t->service)->name) — {{ $t->service->name }} @endif
+                            </span>
+                            @if($due)
+                            <span class="text-muted fs-8 d-block">الاستحقاق: {{ $due->format('d-m-Y') }}</span>
+                            @endif
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            {!! $task_badge !!}
+                            @if($t->needs == 1)
+                            <span class="badge badge-light-info fw-bold">احتياجات</span>
+                            @endif
+                        </div>
+                    </div>
+                    <?php } ?>
+                    @if($listtasks->isEmpty())
+                    <div class="text-muted fw-bold text-center py-10">لا توجد مهام نشطة</div>
+                    @endif
+                </div>
+            </div>
+        </div>
+        <?php } ?>
+
+
+        <?php if (Perm::get_function_access(63) || Perm::get_function_access(64) || Perm::get_function_access(65) || Perm::get_function_access(66) || Perm::get_function_access(67)) { ?>
+
+        <div class="col-xl-4">
+            <div class="card card-xl-stretch mb-xl-8">
+                <div class="card-header border-0">
+                    <h3 class="card-title fw-bolder text-info">طلبات الإجازات</h3>
+                </div>
+                <div class="card-body pt-2 card-scroll h-300px">
+                    <?php
+                    $today = \Carbon\Carbon::today();
+                    foreach ($listvacations as $v) {
+                        $vstart = $v->start ? \Carbon\Carbon::parse($v->start) : null;
+                        $vend   = $v->end   ? \Carbon\Carbon::parse($v->end)   : null;
+                        if ($vstart && $vend && $today->between($vstart, $vend)) {
+                            $vac_status = '<span class="badge badge-light-success fw-bold">جارية</span>';
+                            $vac_accent = 'sn-accent-success';
+                        } elseif ($vstart && $vstart->gt($today)) {
+                            $vac_status = '<span class="badge badge-light-warning fw-bold">قادمة</span>';
+                            $vac_accent = 'sn-accent-warning';
+                        } else {
+                            $vac_status = '<span class="badge badge-light-secondary fw-bold">منتهية</span>';
+                            $vac_accent = 'sn-accent-muted';
+                        }
+                    ?>
+                    <div class="bg-light rounded p-4 mb-4 sn-row-hover {{ $vac_accent }}">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1 me-2">
+                                <span class="fw-bolder text-gray-800 fs-6 d-block">{{ $v->worker_name }}</span>
+                                <span class="fw-bold text-dark fs-8">{{ $v->vacation_type_name ?? 'إجازة' }}</span>
+                                <span class="text-muted fs-8 d-block">
+                                    {{ $vstart ? $vstart->format('d-m-Y') : '—' }} ← {{ $vend ? $vend->format('d-m-Y') : '—' }}
+                                </span>
+                            </div>
+                            {!! $vac_status !!}
+                        </div>
+                    </div>
+                    <?php } ?>
+                    @if($listvacations->isEmpty())
+                    <div class="text-muted fw-bold text-center py-10">لا توجد طلبات إجازات</div>
+                    @endif
                 </div>
             </div>
         </div>

@@ -340,3 +340,38 @@ html, body {
     scroll-behavior: auto !important;
   }
 }
+
+/* -----------------------------------------------------------------------------
+   8. Dashboard widget polish (home) — subtle, business-appropriate motion only.
+      Card hover gets a gentle depth lift; urgent badges pulse. No entrance
+      animations. Killed globally by the section-7 prefers-reduced-motion guard.
+   -------------------------------------------------------------------------- */
+.card {
+  transition: box-shadow var(--sn-dur-base) var(--sn-ease-out);
+}
+.card:hover {
+  box-shadow: var(--sn-shadow-md);
+}
+
+/* list-row hover inside scrollable widget bodies */
+.sn-row-hover {
+  transition: background-color var(--sn-dur-fast) var(--sn-ease-out);
+}
+.sn-row-hover:hover {
+  background-color: var(--sn-emerald-tint) !important;
+}
+
+/* RTL-safe status accents for the vacations widget (border-inline-start, never
+   border-left). Colors stay semantic — emerald ongoing, amber upcoming, muted ended. */
+.sn-accent-success { border-inline-start: 4px solid var(--sn-emerald); }
+.sn-accent-warning { border-inline-start: 4px solid var(--sn-amber); }
+.sn-accent-muted   { border-inline-start: 4px solid var(--sn-line); }
+
+/* pulse reserved for the overdue-tasks counter badge ONLY */
+@keyframes sn-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .55; }
+}
+.sn-badge-pulse {
+  animation: sn-badge-pulse 1.6s var(--sn-ease-out) infinite;
+}

@@ -13,6 +13,8 @@ use App\Models\Workers;
 use App\Models\Moraslat;
 use App\Models\Financial;
 use App\Models\Calculate;
+use App\Models\TheTask;
+use App\Helpers\Perm;
 
 //use App\Http\Requests\StoreEmpsRequest;
 //use App\Http\Requests\UpdateEmpsRequest;
@@ -171,7 +173,49 @@ class HomeController extends Controller
             $insight = ['summary' => null, 'deltas' => [], 'fallback' => true];
         }
 
-        return view('home', compact('page_title', 'listworker', 'listmoraslat', 'filters', 'insight', $const,  $const2,  $const3));
+        // Tasks widget (perm 88 = tasks-module view, same gate as TaskController@index).
+        // Never throws: mirrors the HomeInsightService defensive pattern so a schema
+        // surprise can't take the whole homepage down.
+        $listtasks = collect();
+        $overdue_tasks_count = 0;
+        try {
+            if (Perm::get_function_access(88)) {
+                $activeSchedule = function ($q) { $q->where('status', '!=', 'مكتمل'); };
+                $listtasks = TheTask::with(['worker', 'service', 'schedule'])
+                    ->whereHas('schedule', $activeSchedule)
+                    ->orderByRaw('due_date IS NULL, due_date ASC')
+                    ->limit(15)
+                    ->get();
+                $overdue_tasks_count = TheTask::whereHas('schedule', $activeSchedule)
+                    ->whereNotNull('due_date')
+                    ->whereDate('due_date', '<', Carbon::today())
+                    ->count();
+            }
+        } catch (\Throwable $e) {
+            $listtasks = collect();
+            $overdue_tasks_count = 0;
+        }
+
+        // Vacations widget (perms 63-67, same gate set as VacationController). The
+        // vacation table has no approval-status column, so status is derived at
+        // render time: ongoing / upcoming / ended. Never throws.
+        $listvacations = collect();
+        try {
+            if (Perm::get_function_access(63) || Perm::get_function_access(64) || Perm::get_function_access(65)
+                || Perm::get_function_access(66) || Perm::get_function_access(67)) {
+                $listvacations = DB::table('vacation as v')
+                    ->join('workers as w', 'v.worker_id', '=', 'w.worker_id')
+                    ->leftJoin('vacation_type as vt', 'v.vacation_type_id', '=', 'vt.vacation_type_id')
+                    ->where('v.is_deleted', 0)
+                    ->orderBy('v.vacation_id', 'desc')
+                    ->limit(15)
+                    ->get(['v.vacation_id', 'v.start', 'v.end', 'w.worker_name', 'vt.vacation_type_name']);
+            }
+        } catch (\Throwable $e) {
+            $listvacations = collect();
+        }
+
+        return view('home', compact('page_title', 'listworker', 'listmoraslat', 'filters', 'insight', 'listtasks', 'overdue_tasks_count', 'listvacations', $const,  $const2,  $const3));
 
     }
 
