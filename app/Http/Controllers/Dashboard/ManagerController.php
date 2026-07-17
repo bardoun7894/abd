@@ -309,4 +309,44 @@ class ManagerController extends Controller
     }
 
 
+    /**
+     * Spec 005 remaining-work — AI extraction for the manager (group-leader) add form.
+     * Mirrors WorkersController::aiExtract. Reads an ID/passport scan via
+     * ManagerAiExtractor and returns manager_name / manager_mobile to prefill the
+     * existing form. Nothing is saved to the `manager` table here.
+     */
+    public function aiExtract(Request $request)
+    {
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        $file = $request->file('document');
+        $ds = app(\App\Services\DocumentStorage::class);
+        $tmp = $ds->tempWorkingCopy($file);
+        try {
+            $data = app(\App\Services\ManagerAiExtractor::class)->extract($tmp);
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج البيانات: '.$e->getMessage()], 422);
+        } finally {
+            @unlink($tmp);
+        }
+        $stored = $ds->store($file, 'manager');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'manager', 'filename' => $stored['filename']]);
+
+        \App\Services\AuditLogger::log('manager', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج وثيقة هوية قائد مجموعة بالذكاء الاصطناعي',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'manager_name' => $data['manager_name'],
+                'manager_mobile' => $data['manager_mobile'],
+                'confidence' => $data['field_confidence'],
+                'document_url' => $fileUrl,
+            ],
+        ]);
+    }
+
 }

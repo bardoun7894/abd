@@ -264,6 +264,7 @@ Route::group([
         Route::post('/financial/upd_financial', [financialController::class, 'upd_financial'])->name('financial.upd_financial');
         Route::post('/financial/del_financial', [financialController::class, 'del_financial'])->name('financial.del_financial');
         Route::get('/financial/views', [financialController::class, 'views'])->name('financial.views');
+        Route::get('/financial/ai_insights', [financialController::class, 'aiInsights'])->name('financial.ai_insights');
         Route::post('/financial/updstore', [financialController::class, 'updstore'])->name('financial.updstore');
         Route::resource('/financial', financialController::class);
         Route::post('/financial/print', [financialController::class, 'print'])->name('financial.print');
@@ -307,6 +308,7 @@ Route::group([
         Route::post('/manager/sel_worker_list', [managerController::class, 'sel_worker_list'])->name('manager.sel_worker_list');
 
         Route::post('/manager/delete_file', [managerController::class, 'delete_file'])->name('manager.delete_file');
+        Route::post('/manager/ai-extract', [managerController::class, 'aiExtract'])->name('manager.ai_extract');
 //Route::get('/upload/delete_file/{id}', [UploadController::class,'delete_file'])->name('upload.delete_file');
 
 

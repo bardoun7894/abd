@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Perm;
 use PDF;
 use App\Http\Traits\ApimtitTrait;
+use App\Services\FinancialAiService;
 use Illuminate\Support\Str;
 class FinancialController extends Controller
 {
@@ -259,6 +260,27 @@ class FinancialController extends Controller
         }
     }
 
+
+
+    /**
+     * Spec 005-remaining-work — Financial module AI analytics: collection history,
+     * a short-term forecast, deterministic anomaly flags, and an Arabic AI narrative.
+     * Reuses the same view-permission gate as views() (function ids 21-25).
+     */
+    public function aiInsights(FinancialAiService $ai)
+    {
+        if (Perm::get_function_access(21) || Perm::get_function_access(22) || Perm::get_function_access(23) || Perm::get_function_access(24) || Perm::get_function_access(25)) {
+            $page_title = 'تحليلات الذكاء الاصطناعي المالي';
+            $history = $ai->collectionHistory(6);
+            $forecast = $ai->forecast(6);
+            $anomalies = $ai->anomalies(6);
+            $narrative = $ai->narrative();
+
+            return view('dashboard.financial.ai_insights', compact('page_title', 'history', 'forecast', 'anomalies', 'narrative'));
+        } else {
+            return redirect()->route('show_not_allow')->send();
+        }
+    }
 
 
     public function tbl(Request $request)

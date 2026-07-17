@@ -127,6 +127,13 @@
                                     </a>
                                     @endif
 
+                                    <a class="btn btn-info btn-info--icon" href="{{ route('dashboard.financial.ai_insights') }}">
+                                        <span>
+                                            <i class="fa fa-robot fa-fw"></i>
+                                            <span>تحليلات الذكاء الاصطناعي</span>
+                                        </span>
+                                    </a>
+
                                     </div>
                             </div>
                         </div>

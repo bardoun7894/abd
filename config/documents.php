@@ -41,5 +41,6 @@ return [
         'workers',
         'moraslat',
         'purchase',
+        'manager',
     ],
 ];
