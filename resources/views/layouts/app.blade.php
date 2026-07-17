@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html  lang="ar" direction="rtl" style="direction: rtl;">
+<html lang="ar" dir="rtl">
 <head><base href="../../">
 <title>شركة صباح النور || النظام المالي - @yield('title','لوحة التحكم')</title>
 <meta name="description" content="شركة صباح النور || النظام المالي" />
@@ -14,10 +14,13 @@
 <meta property="og:site_name" content="" />
 <link rel="canonical" href="" />
 <link rel="shortcut icon" href="{{asset('assets/media/logos/logo.png')}}" />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700" />
 <link href="{{asset('assets/plugins/global/plugins.bundle.rtl.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/css/style.bundle.rtl.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/fonts/dinnext/styles.rtl.css')}}" rel="stylesheet" type="text/css" />
+{{-- Sabah Alnoor design layer — IBM Plex Sans Arabic + tokens. Must load AFTER the
+     Metronic bundle + dinnext so it wins on cascade order. Poppins link removed:
+     it was Latin-only and never touched Arabic content. --}}
+<link href="{{asset('css/app-ui.css')}}?v={{ config('global.ver.version_css') }}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/flatpickr/dist/flatpickr.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/flatpickr/dist/ie.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/flatpickr/dist/plugins/confirmDate/confirmDate.css')}}" rel="stylesheet" type="text/css" />

@@ -1,89 +1,107 @@
-
-
-
-
 <x-guest-layout>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ route('login') }}" class='form w-100 ' >
+    {{-- brand mark (shows on the form side; primary identity is the art panel) --}}
+    <div class="sn-auth__brandmark sn-anim">
+        <svg class="sn-mark"><use href="#sn-logo-mark"/></svg>
+        <div>
+            <b>شركة صباح النور</b>
+            <span>Sabah Alnoor Co.</span>
+        </div>
+    </div>
+
+    <h1 class="sn-auth__title sn-anim d1">مرحباً بك مجدداً</h1>
+    <p class="sn-auth__subtitle sn-anim d1">سجّل دخولك للوصول إلى نظام إدارة الشركة ومتابعة أعمالك بسهولة وأمان.</p>
+
+    @if (session('status'))
+        <div class="sn-auth__status sn-anim d2">{{ session('status') }}</div>
+    @endif
+
+    @if ($errors->any())
+        <div class="sn-auth__error sn-shake sn-anim d2">
+            {{ $errors->first() }}
+        </div>
+    @endif
+
+    <form method="POST" action="{{ route('login') }}" data-sn-indicator class="w-100">
         @csrf
 
-        <div>
-            <label class="form-label fs-2 fw-bolder text-dark">الايميل</label>
-            <x-text-input id="email" class="form-control form-control-lg form-control-solid" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="fv-plugins-message-container invalid-feedback" />
+        {{-- Email --}}
+        <div class="sn-field sn-anim d3">
+            <label for="email">البريد الإلكتروني</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true">
+                    <i class="fs-4 bi bi-envelope"></i>
+                </span>
+                <input id="email" type="email" name="email" value="{{ old('email') }}"
+                       placeholder="أدخل بريدك الإلكتروني"
+                       required autofocus autocomplete="username" dir="ltr" />
+            </div>
         </div>
 
-        <!-- Password -->
-        <div class="mt-4">
-            <label class="form-label fw-bolder text-dark fs-2 mb-0">كلمة المرور</label>
-
-            <x-text-input id="password" class="form-control form-control-lg form-control-solid"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
-
-            <x-input-error :messages="$errors->get('password')" class="fv-plugins-message-container invalid-feedback" />
+        {{-- Password --}}
+        <div class="sn-field sn-anim d4">
+            <label for="password">كلمة المرور</label>
+            <div class="sn-input">
+                <span class="sn-input__icon" aria-hidden="true">
+                    <i class="fs-4 bi bi-lock"></i>
+                </span>
+                <input id="password" type="password" name="password"
+                       placeholder="أدخل كلمة المرور"
+                       required autocomplete="current-password" />
+                <button type="button" class="sn-input__reveal" aria-label="إظهار كلمة المرور"
+                        data-sn-reveal="password">
+                    <i class="fs-4 bi bi-eye"></i>
+                </button>
+            </div>
         </div>
 
- <!--         <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="form-check-input" name="toc" value="1">
-                <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Remember me') }}</span>
+        {{-- Remember + forgot --}}
+        <div class="sn-auth__row sn-anim d5">
+            <label class="sn-check">
+                {{-- was name="toc" — the LoginRequest reads boolean('remember'), so remember-me never worked --}}
+                <input type="checkbox" name="remember" value="1" id="remember">
+                <span>تذكّرني</span>
             </label>
-        </div>
-
-
-      <div class="flex items-center justify-end mt-4">
             @if (Route::has('password.request'))
-                <a class="link-primary fs-6 fw-bolder" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
-                </a>
+                <a class="sn-auth__forgot" href="{{ route('password.request') }}">نسيت كلمة المرور؟</a>
             @endif
-
-
-        </div>
-    -->
-
-
-    <div class="block mt-4">
-        <label for="remember_me" class="inline-flex items-center">
-            <input id="remember_me" type="checkbox" class="form-check-input" name="toc" value="1">
-            <span class="ml-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Remember me') }}</span>
-        </label>
-    </div>
-    <div class="flex items-center justify-end mt-4">
-        @if (Route::has('password.request'))
-            <a class="link-primary fs-6 fw-bolder" href="{{ route('password.request') }}">
-                {{ __('Forgot your password?') }}
-            </a>
-        @endif
-
-
-    </div>
-
-
-        <div class="text-center mt-4">
-            <!--begin::Submit button-->
-            <button type="submit" id="kt_sign_in_submit" class="btn btn-lg btn-primary w-100 mb-5">
-                <span class="indicator-label">تسجيل الدخول</span>
-                <span class="indicator-progress">انتظر...
-                <span class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
-            </button>
-        <!--    <div class="text-center text-muted text-uppercase fw-bolder mb-5">او</div>
-            <a href="#" class="btn btn-flex flex-center btn-light btn-lg w-100 mb-5">
-            <img alt="Logo" src="assets/media/svg/brand-logos/google-icon.svg" class="h-20px me-3">تسجيل قوقل</a>
-            <a href="#" class="btn btn-flex flex-center btn-light btn-lg w-100 mb-5">
-            <img alt="Logo" src="assets/media/svg/brand-logos/facebook-4.svg" class="h-20px me-3">Continue with Facebook</a>
-            <a href="#" class="btn btn-flex flex-center btn-light btn-lg w-100">
-            <img alt="Logo" src="assets/media/svg/brand-logos/apple-black.svg" class="h-20px me-3">Continue with Apple</a>-->
         </div>
 
-
-
-
-
-
+        {{-- Submit — general.js wires #kt_sign_in_submit to FormValidation + the loading indicator --}}
+        <button type="submit" id="kt_sign_in_submit" class="sn-btn sn-anim d6">
+            <span class="indicator-label d-inline-flex align-items-center gap-2">
+                تسجيل الدخول
+                <svg class="sn-btn__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M14 7l-5 5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </span>
+            <span class="indicator-progress">
+                انتظر... <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+            </span>
+        </button>
     </form>
+
+    <div class="sn-auth__support sn-anim d7">
+        بحاجة إلى مساعدة؟ <a href="{{ route('tasks.index') }}">تواصل مع الدعم الفني</a>
+    </div>
+
+    {{-- feature strip --}}
+    <div class="sn-features sn-anim d7">
+        <div class="sn-feature">
+            <span class="sn-feature__ic"><i class="fs-5 bi bi-headset"></i></span>
+            <div><b>دعم فني</b><span>على مدار الساعة</span></div>
+        </div>
+        <div class="sn-feature">
+            <span class="sn-feature__ic"><i class="fs-5 bi bi-hand-index-thumb"></i></span>
+            <div><b>سهولة الاستخدام</b><span>واجهة بسيطة وعصرية</span></div>
+        </div>
+        <div class="sn-feature">
+            <span class="sn-feature__ic"><i class="fs-5 bi bi-shield-check"></i></span>
+            <div><b>أمان عالي</b><span>حماية بياناتك</span></div>
+        </div>
+    </div>
+
+    <div class="sn-auth__version">
+        © {{ date('Y') }} شركة صباح النور — الإصدار {{ config('global.ver.version_all') }}
+    </div>
 </x-guest-layout>

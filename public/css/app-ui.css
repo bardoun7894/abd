@@ -1,0 +1,207 @@
+/* =============================================================================
+   app-ui.css — Sabah Alnoor (شركة صباح النور) design layer
+   -----------------------------------------------------------------------------
+   Loaded AFTER the Metronic bundle and after assets/fonts/dinnext/styles.rtl.css,
+   so it wins on cascade ORDER rather than on !important sprawl.
+
+   Why public/css/ and not public/assets/:
+     public/assets/ is the 77MB Metronic bundle. It is NOT in git — it lives on the
+     server and is rsync'd down. Anything written there is lost on a fresh clone and
+     clobbered by the next rsync. public/css/ is tracked, so it ships with `git pull`
+     (which is how this app deploys — nginx + php8.2-fpm, no Docker).
+
+   Cache-bust: linked with ?v={{ config('global.ver.version_css') }}.
+   NOTE: if the server runs `php artisan config:cache`, bumping version_css is a
+   no-op until `config:clear && config:cache`. Blade recompiles on mtime; config does not.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   1. IBM Plex Sans Arabic — self-hosted, replacing BOTH Poppins and DIN Next.
+
+   Chosen on measurement, not taste. Against Almarai/Cairo/Tajawal/Noto Kufi and
+   the incumbent DIN Next, Plex was the only candidate that won on every axis that
+   matters for a dense Arabic financial UI:
+
+     - Tabular digits. Measured digit-width spread = 0px. Almarai and Tajawal are
+       proportional (~7px spread) and do NOT ship the `tnum` feature, so
+       font-variant-numeric silently no-ops and money columns go ragged.
+     - Real 500 and 600. Metronic asks for exactly those two:
+           .fw-bold   {font-weight:500}  -> 2221 uses across live views
+           .fw-bolder {font-weight:600}  ->  544 uses
+       DIN Next has neither (only 300/400/700), so today CSS font-matching resolves
+       500 down to 400 and `fw-bold` renders IDENTICALLY to body text — measured at
+       237.24px for both. 2221 elements meant to read as emphasis currently do
+       nothing. That is a real reason the UI reads flat. Plex has genuine faces at
+       500/600, so this is fixed with zero markup changes and zero !important.
+     - Built for UI density at small sizes. This app's base is 13px.
+     - Already proven here: invoices_local/{show,index}.blade.php use it.
+
+   Self-hosted, not the Google CDN: this is a login-gated internal tool serving Gulf
+   users from a Contabo/EU VPS. A CDN adds DNS+TLS+RTT on the critical path, buys
+   zero SEO, and breaks on an egress-blocked server. 192KB (arabic+latin) vs the
+   600KB of .woff/.ttf DIN Next ships today.
+
+   url() resolves against THIS stylesheet's URL, so it is immune to the
+   <base href="../../"> in the layout. (That tag only endangers HTML-relative URLs —
+   those must keep using asset().)
+
+   Subsets: arabic + latin + latin-ext. Cyrillic and weight 300 dropped — fw-light
+   is used 0 times. unicode-range means the browser fetches only what it renders.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(../fonts/plex/plex-400-arabic.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(../fonts/plex/plex-400-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url(../fonts/plex/plex-400-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url(../fonts/plex/plex-500-arabic.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url(../fonts/plex/plex-500-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 500; font-display: swap;
+  src: url(../fonts/plex/plex-500-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(../fonts/plex/plex-600-arabic.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(../fonts/plex/plex-600-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 600; font-display: swap;
+  src: url(../fonts/plex/plex-600-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url(../fonts/plex/plex-700-arabic.woff2) format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url(../fonts/plex/plex-700-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic'; font-style: normal; font-weight: 700; font-display: swap;
+  src: url(../fonts/plex/plex-700-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* -----------------------------------------------------------------------------
+   2. Tokens.
+      Palette harvested from resources/views/invoices_local/show.blade.php:9-25 —
+      already the best design work in the repo. #0E6B4F is the brand emerald; the
+      warm paper/ink/gold set matches the agricultural identity of the logo.
+   -------------------------------------------------------------------------- */
+:root {
+  /* brand */
+  --sn-emerald:      #0E6B4F;
+  --sn-emerald-deep: #0A4F3A;
+  --sn-emerald-soft: #1A7A4C;
+  --sn-emerald-tint: #E4EFE9;
+  --sn-gold:         #C19A45;
+  --sn-amber:        #B5780A;
+  --sn-amber-tint:   #F6ECD4;
+  --sn-rust:         #A93B2C;
+  --sn-rust-tint:    #F4E2DC;
+  --sn-sky:          #1F6FA8;
+
+  /* surface / ink */
+  --sn-paper:   #F4EEE1;
+  --sn-paper-2: #FBF7EE;
+  --sn-card:    #FFFDF8;
+  --sn-ink:     #23201A;
+  --sn-ink-soft:#6E6557;
+  --sn-line:    #E4DBC8;
+
+  /* radii */
+  --sn-r-sm: 8px;
+  --sn-r-md: 12px;
+  --sn-r-lg: 18px;
+  --sn-r-pill: 50rem;
+
+  /* elevation */
+  --sn-shadow-sm: 0 1px 2px rgba(35,32,26,.04);
+  --sn-shadow-md: 0 1px 2px rgba(35,32,26,.04), 0 12px 30px -12px rgba(35,32,26,.18);
+  --sn-shadow-lg: 0 20px 60px -20px rgba(35,32,26,.28);
+
+  /* motion — --sn-ease-out is the easing the existing .ai-* layer ALREADY uses.
+     Adopting it as a token makes deduping that layer a rename, not a redesign. */
+  --sn-dur-fast: 120ms;
+  --sn-dur-base: 220ms;
+  --sn-dur-slow: 420ms;
+  --sn-ease-out: cubic-bezier(.22, 1, .36, 1);
+
+  /* type */
+  --sn-font: 'IBM Plex Sans Arabic', 'DIN Next LT Arabic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Metronic drives its typography off this. Redefining it here — later in the
+     cascade, equal specificity — retires Poppins app-wide with no !important. */
+  --bs-font-sans-serif: 'IBM Plex Sans Arabic', 'DIN Next LT Arabic', system-ui, -apple-system, sans-serif;
+}
+
+/* -----------------------------------------------------------------------------
+   3. Apply the family.
+      assets/fonts/dinnext/styles.rtl.css sets `html,body{font-family:... !important}`.
+      Matching !important + later load order is the only way past it. This is the one
+      place the file uses !important deliberately — it is not sprawl.
+
+      That dinnext file stays linked ON PURPOSE: besides @font-face it carries real
+      layout rules (.container-xxl max-width:1430px, toolbar spacing, card title
+      weights) and icon references. Removing the link would silently break container
+      widths across all 74 live views.
+   -------------------------------------------------------------------------- */
+html, body {
+  font-family: var(--sn-font) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* -----------------------------------------------------------------------------
+   4. Financial figures.
+      Plex ships true tabular digits (measured spread: 0px), so money columns align
+      by default. These declarations also pin lining figures and kill any inherited
+      letter-spacing that would break the column grid.
+      number_format() emits Latin digits — keep it that way; nothing here should
+      flip to Arabic-Indic mid-app.
+   -------------------------------------------------------------------------- */
+.sn-num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   5. Global motion guard. Anything this layer animates must die here too.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

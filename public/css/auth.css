@@ -1,0 +1,245 @@
+/* =============================================================================
+   auth.css — Sabah Alnoor sign-in experience
+   -----------------------------------------------------------------------------
+   Loaded ONLY by layouts/guest.blade.php (the 5 auth pages), so it can be as
+   expressive as it likes without touching the 74 app views. Consumes the tokens
+   from app-ui.css (--sn-emerald, --sn-gold, --sn-ease-out, ...).
+
+   Direction: "sunrise over the fields" — the company is Sabah Alnoor (Morning
+   Light), an agricultural business. Warm paper for the working surface; an
+   animated emerald→gold dawn with drifting wheat for the brand panel. Refined,
+   not flashy: one orchestrated entrance, ambient motion, no gimmicks.
+   All motion is transform/opacity only and fully disabled under reduced-motion.
+   ============================================================================= */
+
+.sn-auth {
+  --form-w: 560px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: var(--form-w) 1fr;   /* RTL: form on the start (right), art on the end (left) */
+  background: var(--sn-paper-2);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   FORM COLUMN
+   ------------------------------------------------------------------------ */
+.sn-auth__form {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 52px;
+  background: var(--sn-paper-2);
+  box-shadow: 0 0 60px -20px rgba(35, 32, 26, .25);
+}
+.sn-auth__inner { width: 100%; max-width: 380px; margin: 0 auto; }
+
+.sn-auth__brandmark { display: flex; align-items: center; gap: 12px; margin-bottom: 34px; }
+.sn-auth__brandmark .sn-mark { width: 46px; height: 46px; flex: 0 0 auto; }
+.sn-auth__brandmark b { font-weight: 700; color: var(--sn-emerald-deep); font-size: 18px; line-height: 1.15; }
+.sn-auth__brandmark span { display: block; font-weight: 500; color: var(--sn-ink-soft); font-size: 11px; letter-spacing: .04em; }
+
+.sn-auth__title { font-weight: 700; font-size: 26px; color: var(--sn-ink); margin: 0 0 8px; }
+.sn-auth__subtitle { font-weight: 400; font-size: 14px; color: var(--sn-ink-soft); margin: 0 0 30px; line-height: 1.6; }
+
+/* Fields ------------------------------------------------------------------ */
+.sn-field { margin-bottom: 18px; }
+.sn-field > label { display: block; font-weight: 600; font-size: 13px; color: var(--sn-ink); margin-bottom: 7px; }
+.sn-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1.5px solid var(--sn-line);
+  border-radius: var(--sn-r-md);
+  transition: border-color var(--sn-dur-base) var(--sn-ease-out),
+              box-shadow var(--sn-dur-base) var(--sn-ease-out);
+}
+.sn-input__icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 46px; flex: 0 0 auto; color: var(--sn-ink-soft);
+  transition: color var(--sn-dur-base) var(--sn-ease-out), transform var(--sn-dur-base) var(--sn-ease-out);
+}
+.sn-input input {
+  flex: 1 1 auto;
+  border: 0; outline: 0; background: transparent;
+  padding: 13px 4px 13px 14px;
+  font-family: inherit; font-size: 14px; color: var(--sn-ink);
+  min-width: 0;
+}
+.sn-input input::placeholder { color: #b9b0a0; }
+.sn-input:focus-within {
+  border-color: var(--sn-emerald);
+  box-shadow: 0 0 0 4px var(--sn-emerald-tint);
+}
+.sn-input:focus-within .sn-input__icon { color: var(--sn-emerald); transform: scale(1.08); }
+
+/* password reveal */
+.sn-input__reveal {
+  border: 0; background: transparent; cursor: pointer;
+  width: 44px; flex: 0 0 auto; color: var(--sn-ink-soft);
+  display: flex; align-items: center; justify-content: center;
+}
+.sn-input__reveal:hover { color: var(--sn-emerald); }
+
+/* row: remember + forgot */
+.sn-auth__row { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 24px; }
+.sn-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.sn-check input { width: 17px; height: 17px; accent-color: var(--sn-emerald); cursor: pointer; }
+.sn-check span { font-size: 13px; color: var(--sn-ink-soft); }
+.sn-auth__forgot { font-size: 13px; font-weight: 600; color: var(--sn-emerald); text-decoration: none; }
+.sn-auth__forgot:hover { color: var(--sn-emerald-deep); text-decoration: underline; }
+
+/* submit */
+.sn-btn {
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px 20px;
+  border: 0; border-radius: var(--sn-r-md);
+  background: linear-gradient(135deg, var(--sn-emerald) 0%, var(--sn-emerald-deep) 100%);
+  color: #fff; font-family: inherit; font-weight: 700; font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px -10px rgba(14, 107, 79, .7);
+  transition: transform var(--sn-dur-fast) var(--sn-ease-out),
+              box-shadow var(--sn-dur-base) var(--sn-ease-out), filter var(--sn-dur-base) var(--sn-ease-out);
+}
+.sn-btn:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -12px rgba(14, 107, 79, .8); filter: saturate(1.08); }
+.sn-btn:active { transform: translateY(0); }
+.sn-btn .sn-btn__arrow { transition: transform var(--sn-dur-base) var(--sn-ease-out); }
+.sn-btn:hover .sn-btn__arrow { transform: translateX(-4px); }   /* RTL: arrow points/moves start-ward */
+.sn-btn[data-kt-indicator="on"] { pointer-events: none; }
+
+.sn-auth__error {
+  background: var(--sn-rust-tint); color: var(--sn-rust);
+  border: 1px solid rgba(169, 59, 44, .25); border-radius: var(--sn-r-sm);
+  padding: 10px 14px; font-size: 13px; font-weight: 500; margin-bottom: 20px;
+}
+.sn-auth__status {
+  background: var(--sn-emerald-tint); color: var(--sn-emerald-deep);
+  border-radius: var(--sn-r-sm); padding: 10px 14px; font-size: 13px; font-weight: 600; margin-bottom: 20px;
+}
+
+.sn-auth__support { text-align: center; margin-top: 24px; font-size: 13px; color: var(--sn-ink-soft); }
+.sn-auth__support a { color: var(--sn-emerald); font-weight: 600; text-decoration: none; }
+.sn-auth__support a:hover { text-decoration: underline; }
+
+/* feature strip */
+.sn-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--sn-line); }
+.sn-feature { text-align: center; }
+.sn-feature__ic { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 11px; background: var(--sn-emerald-tint); color: var(--sn-emerald-deep); margin-bottom: 8px; }
+.sn-feature b { display: block; font-weight: 600; font-size: 12.5px; color: var(--sn-ink); }
+.sn-feature span { font-size: 11px; color: var(--sn-ink-soft); }
+
+.sn-auth__version { text-align: center; margin-top: 22px; font-size: 11px; color: #b9b0a0; }
+
+/* ---------------------------------------------------------------------------
+   BRAND / ART COLUMN — the animated dawn
+   ------------------------------------------------------------------------ */
+.sn-auth__art {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #fff;
+  /* dawn sky: deep emerald up top easing to a warm horizon */
+  background: linear-gradient(180deg, #093F2E 0%, #0C583F 46%, #17714E 72%, #2C8A5B 100%);
+}
+/* soft ambient light from the sun's side */
+.sn-auth__art::after {
+  content: "";
+  position: absolute; inset: 0; z-index: 4;
+  background: radial-gradient(90% 60% at 30% 68%, rgba(255,214,130,.20), transparent 60%);
+  pointer-events: none;
+}
+
+/* the sun — a defined disc with a warm halo, rising from behind the hills */
+.sn-sun {
+  position: absolute;
+  left: 22%; bottom: 30%;
+  width: 130px; height: 130px; z-index: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #FFE7A8 0%, #FBC65A 45%, #F0AA3C 100%);
+  box-shadow: 0 0 60px 20px rgba(240,170,60,.45), 0 0 140px 60px rgba(240,170,60,.22);
+  animation: sn-sun-breathe 7s ease-in-out infinite;
+}
+.sn-sun::before {   /* halo ring */
+  content: ""; position: absolute; inset: -26px;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 55%, rgba(255,214,130,.18) 60%, transparent 72%);
+}
+
+/* content sits in the vertical middle */
+.sn-auth__art-content { position: relative; z-index: 5; padding: 0 64px; margin-bottom: auto; margin-top: 84px; }
+.sn-auth__art-logo { margin-bottom: 24px; }
+.sn-auth__art-logo .sn-mark-lg { width: 72px; height: 72px; filter: drop-shadow(0 4px 12px rgba(9,63,46,.5)); }
+.sn-auth__art h2 { font-weight: 700; font-size: 33px; line-height: 1.3; margin: 0 0 14px; text-shadow: 0 2px 16px rgba(9,63,46,.5); }
+.sn-auth__art p { font-weight: 400; font-size: 15px; line-height: 1.75; color: rgba(255,255,255,.88); max-width: 34ch; margin: 0; }
+
+/* layered rolling fields at the bottom */
+.sn-hills { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; width: 100%; }
+.sn-hills--back  { height: 190px; color: #0C4F39; opacity: .9; }
+.sn-hills--front { height: 130px; color: #093F2E; }
+
+/* wheat stalks standing in the field, swaying in the breeze */
+.sn-wheat { position: absolute; bottom: 0; z-index: 3; transform-origin: bottom center; }
+.sn-wheat--1 { right: 8%;  width: 74px;  color: #C7A24E; animation: sn-sway 6s   ease-in-out infinite; }
+.sn-wheat--2 { right: 18%; width: 56px;  color: #B08C3E; animation: sn-sway 7.5s ease-in-out infinite reverse; }
+.sn-wheat--3 { right: 2%;  width: 46px;  color: #9E7C36; animation: sn-sway 8.5s ease-in-out .4s infinite; }
+
+@keyframes sn-sun-breathe { 0%,100% { transform: scale(1) translateY(0); filter: brightness(1); } 50% { transform: scale(1.05) translateY(-6px); filter: brightness(1.08); } }
+@keyframes sn-sway { 0%,100% { transform: rotate(-2.4deg); } 50% { transform: rotate(2.4deg); } }
+
+/* ---------------------------------------------------------------------------
+   ENTRANCE CHOREOGRAPHY — staged reveal, transform/opacity only
+   ------------------------------------------------------------------------ */
+@keyframes sn-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes sn-art-in { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: scale(1); } }
+
+.sn-auth__art { animation: sn-art-in 900ms var(--sn-ease-out) both; }
+.sn-anim { opacity: 0; animation: sn-rise 620ms var(--sn-ease-out) both; }
+.sn-anim.d1 { animation-delay: 80ms; }
+.sn-anim.d2 { animation-delay: 160ms; }
+.sn-anim.d3 { animation-delay: 240ms; }
+.sn-anim.d4 { animation-delay: 320ms; }
+.sn-anim.d5 { animation-delay: 400ms; }
+.sn-anim.d6 { animation-delay: 480ms; }
+.sn-anim.d7 { animation-delay: 560ms; }
+
+/* error shake on server-side validation failure */
+@keyframes sn-shake { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-4px)} 40%,60%{transform:translateX(4px)} }
+.sn-shake { animation: sn-shake .5s var(--sn-ease-out) both; }
+
+/* ---------------------------------------------------------------------------
+   RESPONSIVE — collapse to single column with a compact brand band on top
+   ------------------------------------------------------------------------ */
+@media (max-width: 991.98px) {
+  .sn-auth { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sn-auth__art { min-height: 210px; justify-content: center; order: -1; }
+  .sn-auth__art-content { padding: 34px 32px; }
+  .sn-auth__art h2 { font-size: 24px; }
+  .sn-auth__art p { display: none; }
+  .sn-wheat--2, .sn-wheat--3 { display: none; }
+  .sn-auth__form { justify-content: flex-start; padding: 34px 24px 44px; box-shadow: none; }
+  .sn-features { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+}
+@media (max-width: 400px) {
+  .sn-features { grid-template-columns: 1fr; }
+  .sn-feature { display: flex; align-items: center; gap: 10px; text-align: start; }
+  .sn-feature__ic { margin-bottom: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   REDUCED MOTION — kill every animation above (app-ui.css also guards globally)
+   ------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .sn-auth__art, .sn-anim, .sn-auth__art::before,
+  .sn-wheat--1, .sn-wheat--2, .sn-wheat--3, .sn-shake {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

@@ -33,3 +33,7 @@ ai-knowledge-base/
 /public/uploads/invoices/
 /public/uploads/
 *.bak
+
+# Metronic theme bundle — lives on the server, pulled via:
+#   rsync -az MyContabo:/var/www/abd/public/assets/ public/assets/
+/public/assets/
