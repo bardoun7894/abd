@@ -247,6 +247,10 @@ html, body {
 
 /* text + links */
 .text-primary { color: var(--sn-emerald) !important; }
+/* dinnext repurposed .text-info as the old-brand blue accent (#1949ea) app-wide —
+   headings, the user name, menu links. Rebrand it to emerald. (Semantic surfaces
+   like badge-info / alert-info keep their own colors.) */
+.text-info { color: var(--sn-emerald) !important; }
 .text-hover-primary:hover, a.text-hover-primary:hover, .text-hover-primary:hover i { color: var(--sn-emerald) !important; }
 .link-primary { color: var(--sn-emerald); }
 .link-primary:hover, .link-primary:focus { color: var(--sn-emerald-deep); }
