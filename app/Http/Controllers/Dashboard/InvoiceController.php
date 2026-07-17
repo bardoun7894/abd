@@ -32,16 +32,25 @@ class InvoiceController extends Controller
     // wiring (ishaveaccess) can be added once a per_controller row is seeded;
     // admins (emp_job==1) bypass it anyway.
 
-    public function index()
+    public function index(Request $request)
     {
         $page_title = 'استخراج الفواتير';
-        $batches = InvoiceBatch::query()
-            ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
-            ->orderByDesc('id')
-            ->limit(100)
-            ->get();
 
-        return view('dashboard.invoices.index', compact('page_title', 'batches'));
+        $filters = [
+            'q' => trim((string) $request->query('q', '')),
+            'status' => (string) $request->query('status', ''),
+        ];
+
+        $batches = InvoiceBatch::query()
+            // SECURITY: non-admins only ever see their own batches. Must survive any refactor.
+            ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
+            ->when($filters['q'] !== '', fn ($q) => $q->where('original_filename', 'like', '%'.$filters['q'].'%'))
+            ->when($filters['status'] !== '', fn ($q) => $q->where('status', $filters['status']))
+            ->orderByDesc('id')
+            ->paginate(25)
+            ->withQueryString();
+
+        return view('dashboard.invoices.index', compact('page_title', 'batches', 'filters'));
     }
 
     public function create()
