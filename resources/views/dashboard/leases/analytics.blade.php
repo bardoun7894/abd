@@ -150,7 +150,7 @@
         data: {
             labels: ['المستحق', 'المحصّل', 'إيراد سنوي'],
             datasets: [{ label: 'ريال', data: [{{ (float) $stats['due_total'] }}, {{ (float) $stats['paid_total'] }}, {{ (float) $stats['annual_revenue'] }}],
-                backgroundColor: ['#7239ea', '#50cd89', '#009ef7'] }]
+                backgroundColor: ['#0A4F3A', '#50cd89', '#0E6B4F'] }]
         },
         options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
     });
@@ -159,7 +159,7 @@
         data: {
             labels: [@foreach ($forecast as $f)'{{ $f['month'] }}',@endforeach],
             datasets: [
-                { label: 'المستحق المجدوَل', data: [@foreach ($forecast as $f){{ (float) $f['scheduled'] }},@endforeach], borderColor: '#7239ea', backgroundColor: 'rgba(114,57,234,0.1)', tension: 0.3 },
+                { label: 'المستحق المجدوَل', data: [@foreach ($forecast as $f){{ (float) $f['scheduled'] }},@endforeach], borderColor: '#0A4F3A', backgroundColor: 'rgba(10,79,58,0.1)', tension: 0.3 },
                 { label: 'الإيراد المتوقَّع (مرجّح بمعدل التحصيل)', data: [@foreach ($forecast as $f){{ (float) $f['projected'] }},@endforeach], borderColor: '#50cd89', backgroundColor: 'rgba(80,205,137,0.1)', tension: 0.3 }
             ]
         },
