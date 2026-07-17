@@ -27,7 +27,7 @@
     <!-- تنسيقات CSS إضافية -->
     <style>
         .section-title {
-            color: #083da6;
+            color: #0E6B4F;
         }
         .form-group{
             text-align: right;

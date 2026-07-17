@@ -16,7 +16,7 @@
         .print-header {
             text-align: center;
             margin-bottom: 30px;
-            border-bottom: 2px solid #083da6;
+            border-bottom: 2px solid #0E6B4F;
             padding-bottom: 20px;
         }
 
@@ -28,7 +28,7 @@
         .print-title {
             font-size: 24px;
             margin: 20px 0;
-            color: #083da6;
+            color: #0E6B4F;
         }
 
         .info-section {
@@ -55,7 +55,7 @@
         }
 
         th {
-            background-color: #083da6;
+            background-color: #0E6B4F;
             color: white;
             font-weight: bold;
         }
