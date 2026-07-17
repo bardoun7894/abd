@@ -47,7 +47,7 @@
             };
         @endphp
         <div class="card mb-5{{ $needsReview ? ' border-warning' : '' }}" id="inv-{{ $invoice->id }}">
-            <div class="card-header">
+            <div class="card-header flex-wrap">
                 <h3 class="card-title">صفحة {{ $invoice->page_number }} — {{ $invoice->supplier_name ?: 'بدون اسم مورد' }}</h3>
                 <div class="card-toolbar">{!! $statusBadge !!}</div>
             </div>
@@ -61,6 +61,7 @@
                         @endif
                     </div>
                     <div class="col-lg-8">
+                        <div class="table-responsive">
                         <table class="table table-row-dashed table-sm align-middle">
                             <tbody>
                                 @foreach ($fieldLabels as $field => $label)
@@ -84,6 +85,7 @@
                                 @endforeach
                             </tbody>
                         </table>
+                        </div>
 
                         @if ($invoice->validation_notes)
                             @if (str_contains($invoice->validation_notes, 'شذوذ'))

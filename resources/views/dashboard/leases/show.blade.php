@@ -9,7 +9,7 @@
                 <div class="fs-5">الحالة: <span id="st" class="badge badge-light-primary">...</span></div>
             </div>
             <div class="progress h-20px">
-                <div id="bar" class="progress-bar bg-primary fw-bold" role="progressbar" style="width:0%">0%</div>
+                <div id="bar" class="progress-bar bg-primary fw-bold" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="width:0%">0%</div>
             </div>
             <div id="meta" class="text-muted mt-2 fs-7"></div>
             <div id="cost" class="mt-2 fs-7 fw-bold text-gray-700"></div>

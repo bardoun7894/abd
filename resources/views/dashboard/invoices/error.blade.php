@@ -49,9 +49,9 @@
 
     @foreach ($invoices as $invoice)
         <div class="card mb-5" id="err-{{ $invoice->id }}">
-            <div class="card-header">
+            <div class="card-header flex-wrap">
                 <h3 class="card-title">دفعة #{{ $invoice->batch_id }} — صفحة {{ $invoice->page_number }}</h3>
-                <div class="card-toolbar">
+                <div class="card-toolbar flex-wrap">
                     <a href="{{ asset($invoice->batch->pdf_path ?? '') }}" target="_blank" class="btn btn-sm btn-light">الملف الأصلي</a>
                     <button class="btn btn-sm btn-light-warning act-reprocess" data-id="{{ $invoice->id }}">↻ إعادة معالجة</button>
                 </div>

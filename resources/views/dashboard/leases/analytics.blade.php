@@ -69,6 +69,7 @@
                         تعذّر توليد التحليل النصي بالذكاء الاصطناعي حالياً؛ إليك أرقام اتجاه التحصيل الخام:
                     </div>
                 @endif
+                <div class="table-responsive">
                 <table class="table table-row-dashed align-middle fs-7">
                     <thead><tr class="fw-bold text-muted">
                         <th>الشهر</th><th class="text-end">المستحق</th><th class="text-end">المحصّل</th><th class="text-end">النسبة %</th>
@@ -86,6 +87,7 @@
                     @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>
@@ -95,6 +97,7 @@
         <div class="card card-flush">
             <div class="card-header"><h3 class="card-title">أعلى المستأجرين (قيمة)</h3></div>
             <div class="card-body pt-0">
+                <div class="table-responsive">
                 <table class="table table-row-dashed align-middle">
                     <thead><tr class="fw-bold text-muted"><th>المستأجر</th><th class="text-end">الإجمالي</th></tr></thead>
                     <tbody>
@@ -105,6 +108,7 @@
                     @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>
@@ -112,6 +116,7 @@
         <div class="card card-flush">
             <div class="card-header"><h3 class="card-title">أكثر المستأجرين تأخراً</h3></div>
             <div class="card-body pt-0">
+                <div class="table-responsive">
                 <table class="table table-row-dashed align-middle">
                     <thead><tr class="fw-bold text-muted"><th>المستأجر</th><th class="text-end">دفعات متأخرة</th></tr></thead>
                     <tbody>
@@ -122,6 +127,7 @@
                     @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>

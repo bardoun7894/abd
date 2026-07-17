@@ -16,6 +16,8 @@
 .ai-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.68rem;font-weight:700;line-height:1;padding:.35rem .6rem;border-radius:50rem;color:#fff;background:linear-gradient(135deg,#009ef7,#7239ea);letter-spacing:.02em;white-space:nowrap;}
 .ai-dropzone{position:relative;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;border:1.5px dashed rgba(0,158,247,.45);border-radius:.75rem;padding:.85rem 1rem;background:rgba(0,158,247,.04);transition:border-color .15s ease,background-color .15s ease;}
 .ai-dropzone.is-dragover{border-color:#009ef7;background:rgba(0,158,247,.1);}
+/* B2 — a11y: visible focus ring when the drop-zone itself is keyboard-focused (additive). */
+.ai-dropzone:focus-visible{outline:3px solid #009ef7;outline-offset:2px;}
 .ai-dropzone__label{display:flex;align-items:center;gap:.6rem;flex:1 1 220px;min-width:0;cursor:pointer;margin:0;}
 .ai-dropzone__icon{font-size:1.3rem;color:#009ef7;flex:0 0 auto;}
 .ai-dropzone__text{display:flex;flex-direction:column;gap:.1rem;min-width:0;}
@@ -72,7 +74,7 @@
                 <span class="ai-pill"><i class="fa fa-magic"></i> ذكاء اصطناعي</span>
             </div>
             <p class="text-muted fs-8 mb-3">ارفع صورة أو PDF للفاتورة ليتم استخراج بياناتها تلقائياً</p>
-            <div class="ai-dropzone" id="ai_invoice_dropzone">
+            <div class="ai-dropzone" id="ai_invoice_dropzone" role="button" tabindex="0" aria-label="منطقة رفع ملف الفاتورة — اسحب الملف هنا أو اضغط للاختيار">
                 <label for="ai_invoice" class="ai-dropzone__label">
                     <i class="fa fa-cloud-upload-alt ai-dropzone__icon"></i>
                     <span class="ai-dropzone__text">
@@ -265,5 +267,25 @@
         mo.observe(el, {childList: true, characterData: true, subtree: true});
     }
     aiMotion({statusId: 'ai_purchase_extract_status', fieldIds: ['purchase_no', 'purchase_dt', 'purchase_respon', 'purchase_price', 'tax_number', 'note'], analyzeBtnId: 'ai_purchase_extract_btn'});
+})();
+</script>
+
+{{-- B2: keyboard accessibility for the drop-zone container — Enter/Space opens the file
+     picker via the existing label; a NEW, separate script that does not touch the
+     analyze/prefill/motion logic above. --}}
+<script>
+(function aiDropzoneKeyboardActivate(){
+    document.querySelectorAll('.ai-dropzone[role="button"]').forEach(function(zone){
+        if (zone.dataset.kbBound) { return; }
+        zone.dataset.kbBound = '1';
+        zone.addEventListener('keydown', function(e){
+            if (e.target !== zone) { return; }
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                var label = zone.querySelector('label');
+                if (label) { label.click(); }
+            }
+        });
+    });
 })();
 </script>

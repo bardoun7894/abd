@@ -59,7 +59,7 @@
                 <div class="fs-4">الإجمالي العام: <strong id="grand" class="text-success">0.00</strong></div>
             </div>
             <div class="progress h-20px">
-                <div id="bar" class="progress-bar bg-primary fw-bold" role="progressbar" style="width:0%">0%</div>
+                <div id="bar" class="progress-bar bg-primary fw-bold" role="progressbar" aria-valuemin="0" aria-valuemax="100" style="width:0%">0%</div>
             </div>
             <div id="meta" class="text-muted mt-2 fs-7"></div>
             <div id="cost" class="mt-2 fs-7 fw-bold text-gray-700"></div>
@@ -157,6 +157,25 @@
         @media print {
             .d-print-none { display: none !important; }
             table.table { font-size: 10px; }
+        }
+    </style>
+
+    <style>
+        /* B3 — batch progress clarity (additive; toggled purely via CSS classes that a
+           SEPARATE observer script below adds/removes on the existing .progress/#bar
+           elements — render()/poll() above are untouched). */
+        .ai-progress-tall { height: 28px !important; border-radius: .65rem; }
+        .ai-progress-tall #bar { font-size: .95rem; display: flex; align-items: center; justify-content: center; }
+        .ai-progress-processing #bar {
+            background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+            animation: ai-progress-stripes 1s linear infinite;
+        }
+        .ai-progress-done #bar { background-color: #17c653 !important; }
+        #aiProgressBanner.ai-progress-banner-done { color: #17c653; font-weight: 800; }
+        @keyframes ai-progress-stripes { from { background-position: 1rem 0; } to { background-position: 0 0; } }
+        @media (prefers-reduced-motion: reduce) {
+            .ai-progress-processing #bar { animation: none; }
         }
     </style>
 
@@ -296,5 +315,60 @@
 
         poll();
         timer = setInterval(poll, 3000);
+    </script>
+
+    {{-- B3: batch progress clarity — a NEW, SEPARATE script that only *observes* the
+         existing #st/#bar/#meta elements (which render()/poll() above already update)
+         and toggles additive CSS classes + a prominent "processing X/N pages" banner.
+         Does not modify render()/poll() or the polling interval. --}}
+    <script>
+        (function () {
+            var bar = document.getElementById('bar');
+            var st = document.getElementById('st');
+            var meta = document.getElementById('meta');
+            var wrap = bar ? bar.closest('.progress') : null;
+            if (!bar || !wrap || bar.dataset.b3Watch) { return; }
+            bar.dataset.b3Watch = '1';
+            wrap.classList.add('ai-progress-tall');
+
+            var banner = document.createElement('div');
+            banner.id = 'aiProgressBanner';
+            banner.className = 'fs-6 fw-bold mt-2 d-print-none';
+            if (meta && meta.parentNode) { meta.parentNode.insertBefore(banner, meta); }
+
+            function sync() {
+                var pct = parseInt(bar.style.width, 10) || 0;
+                bar.setAttribute('aria-valuenow', String(pct));
+                var statusText = ((st && st.textContent) || '').trim();
+                var isDone = statusText === 'done';
+                var isProcessing = statusText !== '' && statusText !== '...' && !isDone && statusText !== 'failed';
+                wrap.classList.toggle('ai-progress-processing', isProcessing);
+                wrap.classList.toggle('ai-progress-done', isDone);
+                if (isDone) {
+                    banner.classList.add('ai-progress-banner-done');
+                    banner.textContent = 'اكتملت المعالجة ✓';
+                } else if (isProcessing) {
+                    banner.classList.remove('ai-progress-banner-done');
+                    var metaText = (meta && meta.textContent) || '';
+                    var m = metaText.match(/(\d+)\s*\/\s*(\d+)/);
+                    banner.textContent = m ? ('جارٍ المعالجة: ' + m[1] + ' / ' + m[2] + ' صفحة') : 'جارٍ المعالجة…';
+                } else {
+                    banner.classList.remove('ai-progress-banner-done');
+                    banner.textContent = '';
+                }
+            }
+
+            var moBar = new MutationObserver(sync);
+            moBar.observe(bar, { attributes: true, attributeFilter: ['style'] });
+            if (st) {
+                var moSt = new MutationObserver(sync);
+                moSt.observe(st, { childList: true, characterData: true, subtree: true });
+            }
+            if (meta) {
+                var moMeta = new MutationObserver(sync);
+                moMeta.observe(meta, { childList: true, characterData: true, subtree: true });
+            }
+            sync();
+        })();
     </script>
 @endsection

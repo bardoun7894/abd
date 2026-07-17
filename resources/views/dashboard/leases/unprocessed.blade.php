@@ -26,7 +26,7 @@
                         <td>{{ $e->tenant_name }}</td>
                         <td><span class="badge badge-light-{{ $e->status === 'failed' ? 'danger' : 'warning' }}">{{ $e->status === 'failed' ? 'فشل' : 'تحتاج مراجعة' }}</span></td>
                         <td class="fs-8 text-muted">{{ $e->validation_notes ?? $e->error_message }}</td>
-                        <td class="d-flex gap-2">
+                        <td class="d-flex gap-2 flex-wrap">
                             <button class="btn btn-sm btn-light-primary reprocessBtn" data-id="{{ $e->id }}">إعادة القراءة</button>
                             <a href="{{ route('dashboard.leases.show', $e->batch_id) }}" class="btn btn-sm btn-light-warning">تعديل</a>
                         </td>
