@@ -392,6 +392,7 @@ class LeaseExtractionService
         $inStr = false;
         $esc = false;
         $len = strlen($text);
+        $lastCommaAtDepth1 = null;
         for ($i = $start; $i < $len; $i++) {
             $c = $text[$i];
             if ($inStr) {
@@ -402,6 +403,9 @@ class LeaseExtractionService
             }
             if ($c === '"') { $inStr = true; }
             elseif ($c === '{') { $depth++; }
+            elseif ($c === ',') {
+                if ($depth === 1) { $lastCommaAtDepth1 = $i; }
+            }
             elseif ($c === '}') {
                 $depth--;
                 if ($depth === 0) {
@@ -409,6 +413,16 @@ class LeaseExtractionService
                     $decoded = json_decode($candidate, true);
                     return is_array($decoded) ? $decoded : null;
                 }
+            }
+        }
+
+        // Truncated mid-string / mid-object (MAX_TOKENS): keep every complete
+        // top-level pair, drop the unfinished tail, close the object.
+        if ($lastCommaAtDepth1 !== null) {
+            $candidate = substr($text, $start, $lastCommaAtDepth1 - $start).'}';
+            $decoded = json_decode($candidate, true);
+            if (is_array($decoded)) {
+                return $decoded;
             }
         }
 
