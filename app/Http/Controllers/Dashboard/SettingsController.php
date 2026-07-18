@@ -8,6 +8,7 @@ use App\Services\AuditLogger;
 use App\Services\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Spec 005 — admin screen to view/edit API keys & integration settings
@@ -169,5 +170,74 @@ class SettingsController extends Controller
         ]);
 
         return redirect()->route('dashboard.settings.index')->with('success', 'تم تجديد الاشتراك بنجاح ✓');
+    }
+
+    /**
+     * AI usage & cost dashboard (Phase 4): reads the ai_usage_log ledger + ai_extractions
+     * cache to show spend, tokens, and cache-hit rate per module and per day. Fail-open —
+     * if the tables don't exist yet (migration not run) it shows an empty state.
+     */
+    public function aiUsage(Request $request)
+    {
+        $this->guard();
+
+        $page_title = 'استهلاك وتكلفة الذكاء الاصطناعي';
+        $days = (int) $request->query('days', 30);
+        $days = $days > 0 ? min($days, 365) : 30;
+        $since = now()->subDays($days);
+
+        $empty = [
+            'total_calls' => 0, 'hits' => 0, 'misses' => 0, 'hit_rate' => 0.0,
+            'input_tokens' => 0, 'output_tokens' => 0, 'cost_usd' => 0.0, 'cost_sar' => 0.0,
+            'cache_rows' => 0,
+        ];
+        $byModule = collect();
+        $byDay = collect();
+        $stats = $empty;
+
+        try {
+            $base = DB::table('ai_usage_log')->where('created_at', '>=', $since);
+
+            $total = (clone $base)->count();
+            $hits = (clone $base)->where('cache_hit', true)->count();
+            $inTok = (int) (clone $base)->sum('input_tokens');
+            $outTok = (int) (clone $base)->sum('output_tokens');
+            $cost = (float) (clone $base)->sum('est_cost_usd');
+            $sar = (float) config('services.gemini.usd_to_sar', 3.75);
+
+            $stats = [
+                'total_calls' => $total,
+                'hits' => $hits,
+                'misses' => $total - $hits,
+                'hit_rate' => $total > 0 ? round($hits / $total * 100, 1) : 0.0,
+                'input_tokens' => $inTok,
+                'output_tokens' => $outTok,
+                'cost_usd' => round($cost, 4),
+                'cost_sar' => round($cost * $sar, 3),
+                'cache_rows' => (int) DB::table('ai_extractions')->count(),
+            ];
+
+            $byModule = DB::table('ai_usage_log')
+                ->where('created_at', '>=', $since)
+                ->select('module',
+                    DB::raw('COUNT(*) as calls'),
+                    DB::raw('SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
+                    DB::raw('SUM(input_tokens) as in_tok'),
+                    DB::raw('SUM(output_tokens) as out_tok'),
+                    DB::raw('SUM(est_cost_usd) as cost'))
+                ->groupBy('module')->orderByDesc('cost')->get();
+
+            $byDay = DB::table('ai_usage_log')
+                ->where('created_at', '>=', $since)
+                ->select(DB::raw('DATE(created_at) as d'),
+                    DB::raw('COUNT(*) as calls'),
+                    DB::raw('SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
+                    DB::raw('SUM(est_cost_usd) as cost'))
+                ->groupBy(DB::raw('DATE(created_at)'))->orderByDesc('d')->limit(31)->get();
+        } catch (\Throwable $e) {
+            // tables not migrated yet → empty state
+        }
+
+        return view('dashboard.settings.ai_usage', compact('page_title', 'stats', 'byModule', 'byDay', 'days'));
     }
 }

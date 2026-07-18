@@ -40,6 +40,8 @@ Route::group([
         // Spec 007 — AI subscription config + renew (super-admin only)
         Route::post('/settings/subscription/update', [\App\Http\Controllers\Dashboard\SettingsController::class, 'updateSubscription'])->name('settings.subscription.update');
         Route::post('/settings/subscription/renew', [\App\Http\Controllers\Dashboard\SettingsController::class, 'renewSubscription'])->name('settings.subscription.renew');
+        // Phase 4 — AI usage & cost dashboard (super-admin only)
+        Route::get('/settings/ai-usage', [\App\Http\Controllers\Dashboard\SettingsController::class, 'aiUsage'])->name('settings.ai_usage');
 
         Route::resource('/categories', CategoriesController::class);
 

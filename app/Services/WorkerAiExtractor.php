@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
  */
 class WorkerAiExtractor
 {
-    public function __construct(private GeminiClient $gemini) {}
+    public function __construct(private GeminiClient $gemini, private InteractiveDocPrep $docPrep) {}
 
     /**
      * @return array{worker_name:?string, ssn:?string, passport_no:?string, dob:?string,
@@ -25,7 +25,13 @@ class WorkerAiExtractor
     public function extract(string $filePath, ?string $model = null): array
     {
         // Interactive prefill — fast-fail budget so a slow model can't freeze the request.
-        $raw = $this->gemini->extract($this->prompt(), $filePath, $this->schema(), $model, null, (int) config('services.gemini.interactive_timeout', 25), (int) config('services.gemini.interactive_retries', 2));
+        // Billing: only page 1, downscaled, is sent — see InteractiveDocPrep.
+        $prep = $this->docPrep->prepare($filePath);
+        try {
+            $raw = $this->gemini->extract($this->prompt(), $prep['path'], $this->schema(), $model, null, (int) config('services.gemini.interactive_timeout', 25), (int) config('services.gemini.interactive_retries', 2));
+        } finally {
+            ($prep['cleanup'])();
+        }
 
         $workerName = $this->cleanStr($raw['worker_name'] ?? null);
         $ssn = $this->idStr($raw['ssn'] ?? null);

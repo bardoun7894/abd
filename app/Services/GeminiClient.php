@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -219,10 +222,39 @@ class GeminiClient
         // keep the generous config defaults.
         $maxAttempts = $maxAttempts ?? (int) config('services.gemini.retries', 4);
         $httpTimeout = $timeout ?? (int) config('services.gemini.page_timeout', 120);
+
+        // --- Unified result cache (dedup) + concurrency cap + usage ledger. Fail-open:
+        // any cache/DB/lock hiccup must never block or break extraction. ---
+        $cacheEnabled = (bool) config('services.gemini.cache_enabled', true);
+        $module = $this->guessModule();
+        $cacheKey = $cacheEnabled ? $this->extractionCacheKey($model, $prompt, $schema, $filePath) : null;
+        if ($cacheKey !== null) {
+            $cached = $this->readExtractionCache($cacheKey);
+            if ($cached !== null) {
+                $this->lastUsage = [
+                    'promptTokenCount' => (int) ($cached->input_tokens ?? 0),
+                    'candidatesTokenCount' => (int) ($cached->output_tokens ?? 0),
+                ];
+                $this->bumpExtractionCacheHit($cacheKey);
+                $this->logAiUsage($module, $model, true, (int) $cached->input_tokens, (int) $cached->output_tokens, (float) $cached->est_cost_usd);
+                $decodedCached = json_decode($cached->result_json, true);
+                if (is_array($decodedCached)) {
+                    return $decodedCached; // instant, zero-cost hit — no HTTP, no quota
+                }
+            }
+        }
+
+        // Concurrency cap: a burst of AI calls must not tie up every PHP-FPM worker.
+        $slot = $this->acquireAiSlot();
+        if ($slot === null) {
+            throw new RuntimeException('النظام مشغول بمعالجة طلبات الذكاء الاصطناعي حالياً، يرجى المحاولة بعد قليل.');
+        }
+
         $attempt = 0;
         $resp = null;
         $lastStatus = null;
         $lastBody = null;
+        try {
         while (true) {
             $attempt++;
             try {
@@ -296,7 +328,16 @@ class GeminiClient
         // place to meter pages without touching each module's pipeline.
         app(AiSubscriptionGate::class)->recordPages(1);
 
+        // Cache the result (dedup future identical calls) + log the usage (miss).
+        if ($cacheKey !== null) {
+            $this->writeExtractionCache($cacheKey, $module, $model, $filePath, $decoded, $this->lastInputTokens(), $this->lastOutputTokens());
+        }
+        $this->logAiUsage($module, $model, false, $this->lastInputTokens(), $this->lastOutputTokens(), $this->estCostUsd($this->lastInputTokens(), $this->lastOutputTokens()));
+
         return $decoded;
+        } finally {
+            $this->releaseAiSlot($slot);
+        }
     }
 
     /**
@@ -402,5 +443,149 @@ class GeminiClient
             'webp' => 'image/webp',
             default => 'application/octet-stream',
         };
+    }
+
+    // ---- Unified cache + concurrency + usage helpers (all fail-open) ----
+
+    /** Best-effort module label (calling extractor/service class basename) for the ledger. */
+    private function guessModule(): ?string
+    {
+        try {
+            foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+                $cls = $frame['class'] ?? '';
+                if ($cls && $cls !== static::class && (str_contains($cls, 'Extractor') || str_contains($cls, 'Service') || str_contains($cls, 'Pipeline'))) {
+                    return class_basename($cls);
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        return null;
+    }
+
+    /** Deterministic cache key: model + prompt + schema + file content hash. */
+    private function extractionCacheKey(string $model, string $prompt, array $schema, string $filePath): ?string
+    {
+        try {
+            $fileHash = @hash_file('sha256', $filePath);
+            if ($fileHash === false) {
+                return null;
+            }
+
+            return hash('sha256', $model.'|'.$prompt.'|'.json_encode($schema).'|'.$fileHash);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function readExtractionCache(string $key): ?object
+    {
+        try {
+            $ttlDays = (int) config('services.gemini.cache_ttl_days', 90);
+
+            return DB::table('ai_extractions')
+                ->where('cache_key', $key)
+                ->when($ttlDays > 0, fn ($q) => $q->where('created_at', '>=', now()->subDays($ttlDays)))
+                ->first();
+        } catch (\Throwable $e) {
+            return null; // table missing / DB down → treat as miss
+        }
+    }
+
+    private function bumpExtractionCacheHit(string $key): void
+    {
+        try {
+            DB::table('ai_extractions')->where('cache_key', $key)->increment('hit_count');
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
+    private function writeExtractionCache(string $key, ?string $module, ?string $model, string $filePath, array $result, int $in, int $out): void
+    {
+        try {
+            DB::table('ai_extractions')->updateOrInsert(
+                ['cache_key' => $key],
+                [
+                    'module' => $module,
+                    'model' => $model,
+                    'file_hash' => @hash_file('sha256', $filePath) ?: null,
+                    'result_json' => json_encode($result, JSON_UNESCAPED_UNICODE),
+                    'input_tokens' => $in,
+                    'output_tokens' => $out,
+                    'est_cost_usd' => $this->estCostUsd($in, $out),
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        } catch (\Throwable $e) {
+            // ignore — caching is best-effort
+        }
+    }
+
+    private function logAiUsage(?string $module, ?string $model, bool $hit, int $in, int $out, float $cost): void
+    {
+        try {
+            DB::table('ai_usage_log')->insert([
+                'module' => $module,
+                'model' => $model,
+                'cache_hit' => $hit,
+                'input_tokens' => $in,
+                'output_tokens' => $out,
+                'est_cost_usd' => $cost,
+                'user_id' => Auth::check() ? Auth::id() : null,
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // ignore — the ledger is best-effort
+        }
+    }
+
+    private function estCostUsd(int $in, int $out): float
+    {
+        $pin = (float) config('services.gemini.price_in_per_m', 0);
+        $pout = (float) config('services.gemini.price_out_per_m', 0);
+
+        return round($in / 1_000_000 * $pin + $out / 1_000_000 * $pout, 6);
+    }
+
+    /**
+     * Acquire one of N concurrency slots via an atomic Cache::add semaphore.
+     * Returns the slot key on success, or null when all slots are taken (caller
+     * fast-fails). Slots auto-expire (slot_ttl) so a crashed request never leaks one.
+     * Fail-open: if the cache store errors, returns a sentinel so extraction proceeds.
+     */
+    private function acquireAiSlot(): ?string
+    {
+        $max = (int) config('services.gemini.max_concurrent', 3);
+        if ($max <= 0) {
+            return 'ai_slot_disabled';
+        }
+        $ttl = (int) config('services.gemini.slot_ttl', 90);
+        try {
+            for ($i = 0; $i < $max; $i++) {
+                $key = 'ai_slot_'.$i;
+                if (Cache::add($key, 1, $ttl)) {
+                    return $key;
+                }
+            }
+
+            return null; // all busy
+        } catch (\Throwable $e) {
+            return 'ai_slot_bypass'; // cache store issue → don't block extraction
+        }
+    }
+
+    private function releaseAiSlot(?string $slot): void
+    {
+        if ($slot === null || $slot === 'ai_slot_disabled' || $slot === 'ai_slot_bypass') {
+            return;
+        }
+        try {
+            Cache::forget($slot);
+        } catch (\Throwable $e) {
+            // ignore — the slot's TTL will release it
+        }
     }
 }

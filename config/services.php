@@ -61,6 +61,19 @@ return [
         // PHP-FPM worker for minutes and freeze the browser. The user can just retry.
         'interactive_timeout' => env('GEMINI_INTERACTIVE_TIMEOUT', 25),
         'interactive_retries' => env('GEMINI_INTERACTIVE_RETRIES', 2),
+        // Interactive doc prep (Spec 007): only page 1 of a multi-page PDF is sent to
+        // Gemini for the synchronous form-prefill path, rasterized at a lower DPI than
+        // the background pipelines and images downscaled if oversized — cuts billed
+        // input tokens without touching accuracy (page 1 has the data we need).
+        'interactive_dpi' => env('GEMINI_INTERACTIVE_DPI', 130),
+        'interactive_max_px' => env('GEMINI_INTERACTIVE_MAX_PX', 1600),
+        // Result cache (dedup identical calls → 0 cost on re-send) + concurrency cap
+        // (a burst of AI calls can't starve PHP-FPM workers). Fail-open — any cache/DB
+        // hiccup never blocks extraction.
+        'cache_enabled' => env('GEMINI_CACHE_ENABLED', true),
+        'cache_ttl_days' => env('GEMINI_CACHE_TTL_DAYS', 90),
+        'max_concurrent' => env('GEMINI_MAX_CONCURRENT', 3),
+        'slot_ttl' => env('GEMINI_SLOT_TTL', 90), // seconds; auto-releases a leaked slot
         // Pricing for the cost estimate shown in the UI (USD per 1M tokens).
         'price_in_per_m' => env('GEMINI_PRICE_IN', 1.50),
         'price_out_per_m' => env('GEMINI_PRICE_OUT', 9.00),

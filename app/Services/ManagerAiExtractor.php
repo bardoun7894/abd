@@ -12,7 +12,7 @@ namespace App\Services;
  */
 class ManagerAiExtractor
 {
-    public function __construct(private GeminiClient $gemini) {}
+    public function __construct(private GeminiClient $gemini, private InteractiveDocPrep $docPrep) {}
 
     /**
      * @return array{manager_name:?string, manager_mobile:?string, field_confidence:array, _in:int, _out:int}
@@ -20,7 +20,13 @@ class ManagerAiExtractor
     public function extract(string $filePath, ?string $model = null): array
     {
         // Interactive prefill — fast-fail budget so a slow model can't freeze the request.
-        $raw = $this->gemini->extract($this->prompt(), $filePath, $this->schema(), $model, null, (int) config('services.gemini.interactive_timeout', 25), (int) config('services.gemini.interactive_retries', 2));
+        // Billing: only page 1, downscaled, is sent — see InteractiveDocPrep.
+        $prep = $this->docPrep->prepare($filePath);
+        try {
+            $raw = $this->gemini->extract($this->prompt(), $prep['path'], $this->schema(), $model, null, (int) config('services.gemini.interactive_timeout', 25), (int) config('services.gemini.interactive_retries', 2));
+        } finally {
+            ($prep['cleanup'])();
+        }
 
         $managerName = $this->cleanStr($raw['manager_name'] ?? null);
         $managerMobile = $this->idStr($raw['manager_mobile'] ?? null);

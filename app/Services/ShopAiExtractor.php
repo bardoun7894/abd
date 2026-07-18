@@ -15,7 +15,7 @@ use Carbon\Carbon;
  */
 class ShopAiExtractor
 {
-    public function __construct(private GeminiClient $gemini) {}
+    public function __construct(private GeminiClient $gemini, private InteractiveDocPrep $docPrep) {}
 
     /**
      * @return array{document_type:?string, document_number:?string, issue_date:?string,
@@ -28,15 +28,21 @@ class ShopAiExtractor
         // Interactive path (synchronous AJAX prefill): fast-fail budget so a slow or
         // overloaded model returns an error in ~40s instead of blocking the request
         // (and a PHP-FPM worker) for minutes. Background pipelines don't pass these.
-        $raw = $this->gemini->extract(
-            $this->prompt(),
-            $filePath,
-            $this->schema(),
-            $model,
-            null,
-            (int) config('services.gemini.interactive_timeout', 40),
-            (int) config('services.gemini.interactive_retries', 2),
-        );
+        // Billing: only page 1, downscaled, is sent — see InteractiveDocPrep.
+        $prep = $this->docPrep->prepare($filePath);
+        try {
+            $raw = $this->gemini->extract(
+                $this->prompt(),
+                $prep['path'],
+                $this->schema(),
+                $model,
+                null,
+                (int) config('services.gemini.interactive_timeout', 40),
+                (int) config('services.gemini.interactive_retries', 2),
+            );
+        } finally {
+            ($prep['cleanup'])();
+        }
 
         return [
             'document_type' => $this->normalizeType($raw['document_type'] ?? null),

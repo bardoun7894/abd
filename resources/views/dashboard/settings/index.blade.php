@@ -27,6 +27,11 @@
                         <i class="fa fa-robot text-primary me-2"></i>
                         <h2 class="fw-bold">اشتراك الذكاء الاصطناعي</h2>
                     </div>
+                    <div class="card-toolbar">
+                        <a href="{{ route('dashboard.settings.ai_usage') }}" class="btn btn-sm btn-light-primary fw-bold">
+                            <i class="fa fa-chart-line me-1"></i> الاستهلاك والتكلفة
+                        </a>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="alert {{ $subBlocked ? 'alert-danger' : 'alert-light-success' }} d-flex align-items-center mb-6">
