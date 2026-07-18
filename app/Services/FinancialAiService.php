@@ -5,8 +5,6 @@ namespace App\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 /**
  * Spec 005 remaining-work — Financial module AI: collection history, a short-term
@@ -104,7 +102,7 @@ class FinancialAiService
 
         try {
             $narrative = Cache::remember($this->cacheKey(), now()->addHours(6), function () use ($history, $model) {
-                return trim($this->callGeminiText($this->narrativePrompt($history), $model));
+                return trim(app(GeminiClient::class)->generateText($this->narrativePrompt($history), $model));
             });
 
             return ['narrative' => $narrative, 'history' => $history, 'source' => 'ai'];
@@ -307,55 +305,4 @@ class FinancialAiService
             ->all();
     }
 
-    /**
-     * Minimal text-only Gemini call — copied verbatim from
-     * LeaseForecastService::callGeminiText() / HomeInsightService::callGeminiText()
-     * (GeminiClient is file-input only and frozen).
-     */
-    private function callGeminiText(string $prompt, ?string $model = null): string
-    {
-        $key = config('services.gemini.key');
-        if (empty($key)) {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-        $model = $model ?: config('services.gemini.default_model');
-        $base = rtrim(config('services.gemini.base_url'), '/');
-
-        $body = [
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                ],
-            ]],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'responseMimeType' => 'text/plain',
-            ],
-        ];
-
-        $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
-        $attempt = 0;
-        while (true) {
-            $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
-            if ($resp->successful()) {
-                break;
-            }
-            $status = $resp->status();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                usleep((int) ((2 ** $attempt) * 500_000));
-
-                continue;
-            }
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
-        }
-
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
-        }
-
-        return $text;
-    }
 }

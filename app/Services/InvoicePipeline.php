@@ -26,7 +26,7 @@ class InvoicePipeline
      * Run the pipeline for a batch. $onProgress($done,$total) is called as pages finish
      * so the UI/CLI can show progress. Returns the number of invoices stored.
      */
-    public function run(InvoiceBatch $batch, string $pdfPath, ?string $model = null, ?callable $onProgress = null, string $mode = 'whole'): int
+    public function run(InvoiceBatch $batch, string $pdfPath, ?string $model = null, ?callable $onProgress = null, string $mode = 'whole', ?float $deadline = null): int
     {
         $model = $model ?: config('services.gemini.default_model');
 
@@ -43,9 +43,9 @@ class InvoicePipeline
         $this->outTokens = 0;
 
         if ($mode === 'whole') {
-            $made = $this->wholeDocument($batch, $pdfPath, $savedRel, $model);
+            $made = $this->wholeDocument($batch, $pdfPath, $savedRel, $model, $deadline);
         } else {
-            $made = $this->perPage($batch, $pdfPath, $pagesDir, $model, $onProgress, $mode === 'grouped');
+            $made = $this->perPage($batch, $pdfPath, $pagesDir, $model, $onProgress, $mode === 'grouped', $deadline);
         }
 
         // Flag repeated invoice numbers (within this batch and against earlier ones) for review.
@@ -63,7 +63,7 @@ class InvoicePipeline
         return $made;
     }
 
-    private function perPage(InvoiceBatch $batch, string $pdfPath, string $pagesDir, string $model, ?callable $onProgress, bool $group): int
+    private function perPage(InvoiceBatch $batch, string $pdfPath, string $pagesDir, string $model, ?callable $onProgress, bool $group, ?float $deadline = null): int
     {
         // Spec 002 FR-101 — a directly-uploaded image (JPG/PNG/WEBP) is already a
         // single "page": copy it into the batch dir and use it as-is, no rasterize/split.
@@ -94,6 +94,13 @@ class InvoicePipeline
         foreach ($pages as $i => $pagePath) {
             $pageNo = $i + 1;
             $rel = str_replace(public_path().'/', '', $pagePath);
+            if ($this->deadlineExceeded($deadline)) {
+                for ($j = $i; $j < $total; $j++) {
+                    $remainingRel = str_replace(public_path().'/', '', $pages[$j]);
+                    $rows[] = ['page_number' => $j + 1, 'invoice_number' => null, '_image' => $remainingRel, '_error' => 'Job deadline exceeded before AI call'];
+                }
+                break;
+            }
             $t0 = microtime(true);
             try {
                 // Pass 1 — cheap. Escalate THIS page to deeper thinking only if it's a bad scan.
@@ -136,8 +143,15 @@ class InvoicePipeline
         return count($invoices);
     }
 
-    private function wholeDocument(InvoiceBatch $batch, string $pdfPath, string $savedRel, string $model): int
+    private function wholeDocument(InvoiceBatch $batch, string $pdfPath, string $savedRel, string $model, ?float $deadline = null): int
     {
+        if ($this->deadlineExceeded($deadline)) {
+            $batch->update(['total_pages' => 1, 'status' => 'processing']);
+            $this->persist($batch, 1, ['_error' => 'Job deadline exceeded before AI call'], $savedRel);
+
+            return 0;
+        }
+
         [$light, $hard, $escalate] = $this->thinkingTiers();
 
         // Pass 1 — cheap (no/low thinking). image_quality + validation flag the bad scans.
@@ -234,6 +248,17 @@ class InvoicePipeline
             config('services.gemini.thinking_level_hard', 'low'),
             (bool) config('services.gemini.escalate_on_review', true),
         ];
+    }
+
+    /** Returns true if less than page_timeout seconds remain before $deadline. */
+    private function deadlineExceeded(?float $deadline): bool
+    {
+        if ($deadline === null) {
+            return false;
+        }
+        $buffer = (int) config('services.gemini.page_timeout', 120);
+
+        return microtime(true) + $buffer >= $deadline;
     }
 
     private function anyFlagged(array $invoices): bool

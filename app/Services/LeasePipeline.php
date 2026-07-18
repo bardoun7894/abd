@@ -28,7 +28,7 @@ class LeasePipeline
      * Run the pipeline for a batch. $onProgress($done,$total) is called as pages finish
      * so the UI/CLI can show progress. Returns the number of extraction rows stored.
      */
-    public function run(LeaseBatch $batch, string $pdfPath, ?string $model = null, ?callable $onProgress = null): int
+    public function run(LeaseBatch $batch, string $pdfPath, ?string $model = null, ?callable $onProgress = null, ?float $deadline = null): int
     {
         $model = $model ?: config('services.gemini.default_model');
 
@@ -62,6 +62,13 @@ class LeasePipeline
         foreach ($pages as $i => $pagePath) {
             $pageNo = $i + 1;
             $rel = str_replace(public_path().'/', '', $pagePath);
+            if ($this->deadlineExceeded($deadline)) {
+                for ($j = $i; $j < $total; $j++) {
+                    $remainingRel = str_replace(public_path().'/', '', $pages[$j]);
+                    $this->persist($batch, $j + 1, ['_error' => 'Job deadline exceeded before AI call'], $remainingRel);
+                }
+                break;
+            }
             try {
                 $data = $this->service->extractLease($pagePath, $model, $light);
                 $this->inTokens += (int) ($data['_in'] ?? 0);
@@ -103,6 +110,17 @@ class LeasePipeline
             config('services.gemini.thinking_level_hard', 'low'),
             (bool) config('services.gemini.escalate_on_review', true),
         ];
+    }
+
+    /** Returns true if less than page_timeout seconds remain before $deadline. */
+    private function deadlineExceeded(?float $deadline): bool
+    {
+        if ($deadline === null) {
+            return false;
+        }
+        $buffer = (int) config('services.gemini.page_timeout', 120);
+
+        return microtime(true) + $buffer >= $deadline;
     }
 
     public function persist(LeaseBatch $batch, int $pageNo, array $data, ?string $imagePath): LeaseExtraction

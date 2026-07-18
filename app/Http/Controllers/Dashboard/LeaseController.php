@@ -310,6 +310,13 @@ class LeaseController extends Controller
         $extraction = LeaseExtraction::findOrFail($id);
         $this->authorizeBatch($extraction->batch);
 
+        if ($extraction->batch->status === 'processing') {
+            return response()->json([
+                'status' => false,
+                'message_out' => 'الدفعة قيد المعالجة بالفعل، يرجى الانتظار',
+            ], 409);
+        }
+
         $extraction->forceFill(['status' => 'pending', 'error_message' => null])->save();
 
         \App\Services\AuditLogger::log('lease', (int) $extraction->id, \App\Services\AuditLogger::REPROCESS, [

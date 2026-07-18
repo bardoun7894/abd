@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 /**
@@ -25,6 +27,132 @@ class GeminiClient
     public function lastOutputTokens(): int
     {
         return (int) ($this->lastUsage['candidatesTokenCount'] ?? 0) + (int) ($this->lastUsage['thoughtsTokenCount'] ?? 0);
+    }
+
+    /**
+     * Generate plain text from a prompt via Gemini (text-only call).
+     *
+     * Mirrors extract()'s retry/backoff/error handling, but sends a single text
+     * part with responseMimeType text/plain and returns the raw generated string.
+     *
+     * @throws RuntimeException on config/HTTP/missing-content failure
+     */
+    public function generateText(string $prompt, ?string $model = null): string
+    {
+        $key = config('services.gemini.key');
+        if (empty($key)) {
+            throw new RuntimeException('GEMINI_API_KEY is not configured.');
+        }
+        $model = $model ?: config('services.gemini.default_model');
+        $base = rtrim(config('services.gemini.base_url'), '/');
+
+        $body = [
+            'contents' => [[
+                'parts' => [
+                    ['text' => $prompt],
+                ],
+            ]],
+            'generationConfig' => [
+                'temperature' => 0.3,
+                'responseMimeType' => 'text/plain',
+            ],
+        ];
+
+        $url = "{$base}/models/{$model}:generateContent?key={$key}";
+        $maxAttempts = (int) config('services.gemini.retries', 4);
+        $attempt = 0;
+        $resp = null;
+        $lastStatus = null;
+        $lastBody = null;
+        while (true) {
+            $attempt++;
+            try {
+                $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
+            } catch (ConnectionException $e) {
+                $lastStatus = 'connection';
+                $lastBody = $e->getMessage();
+                if ($attempt < $maxAttempts) {
+                    Log::warning('Gemini transient HTTP error; retrying', [
+                        'model' => $model,
+                        'status' => 'connection',
+                        'attempt' => $attempt,
+                        'max_attempts' => $maxAttempts,
+                    ]);
+                    usleep((int) ((2 ** $attempt) * 500_000));
+
+                    continue;
+                }
+                Log::error('Gemini HTTP request failed after retries', [
+                    'model' => $model,
+                    'status' => 'connection',
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'response' => substr($lastBody, 0, 1000),
+                ]);
+                throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
+            }
+
+            if ($resp->successful()) {
+                break;
+            }
+            $status = $resp->status();
+            $lastStatus = $status;
+            $lastBody = $resp->body();
+            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
+                Log::warning('Gemini transient HTTP error; retrying', [
+                    'model' => $model,
+                    'status' => $status,
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                ]);
+                usleep((int) ((2 ** $attempt) * 500_000));
+
+                continue;
+            }
+            Log::error('Gemini HTTP request failed after retries', [
+                'model' => $model,
+                'status' => $status,
+                'attempt' => $attempt,
+                'max_attempts' => $maxAttempts,
+                'response' => substr($lastBody, 0, 1000),
+            ]);
+            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
+        }
+
+        $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
+        Log::info('Gemini text generation completed', [
+            'model' => $model,
+            'attempts' => $attempt,
+            'input_tokens' => $this->lastInputTokens(),
+            'output_tokens' => $this->lastOutputTokens(),
+        ]);
+
+        return $this->extractTextResponse($resp->json());
+    }
+
+    /**
+     * Robustly pull the plain-text payload out of a Gemini generateContent response.
+     * Thinking models may return thought parts first; skip them and return the first
+     * real text part. Throws if no text content is present.
+     */
+    protected function extractTextResponse($json): string
+    {
+        $parts = (array) data_get($json, 'candidates.0.content.parts', []);
+        foreach ($parts as $part) {
+            if (! empty($part['thought'])) {
+                continue;
+            }
+            if (isset($part['text']) && is_string($part['text'])) {
+                return $part['text'];
+            }
+        }
+
+        $fallback = data_get($json, 'candidates.0.content.parts.0.text');
+        if (is_string($fallback)) {
+            return $fallback;
+        }
+
+        throw new RuntimeException('Gemini returned no content: '.json_encode($json));
     }
 
     /**
@@ -70,22 +198,71 @@ class GeminiClient
         $url = "{$base}/models/{$model}:generateContent?key={$key}";
         $maxAttempts = (int) config('services.gemini.retries', 4);
         $attempt = 0;
+        $resp = null;
+        $lastStatus = null;
+        $lastBody = null;
         while (true) {
             $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
+            try {
+                $resp = Http::timeout((int) config('services.gemini.page_timeout', 120))->acceptJson()->post($url, $body);
+            } catch (ConnectionException $e) {
+                $lastStatus = 'connection';
+                $lastBody = $e->getMessage();
+                if ($attempt < $maxAttempts) {
+                    Log::warning('Gemini transient HTTP error; retrying', [
+                        'model' => $model,
+                        'status' => 'connection',
+                        'attempt' => $attempt,
+                        'max_attempts' => $maxAttempts,
+                    ]);
+                    usleep((int) ((2 ** $attempt) * 500_000));
+
+                    continue;
+                }
+                Log::error('Gemini HTTP request failed after retries', [
+                    'model' => $model,
+                    'status' => 'connection',
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'response' => substr($lastBody, 0, 1000),
+                ]);
+                throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
+            }
+
             if ($resp->successful()) {
                 break;
             }
             $status = $resp->status();
+            $lastStatus = $status;
+            $lastBody = $resp->body();
             if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
+                Log::warning('Gemini transient HTTP error; retrying', [
+                    'model' => $model,
+                    'status' => $status,
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                ]);
                 usleep((int) ((2 ** $attempt) * 500_000));
 
                 continue;
             }
+            Log::error('Gemini HTTP request failed after retries', [
+                'model' => $model,
+                'status' => $status,
+                'attempt' => $attempt,
+                'max_attempts' => $maxAttempts,
+                'response' => substr($lastBody, 0, 1000),
+            ]);
             throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
         }
 
         $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
+        Log::info('Gemini extraction completed', [
+            'model' => $model,
+            'attempts' => $attempt,
+            'input_tokens' => $this->lastInputTokens(),
+            'output_tokens' => $this->lastOutputTokens(),
+        ]);
 
         return $this->decodeJsonResponse($resp->json());
     }

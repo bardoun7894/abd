@@ -147,6 +147,22 @@ it('reprocess() re-dispatches ProcessInvoiceBatch for the invoice batch and logs
     expect(DB::table('ai_audit_log')->where('document_id', $invoice->id)->where('action', 'reprocess')->exists())->toBeTrue();
 });
 
+it('reprocess() returns a conflict when the batch is already processing', function () {
+    actingAsAdmin();
+    Queue::fake();
+    $batch = makeBatch(['status' => 'processing']);
+    $invoice = makeInvoice($batch->id, ['status' => 'failed']);
+
+    $controller = new InvoiceController();
+    $response = $controller->reprocess($invoice->id);
+    $payload = $response->getData(true);
+
+    expect($response->status())->toBe(409);
+    expect($payload['status'])->toBeFalse();
+    expect($payload['message_out'])->toContain('قيد المعالجة');
+    Queue::assertNothingPushed();
+});
+
 // ---- draft() ----------------------------------------------------------------------
 
 it('draft() sets status to draft without finalizing the invoice', function () {

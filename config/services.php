@@ -53,6 +53,8 @@ return [
         'rescan_model' => env('GEMINI_RESCAN_MODEL', 'gemini-3-flash-preview'),
         'base_url' => env('GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta'),
         'timeout' => env('GEMINI_TIMEOUT', 120),
+        // Per-page HTTP timeout and deadline buffer for AI calls inside pipelines.
+        'page_timeout' => env('GEMINI_PAGE_TIMEOUT', 120),
         'retries' => env('GEMINI_RETRIES', 4),
         // Pricing for the cost estimate shown in the UI (USD per 1M tokens).
         'price_in_per_m' => env('GEMINI_PRICE_IN', 1.50),

@@ -3,8 +3,6 @@
 namespace App\Services;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 /**
  * Reads a single scanned Arabic Saudi VAT invoice (image or single-page PDF),
@@ -49,8 +47,9 @@ class InvoiceExtractionService
      */
     public function extractInvoice(string $filePath, ?string $model = null, ?string $thinking = null): array
     {
-        $mime = $this->mimeFor($filePath);
-        $raw = $this->callGemini($this->prompt(false), $filePath, $mime, $this->singleSchema(), $model, $thinking);
+        $gemini = new GeminiClient();
+        $raw = $gemini->extract($this->prompt(false), $filePath, $this->singleSchema(), $model, $thinking);
+        $this->lastUsage = $gemini->lastUsage;
 
         $data = is_array($raw) ? $raw : [];
         $norm = $this->normalize($data);
@@ -73,7 +72,9 @@ class InvoiceExtractionService
      */
     public function extractInvoicesFromDocument(string $pdfPath, ?string $model = null, ?string $thinking = null): array
     {
-        $raw = $this->callGemini($this->prompt(true), $pdfPath, 'application/pdf', $this->documentSchema(), $model, $thinking);
+        $gemini = new GeminiClient();
+        $raw = $gemini->extract($this->prompt(true), $pdfPath, $this->documentSchema(), $model, $thinking);
+        $this->lastUsage = $gemini->lastUsage;
 
         $list = $raw['invoices'] ?? (array_is_list($raw ?? []) ? $raw : []);
         $invoices = [];
@@ -132,7 +133,9 @@ class InvoiceExtractionService
             ],
         ];
 
-        $raw = $this->callGemini($prompt, $pdfPath, 'application/pdf', $schema, $model);
+        $gemini = new GeminiClient();
+        $raw = $gemini->extract($prompt, $pdfPath, $schema, $model);
+        $this->lastUsage = $gemini->lastUsage;
 
         $segments = [];
         foreach (($raw['invoices'] ?? []) as $i => $seg) {
@@ -675,99 +678,4 @@ class InvoiceExtractionService
         ];
     }
 
-    /**
-     * POST one document part + prompt to Gemini generateContent, return decoded JSON.
-     *
-     * @throws RuntimeException on HTTP failure (caller / job decides retry).
-     */
-    protected function callGemini(string $prompt, string $filePath, string $mime, array $schema, ?string $model, ?string $thinking = null): array
-    {
-        $key = config('services.gemini.key');
-        if (empty($key)) {
-            throw new RuntimeException('GEMINI_API_KEY is not configured.');
-        }
-        $model = $model ?: config('services.gemini.default_model');
-        $base = rtrim(config('services.gemini.base_url'), '/');
-
-        if (! is_file($filePath)) {
-            throw new RuntimeException("File not found: {$filePath}");
-        }
-
-        $generationConfig = [
-            'temperature' => 0,
-            'responseMimeType' => 'application/json',
-            'responseSchema' => $schema,
-        ];
-        // Gemini 3.x reasoning effort. Default 'minimal' (cheapest) for clear scans;
-        // the pipeline passes a higher level when re-reading a bad scan.
-        $level = $thinking ?: config('services.gemini.thinking_level');
-        if ($level && str_contains($model, 'gemini-3')) {
-            $generationConfig['thinkingConfig'] = ['thinkingLevel' => $level];
-        }
-
-        $body = [
-            'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                    ['inline_data' => [
-                        'mime_type' => $mime,
-                        'data' => base64_encode(file_get_contents($filePath)),
-                    ]],
-                ],
-            ]],
-            'generationConfig' => $generationConfig,
-        ];
-
-        // Retry transient errors (429 rate-limit, 5xx overload) with exponential backoff —
-        // the cheap lite models 503 often under load.
-        $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
-        $attempt = 0;
-        $resp = null;
-        while (true) {
-            $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))
-                ->acceptJson()
-                ->post($url, $body);
-
-            if ($resp->successful()) {
-                break;
-            }
-
-            $status = $resp->status();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                usleep((int) ((2 ** $attempt) * 500_000)); // 1s, 2s, 4s, 8s ...
-                continue;
-            }
-
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
-        }
-
-        $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
-
-        $text = data_get($resp->json(), 'candidates.0.content.parts.0.text');
-        if ($text === null) {
-            throw new RuntimeException('Gemini returned no content: '.$resp->body());
-        }
-
-        $decoded = json_decode($text, true);
-        if (! is_array($decoded)) {
-            throw new RuntimeException('Gemini returned non-JSON: '.$text);
-        }
-
-        return $decoded;
-    }
-
-    private function mimeFor(string $path): string
-    {
-        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-
-        return match ($ext) {
-            'pdf' => 'application/pdf',
-            'png' => 'image/png',
-            'jpg', 'jpeg' => 'image/jpeg',
-            'webp' => 'image/webp',
-            default => 'application/octet-stream',
-        };
-    }
 }

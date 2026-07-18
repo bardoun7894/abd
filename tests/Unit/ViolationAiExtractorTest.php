@@ -129,6 +129,32 @@ it('drafts a formal Arabic violation-notice letter from a text-only Gemini call 
     });
 });
 
+it('classifies with a caller-supplied model instead of the default', function () {
+    config()->set('services.gemini.key', 'test-key');
+    config()->set('services.gemini.default_model', 'gemini-flash-lite-latest');
+    config()->set('services.gemini.base_url', 'https://gen.example/v1beta');
+
+    Http::fake([
+        '*' => Http::response([
+            'candidates' => [[
+                'content' => ['parts' => [[
+                    'text' => json_encode([
+                        'side_hint' => 'البلدية',
+                        'severity_hint' => 'بسيطة',
+                        'suggested_action' => 'تصحيح المخالفة.',
+                    ]),
+                ]]],
+            ]],
+        ], 200),
+    ]);
+
+    app(ViolationAiExtractor::class)->classify('مخالفة بسيطة', [], [], 'gemini-3-flash-preview');
+
+    Http::assertSent(function ($req) {
+        return str_contains($req->url(), 'models/gemini-3-flash-preview:generateContent');
+    });
+});
+
 it('throws on a Gemini HTTP failure during classify', function () {
     config()->set('services.gemini.key', 'test-key');
     config()->set('services.gemini.retries', 1);
