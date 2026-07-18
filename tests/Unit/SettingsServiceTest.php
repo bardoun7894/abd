@@ -78,3 +78,12 @@ it('maps the four advanced Gemini settings to their config keys', function () {
         ->and(config('services.gemini.timeout'))->toBe('240')
         ->and(config('services.gemini.retries'))->toBe('6');
 });
+
+it('maps gemini_page_timeout to services.gemini.page_timeout', function () {
+    config(['services.gemini.page_timeout' => 120]);
+    Settings::set('gemini_page_timeout', '300');
+
+    Settings::applyToConfig();
+
+    expect(config('services.gemini.page_timeout'))->toBe('300');
+});

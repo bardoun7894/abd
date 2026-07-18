@@ -27,7 +27,8 @@ class SettingsController extends Controller
                 ['key' => 'gemini_rescan_model', 'label' => 'موديل إعادة الفحص', 'secret' => false, 'placeholder' => 'gemini-3-flash-preview'],
                 ['key' => 'gemini_thinking', 'label' => 'مستوى التفكير', 'secret' => false, 'placeholder' => 'minimal | low | medium | high'],
                 ['key' => 'gemini_thinking_hard', 'label' => 'التفكير العميق', 'secret' => false, 'placeholder' => 'low | medium | high'],
-                ['key' => 'gemini_timeout', 'label' => 'مهلة Gemini (ثانية)', 'secret' => false, 'placeholder' => '120'],
+                ['key' => 'gemini_timeout', 'label' => 'مهلة استدعاءات النص فقط (ثانية)', 'secret' => false, 'placeholder' => '120'],
+                ['key' => 'gemini_page_timeout', 'label' => 'مهلة استخراج الملفات لكل صفحة (ثانية)', 'secret' => false, 'placeholder' => '120'],
                 ['key' => 'gemini_retries', 'label' => 'عدد محاولات إعادة الاتصال', 'secret' => false, 'placeholder' => '4'],
             ],
             'الرسائل النصية (SMS)' => [

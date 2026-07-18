@@ -80,6 +80,7 @@ class Settings
             'gemini_thinking' => 'services.gemini.thinking_level',
             'gemini_thinking_hard' => 'services.gemini.thinking_level_hard',
             'gemini_timeout' => 'services.gemini.timeout',
+            'gemini_page_timeout' => 'services.gemini.page_timeout',
             'gemini_retries' => 'services.gemini.retries',
             'zatca_seller_name' => 'zatca.seller_name',
             'zatca_vat_number' => 'zatca.vat_number',

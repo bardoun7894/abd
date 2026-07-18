@@ -528,30 +528,46 @@ a.text-hover-primary:hover,
       line; no physical properties (RTL-safe).
    -------------------------------------------------------------------------- */
 .sn-lease-review {
-  table-layout: fixed;
-  width: 100%;
+	table-layout: fixed;
+	width: 100%;
 }
-.sn-lease-review .sn-col-id       { width: 3.5rem; }
-.sn-lease-review .sn-col-batch    { width: 5rem; }
-.sn-lease-review .sn-col-contract { width: 11rem; }
-.sn-lease-review .sn-col-tenant   { width: 16rem; }
-.sn-lease-review .sn-col-status   { width: 7.5rem; }
-.sn-lease-review .sn-col-notes    { width: auto; }
-.sn-lease-review .sn-col-actions  { width: 12rem; }
+.sn-lease-review .sn-col-id {
+	width: 3.5rem;
+}
+.sn-lease-review .sn-col-batch {
+	width: 5rem;
+}
+.sn-lease-review .sn-col-contract {
+	width: 11rem;
+}
+.sn-lease-review .sn-col-tenant {
+	width: 16rem;
+}
+.sn-lease-review .sn-col-status {
+	width: 7.5rem;
+}
+.sn-lease-review .sn-col-notes {
+	width: auto;
+}
+.sn-lease-review .sn-col-actions {
+	width: 12rem;
+}
 
 .sn-lease-review td {
-  vertical-align: middle;
-  padding-block: .85rem;
+	vertical-align: middle;
+	padding-block: 0.85rem;
 }
 .sn-lease-review .sn-notes-cell {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.7;
-  word-break: break-word;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	line-height: 1.7;
+	word-break: break-word;
 }
 @media (max-width: 991.98px) {
-  .sn-lease-review .sn-col-contract,
-  .sn-lease-review .sn-col-tenant { width: auto; }
+	.sn-lease-review .sn-col-contract,
+	.sn-lease-review .sn-col-tenant {
+		width: auto;
+	}
 }

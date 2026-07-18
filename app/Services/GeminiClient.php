@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -60,22 +61,71 @@ class GeminiClient
         $url = "{$base}/models/{$model}:generateContent?key={$key}";
         $maxAttempts = (int) config('services.gemini.retries', 4);
         $attempt = 0;
+        $resp = null;
+        $lastStatus = null;
+        $lastBody = null;
         while (true) {
             $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
+            try {
+                $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
+            } catch (ConnectionException $e) {
+                $lastStatus = 'connection';
+                $lastBody = $e->getMessage();
+                if ($attempt < $maxAttempts) {
+                    Log::warning('Gemini transient HTTP error; retrying', [
+                        'model' => $model,
+                        'status' => 'connection',
+                        'attempt' => $attempt,
+                        'max_attempts' => $maxAttempts,
+                    ]);
+                    usleep((int) ((2 ** $attempt) * 500_000));
+
+                    continue;
+                }
+                Log::error('Gemini HTTP request failed after retries', [
+                    'model' => $model,
+                    'status' => 'connection',
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'response' => substr($lastBody, 0, 1000),
+                ]);
+                throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
+            }
+
             if ($resp->successful()) {
                 break;
             }
             $status = $resp->status();
+            $lastStatus = $status;
+            $lastBody = $resp->body();
             if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
+                Log::warning('Gemini transient HTTP error; retrying', [
+                    'model' => $model,
+                    'status' => $status,
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                ]);
                 usleep((int) ((2 ** $attempt) * 500_000));
 
                 continue;
             }
+            Log::error('Gemini HTTP request failed after retries', [
+                'model' => $model,
+                'status' => $status,
+                'attempt' => $attempt,
+                'max_attempts' => $maxAttempts,
+                'response' => substr($lastBody, 0, 1000),
+            ]);
             throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
         }
 
         $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
+        Log::info('Gemini text generation completed', [
+            'model' => $model,
+            'attempts' => $attempt,
+            'input_tokens' => $this->lastInputTokens(),
+            'output_tokens' => $this->lastOutputTokens(),
+        ]);
 
         return $this->extractTextResponse($resp->json());
     }
@@ -153,7 +203,32 @@ class GeminiClient
         $lastBody = null;
         while (true) {
             $attempt++;
-            $resp = Http::timeout((int) config('services.gemini.page_timeout', 120))->acceptJson()->post($url, $body);
+            try {
+                $resp = Http::timeout((int) config('services.gemini.page_timeout', 120))->acceptJson()->post($url, $body);
+            } catch (ConnectionException $e) {
+                $lastStatus = 'connection';
+                $lastBody = $e->getMessage();
+                if ($attempt < $maxAttempts) {
+                    Log::warning('Gemini transient HTTP error; retrying', [
+                        'model' => $model,
+                        'status' => 'connection',
+                        'attempt' => $attempt,
+                        'max_attempts' => $maxAttempts,
+                    ]);
+                    usleep((int) ((2 ** $attempt) * 500_000));
+
+                    continue;
+                }
+                Log::error('Gemini HTTP request failed after retries', [
+                    'model' => $model,
+                    'status' => 'connection',
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'response' => substr($lastBody, 0, 1000),
+                ]);
+                throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
+            }
+
             if ($resp->successful()) {
                 break;
             }

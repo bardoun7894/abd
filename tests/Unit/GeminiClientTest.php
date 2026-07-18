@@ -5,6 +5,9 @@
 uses(Tests\TestCase::class);
 
 use App\Services\GeminiClient;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
@@ -136,4 +139,118 @@ it('sends a text/plain generation config for text-only calls', function () {
             && data_get($req->data(), 'contents.0.parts.0.text') === 'نص فقط'
             && ! collect(data_get($req->data(), 'contents.0.parts'))->contains(fn ($p) => isset($p['inline_data']))
     );
+});
+
+it('retries on connection timeout and eventually returns the generated text', function () {
+    $attempts = 0;
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+        if ($attempts < 3) {
+            throw new ConnectionException('cURL error 28: Connection timed out');
+        }
+
+        return Http::response([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'connected']]],
+            ]],
+        ], 200);
+    });
+
+    $client = new GeminiClient();
+
+    expect($client->generateText('timeout test'))->toBe('connected');
+    expect($attempts)->toBe(3);
+});
+
+it('throws when connection timeouts exceed the retry limit', function () {
+    config()->set('services.gemini.retries', 2);
+    Http::fake(function () {
+        throw new ConnectionException('cURL error 56: Recv failure');
+    });
+
+    $client = new GeminiClient();
+
+    expect(fn () => $client->generateText('fail'))
+        ->toThrow(RuntimeException::class, 'Gemini connection failed');
+});
+
+it('logs retry and success for generateText', function () {
+    $captured = [];
+    Event::listen(MessageLogged::class, function (MessageLogged $e) use (&$captured) {
+        $captured[] = ['level' => $e->level, 'message' => $e->message, 'context' => $e->context];
+    });
+
+    Http::fake([
+        '*' => Http::response([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'ok']]],
+            ]],
+            'usageMetadata' => ['promptTokenCount' => 7, 'candidatesTokenCount' => 2],
+        ], 200),
+    ]);
+
+    $client = new GeminiClient();
+    $client->generateText('log me');
+
+    $info = collect($captured)->first(fn ($c) => $c['message'] === 'Gemini text generation completed');
+    expect($info)->not->toBeNull();
+    expect($info['context']['input_tokens'])->toBe(7);
+    expect($info['context']['output_tokens'])->toBe(2);
+    expect($info['context']['attempts'])->toBe(1);
+});
+
+it('logs warning on connection timeout retry for generateText', function () {
+    $captured = [];
+    Event::listen(MessageLogged::class, function (MessageLogged $e) use (&$captured) {
+        $captured[] = ['level' => $e->level, 'message' => $e->message, 'context' => $e->context];
+    });
+
+    $attempts = 0;
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+        if ($attempts < 2) {
+            throw new ConnectionException('cURL error 28');
+        }
+
+        return Http::response([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => 'ok']]],
+            ]],
+        ], 200);
+    });
+
+    $client = new GeminiClient();
+    $client->generateText('retry log');
+
+    $warning = collect($captured)->first(fn ($c) => $c['message'] === 'Gemini transient HTTP error; retrying');
+    expect($warning)->not->toBeNull();
+    expect($warning['context']['status'])->toBe('connection');
+    expect($warning['context']['attempt'])->toBe(1);
+});
+
+it('retries on connection timeout during file extraction', function () {
+    $tmp = tempnam(sys_get_temp_dir(), 'gem').'.pdf';
+    file_put_contents($tmp, '%PDF-1.4 fake');
+
+    $attempts = 0;
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+        if ($attempts < 3) {
+            throw new ConnectionException('cURL error 28: Connection timed out');
+        }
+
+        return Http::response([
+            'candidates' => [[
+                'content' => ['parts' => [['text' => json_encode(['result' => 'ok'])]]],
+            ]],
+        ], 200);
+    });
+
+    $client = new GeminiClient();
+    $r = $client->extract('prompt', $tmp, ['type' => 'OBJECT', 'properties' => ['result' => ['type' => 'STRING']]]);
+
+    expect($r['result'])->toBe('ok');
+    expect($attempts)->toBe(3);
+
+    @unlink($tmp);
 });

@@ -57,3 +57,38 @@ Harden the entire AI layer: fix error handling, queue resilience, JSON decoding,
 12. Verification
     - Run `./vendor/bin/pest`.
     - Deploy to test server and re-run lease batch + invoice batch smoke tests.
+
+## Reviewer fixes (round 2)
+
+13. Make `failed_jobs.id` migration DB-portable
+    - Use Laravel Schema helpers or DB-conditional SQL (MySQL/Oracle/SQLite).
+    - Respect `config('queue.failed.table')`.
+
+14. Centralize file extraction in `GeminiClient`
+    - Move `callGemini()` + `decodeJsonResponse()` + `tryDecodeJson()` from `InvoiceExtractionService` and `LeaseExtractionService` into `GeminiClient::extract()`.
+    - Remove duplicated retry/decoder loops.
+
+15. Retry connection-level timeouts in `GeminiClient`
+    - Catch `Illuminate\Http\Client\ConnectionException` (cURL 28/56) in retry loop.
+    - Apply to both `extract()` and `generateText()`.
+
+16. Add structured logging to `GeminiClient::generateText()`
+    - Mirror logging in `extract()`: model, tokens, attempts, errors.
+
+17. Make job retries resume-aware and exception-class aware
+    - Skip pages with `status = done` on retry.
+    - Use `$retryOn` to avoid retrying deterministic errors (bad JSON, auth, invalid schema).
+
+18. Make reprocess guard atomic
+    - Use `where('status', '!=', 'processing')->update(['status' => 'processing'])` and check affected rows.
+
+19. Clarify `timeout` vs `page_timeout` in admin Settings
+    - Either expose `gemini_page_timeout` or map the existing setting correctly.
+
+20. Add missing tests
+    - Connection-timeout retry test.
+    - Billing retry-storm / max-calls-per-page test.
+    - Per-page resume test.
+
+21. Re-verify
+    - Re-run targeted tests and deploy to test server for smoke test.
