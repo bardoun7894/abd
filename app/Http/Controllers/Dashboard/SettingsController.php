@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiSubscription;
 use App\Services\AuditLogger;
 use App\Services\Settings;
 use Illuminate\Http\Request;
@@ -72,7 +73,10 @@ class SettingsController extends Controller
             }
         }
 
-        return view('dashboard.settings.index', compact('registry', 'values', 'custom'));
+        // Spec 007 — AI subscription status/config on the settings screen.
+        $subscription = AiSubscription::current();
+
+        return view('dashboard.settings.index', compact('registry', 'values', 'custom', 'subscription'));
     }
 
     public function update(Request $request)
@@ -116,5 +120,54 @@ class SettingsController extends Controller
         ]);
 
         return redirect()->route('dashboard.settings.index')->with('success', 'تم حفظ الإعدادات بنجاح ✓');
+    }
+
+    /**
+     * Spec 007 — edit the AI subscription's active flag, expiry date, and
+     * page quota (does NOT touch used_pages or renewed_at — that's renew()).
+     */
+    public function updateSubscription(Request $request)
+    {
+        $this->guard();
+
+        $sub = AiSubscription::current();
+        $sub->active = $request->boolean('sub_active');
+        $sub->expires_at = $request->filled('sub_expires_at') ? $request->input('sub_expires_at') : null;
+        $sub->quota_pages = $request->filled('sub_quota_pages') ? max(0, (int) $request->input('sub_quota_pages')) : null;
+        $sub->save();
+
+        AuditLogger::log('ai_subscription', $sub->id, AuditLogger::EDIT, [
+            'note' => 'تحديث إعدادات اشتراك الذكاء الاصطناعي',
+        ]);
+
+        return redirect()->route('dashboard.settings.index')->with('success', 'تم حفظ إعدادات الاشتراك ✓');
+    }
+
+    /**
+     * Spec 007 — "تجديد الاشتراك": reactivates, sets a new expires_at,
+     * resets used_pages=0, and stamps renewed_at.
+     */
+    public function renewSubscription(Request $request)
+    {
+        $this->guard();
+
+        $request->validate([
+            'renew_expires_at' => 'nullable|date',
+        ]);
+
+        $sub = AiSubscription::current();
+        $sub->active = true;
+        $sub->expires_at = $request->filled('renew_expires_at')
+            ? $request->input('renew_expires_at')
+            : now()->addYear()->toDateString();
+        $sub->used_pages = 0;
+        $sub->renewed_at = now();
+        $sub->save();
+
+        AuditLogger::log('ai_subscription', $sub->id, AuditLogger::EDIT, [
+            'note' => 'تم تجديد اشتراك الذكاء الاصطناعي حتى '.$sub->expires_at->toDateString(),
+        ]);
+
+        return redirect()->route('dashboard.settings.index')->with('success', 'تم تجديد الاشتراك بنجاح ✓');
     }
 }

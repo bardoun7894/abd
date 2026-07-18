@@ -9,6 +9,7 @@
                     <th > مبلغ الايجار </th>
                     <th >ملاحظة</th>
                     <th >تاريخ الادخال</th>
+                    <th >الحالة</th>
                   <?php  if (Perm::get_function_access(33)) {?>
                     <th>الاجراءات</th>
                 <?php }?>
@@ -75,6 +76,25 @@
             },
         });
           });
+
+        function toggle_rentpay(id) {
+            $.ajax({
+                url: "{{ route('dashboard.shop.toggle_rentpay') }}",
+                type: "POST",
+                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
+                data: { id: id },
+                success: function (res) {
+                    if (res && res.status) {
+                        $('#rentpay_tbl').DataTable().ajax.reload(null, false);
+                    } else {
+                        alert((res && res.message_out) || 'تعذّر التحديث');
+                    }
+                },
+                error: function (xhr) {
+                    alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر التحديث');
+                }
+            });
+        }
       </script>
 
 

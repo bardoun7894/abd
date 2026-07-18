@@ -7,6 +7,12 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
+// NOTE: AiSubscriptionGate lives in this same namespace (App\Services), so
+// it's referenced below as app(AiSubscriptionGate::class) with no `use`
+// needed. Resolved via the container at call time (not constructor DI)
+// since every extractor in the app instantiates GeminiClient directly with
+// `new GeminiClient()`.
+
 /**
  * Reusable Google Gemini JSON-extraction call, shared by every module's AI extractor
  * (Spec 004). Sends one document (image/PDF) + a prompt and a responseSchema, returns
@@ -39,6 +45,10 @@ class GeminiClient
      */
     public function generateText(string $prompt, ?string $model = null): string
     {
+        // Spec 007 — central AI-subscription gate. Throws (Arabic message)
+        // when the subscription is inactive, expired, or quota-exhausted.
+        app(AiSubscriptionGate::class)->assertAllowed();
+
         $key = config('services.gemini.key');
         if (empty($key)) {
             throw new RuntimeException('GEMINI_API_KEY is not configured.');
@@ -165,6 +175,13 @@ class GeminiClient
      */
     public function extract(string $prompt, string $filePath, array $schema, ?string $model = null, ?string $thinking = null): array
     {
+        // Spec 007 — central AI-subscription gate. Throws (Arabic message)
+        // when the subscription is inactive, expired, or quota-exhausted.
+        // This single choke point covers every caller (invoices, leases,
+        // shop, worker/vehicle/expense/... extractors) since they all
+        // instantiate GeminiClient directly and call extract().
+        app(AiSubscriptionGate::class)->assertAllowed();
+
         $key = config('services.gemini.key');
         if (empty($key)) {
             throw new RuntimeException('GEMINI_API_KEY is not configured.');
@@ -264,7 +281,17 @@ class GeminiClient
             'output_tokens' => $this->lastOutputTokens(),
         ]);
 
-        return $this->decodeJsonResponse($resp->json());
+        $decoded = $this->decodeJsonResponse($resp->json());
+
+        // Spec 007 — count usage against the quota only once extraction of
+        // this file actually produced usable JSON (a thrown/failed call
+        // below never reaches here, so it never consumes quota). extract()
+        // is called once per page/file across every extractor in the app,
+        // so "1 call = 1 page" here is the least-invasive, single-choke-point
+        // place to meter pages without touching each module's pipeline.
+        app(AiSubscriptionGate::class)->recordPages(1);
+
+        return $decoded;
     }
 
     /**

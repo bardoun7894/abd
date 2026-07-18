@@ -853,6 +853,56 @@ class ReportController extends Controller
 
 
 
+    /**
+     * Client feedback (2026-07): "في نهاية إدارة المالية، كم عقد اندفع وكم ما اندفع".
+     * Rolls up rent payments (shop_rentpay) per shop into fully-paid vs outstanding
+     * contracts, with paid/outstanding amounts. Reads the paid/unpaid flag added by
+     * the shop_rentpay migration; COALESCE keeps it safe if a row predates the column.
+     */
+    public function rent_summary(Request $request)
+    {
+        $page_title = 'ملخص عقود الإيجار — المدفوع وغير المدفوع';
+
+        $rows = DB::table('shop_rentpay as rp')
+            ->join('shop as s', 's.shop_id', '=', 'rp.shop_id')
+            ->select(
+                's.shop_id',
+                's.shop_name',
+                DB::raw('COUNT(*) as total_cnt'),
+                DB::raw("SUM(CASE WHEN COALESCE(rp.rentpay_status,'unpaid')='paid' THEN 1 ELSE 0 END) as paid_cnt"),
+                DB::raw('SUM(rp.rentpay_price) as total_amt'),
+                DB::raw("SUM(CASE WHEN COALESCE(rp.rentpay_status,'unpaid')='paid' THEN rp.rentpay_price ELSE 0 END) as paid_amt")
+            )
+            ->groupBy('s.shop_id', 's.shop_name')
+            ->get();
+
+        $contracts_paid = 0;      // every payment settled
+        $contracts_outstanding = 0; // at least one unpaid payment
+        $total_amt = 0.0;
+        $paid_amt = 0.0;
+
+        foreach ($rows as $r) {
+            $total_amt += (float) $r->total_amt;
+            $paid_amt += (float) $r->paid_amt;
+            if ((int) $r->paid_cnt >= (int) $r->total_cnt && (int) $r->total_cnt > 0) {
+                $contracts_paid++;
+            } else {
+                $contracts_outstanding++;
+            }
+        }
+
+        $stats = [
+            'contracts_total' => $rows->count(),
+            'contracts_paid' => $contracts_paid,
+            'contracts_outstanding' => $contracts_outstanding,
+            'total_amt' => $total_amt,
+            'paid_amt' => $paid_amt,
+            'outstanding_amt' => max(0.0, $total_amt - $paid_amt),
+        ];
+
+        return view('dashboard.report.rent_summary', compact('page_title', 'rows', 'stats'));
+    }
+
     public function print_shop_xlsx(Request $request)
     {
 

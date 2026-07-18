@@ -215,6 +215,12 @@
                                             setv('rent_sdt', d.issue_date);
                                             setv('rent_edt', d.expiry_date);
                                             setv('rent_name', d.owner_name);
+                                            // Payment-schedule inputs → hidden fields; on save the server
+                                            // auto-generates the دفعات into shop_rentpay (client feedback 2026-07).
+                                            setv('rent_sched_num', d.num_payments);
+                                            setv('rent_sched_value', d.payment_value);
+                                            setv('rent_sched_freq', d.payment_frequency);
+                                            setv('rent_sched_rentval', d.rent_amount);
                                         }
                                         // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
                                         try {
@@ -821,6 +827,14 @@ if($emp_job==1){
                         im-insert="true" type="text" style="display:none"
                         class="form-control kt-font-dark kt-font-bolder " readonly placeholder="rentfile_db"
                         aria-describedby="basic-addon1">
+
+                    {{-- Hidden AI-extracted lease payment-schedule inputs. Populated by the
+                         AI-extract JS on a lease document; consumed by updfile() to auto-generate
+                         the دفعات into shop_rentpay (client feedback 2026-07). --}}
+                    <input type="hidden" name="rent_sched_num" id="rent_sched_num" value="">
+                    <input type="hidden" name="rent_sched_value" id="rent_sched_value" value="">
+                    <input type="hidden" name="rent_sched_freq" id="rent_sched_freq" value="">
+                    <input type="hidden" name="rent_sched_rentval" id="rent_sched_rentval" value="">
                     <div class=" col-12 col-lg-4 col-md-12 col-sm-12 mb-5">
                         <label for="doe" class="form-label  fs-6 fw-bold text-dark mb-3">تحميل
                             صورة العقد :</label>

@@ -20,6 +20,7 @@ class ShopAiExtractor
     /**
      * @return array{document_type:?string, document_number:?string, issue_date:?string,
      *               expiry_date:?string, owner_name:?string, rent_amount:?float,
+     *               num_payments:?int, payment_value:?float, payment_frequency:?string,
      *               field_confidence:array, _in:int, _out:int}
      */
     public function extract(string $filePath, ?string $model = null): array
@@ -33,6 +34,11 @@ class ShopAiExtractor
             'expiry_date' => $this->parseDate($raw['expiry_date'] ?? null),
             'owner_name' => $this->cleanStr($raw['owner_name'] ?? null),
             'rent_amount' => $this->num($raw['rent_amount'] ?? null),
+            // Lease payment-schedule inputs (client feedback 2026-07) — used to
+            // generate the shop_rentpay دفعات automatically. Null for non-lease docs.
+            'num_payments' => $this->intOrNull($raw['num_payments'] ?? null),
+            'payment_value' => $this->num($raw['payment_value'] ?? null),
+            'payment_frequency' => $this->cleanStr($raw['payment_frequency'] ?? null),
             'field_confidence' => $this->confidence($raw['field_confidence'] ?? null),
             '_in' => $this->gemini->lastInputTokens(),
             '_out' => $this->gemini->lastOutputTokens(),
@@ -54,6 +60,9 @@ class ShopAiExtractor
                 'expiry_date' => ['type' => 'STRING', 'nullable' => true],
                 'owner_name' => ['type' => 'STRING', 'nullable' => true],
                 'rent_amount' => ['type' => 'NUMBER', 'nullable' => true],
+                'num_payments' => ['type' => 'INTEGER', 'nullable' => true],
+                'payment_value' => ['type' => 'NUMBER', 'nullable' => true],
+                'payment_frequency' => ['type' => 'STRING', 'nullable' => true],
                 'field_confidence' => [
                     'type' => 'OBJECT',
                     'nullable' => true,
@@ -78,6 +87,9 @@ class ShopAiExtractor
             .'- expiry_date: تاريخ الانتهاء بصيغة YYYY-MM-DD.'."\n"
             .'- owner_name: اسم صاحب المؤسسة/المحل، أو اسم المالك/المؤجر في حال كان عقد إيجار.'."\n"
             .'- rent_amount: قيمة الإيجار السنوية أو الإجمالية (رقم بدون رمز عملة) — فقط إن كان المستند عقد إيجار، وإلا null.'."\n"
+            .'- num_payments: عدد الدفعات في العقد (رقم صحيح) — فقط لعقد الإيجار، وإلا null.'."\n"
+            .'- payment_value: قيمة الدفعة الواحدة (رقم بدون رمز عملة) — فقط لعقد الإيجار، وإلا null.'."\n"
+            .'- payment_frequency: دورية الدفع (شهري/ربع سنوي/نصف سنوي/سنوي/دفعة واحدة) — فقط لعقد الإيجار، وإلا null.'."\n"
             .'- field_confidence: درجة ثقة 0..1 لكل من document_number و issue_date و expiry_date و owner_name.'."\n"
             .'حوّل الأرقام العربية إلى لاتينية. لا تخمّن؛ استخدم null لأي حقل غير موجود. أعد JSON فقط.';
     }
@@ -108,6 +120,13 @@ class ShopAiExtractor
         $v = trim((string) ($v ?? ''));
 
         return $v === '' ? null : $v;
+    }
+
+    private function intOrNull($v): ?int
+    {
+        $n = $this->num($v);
+
+        return $n === null ? null : (int) round($n);
     }
 
     private function cleanIdStr($v): ?string

@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\InvoiceBatch;
 use App\Models\InvoiceItem;
 use App\Models\Shop;
+use App\Services\AiSubscriptionGate;
 use App\Services\AuditLogger;
 use App\Services\InvoiceBatchSummarizer;
 use App\Services\InvoicePurchaseMapper;
@@ -57,11 +58,24 @@ class InvoiceController extends Controller
     {
         $page_title = 'رفع فاتورة PDF';
 
-        return view('dashboard.invoices.upload', compact('page_title'));
+        // Spec 007 — remaining-quota banner on the upload screen.
+        $subscription = app(AiSubscriptionGate::class)->check();
+
+        return view('dashboard.invoices.upload', compact('page_title', 'subscription'));
     }
 
     public function store(Request $request)
     {
+        // Spec 007 — block the upload up front (before any file I/O or job
+        // dispatch) when the AI subscription is inactive/expired/quota-
+        // exhausted, with a clear Arabic message instead of a mid-pipeline
+        // failure or 500.
+        try {
+            app(AiSubscriptionGate::class)->assertAllowed();
+        } catch (\RuntimeException $e) {
+            return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
+        }
+
         // Spec 002 FR-101 — accept PDF OR a scanned image (JPG/PNG/JPEG/WEBP).
         $validated = $request->validate([
             'pdf' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:51200', // 50 MB
@@ -161,6 +175,98 @@ class InvoiceController extends Controller
         }
 
         return response()->json(['status' => true, 'message_out' => $msg, 'summary' => $summary]);
+    }
+
+    /**
+     * Delete a whole batch and every invoice in it. Any invoice already posted to
+     * the main `purchase` table is reversed first (purchase + its items + attachments
+     * removed), then the isolated-side batch/invoices are dropped.
+     */
+    public function destroy($id)
+    {
+        $batch = $this->findOwned($id);
+
+        $reversed = 0;
+        foreach ($batch->invoices()->get() as $inv) {
+            if (filled($inv->purchase_id)) {
+                $this->reversePurchase((int) $inv->purchase_id);
+                $inv->forceFill(['purchase_id' => null, 'mapped_at' => null])->save();
+                $reversed++;
+            }
+            InvoiceItem::on($inv->getConnectionName())->where('invoice_id', $inv->id)->delete();
+        }
+
+        // FK batch_id cascades to invoices, but delete explicitly for clarity/safety.
+        $batch->invoices()->delete();
+        $batch->delete();
+
+        AuditLogger::log('invoice', (int) $id, AuditLogger::DELETE, [
+            'note' => 'حُذفت الدفعة'.($reversed ? " (عُكس ترحيل {$reversed} فاتورة من المشتريات)" : ''),
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message_out' => 'تم حذف الدفعة'.($reversed ? " وعكس ترحيل {$reversed} فاتورة" : ''),
+            'redirect' => route('dashboard.invoices.index'),
+        ]);
+    }
+
+    /**
+     * Delete a single invoice from a batch. If it was posted to `purchase`, its
+     * purchase row (+ items + attachments) is reversed first.
+     */
+    public function destroyInvoice($batchId, $invoiceId)
+    {
+        $batch = $this->findOwned($batchId);
+
+        $inv = $batch->invoices()->whereKey($invoiceId)->firstOrFail();
+
+        $reversed = false;
+        if (filled($inv->purchase_id)) {
+            $this->reversePurchase((int) $inv->purchase_id);
+            $reversed = true;
+        }
+
+        InvoiceItem::on($inv->getConnectionName())->where('invoice_id', $inv->id)->delete();
+        $inv->delete();
+        $batch->recomputeGrandTotal();
+
+        AuditLogger::log('invoice', (int) $inv->id, AuditLogger::DELETE, [
+            'batch_id' => (int) $batch->id,
+            'note' => 'حُذفت الفاتورة'.($reversed ? ' (عُكس ترحيلها من المشتريات)' : ''),
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message_out' => 'تم حذف الفاتورة'.($reversed ? ' وعكس ترحيلها' : ''),
+        ]);
+    }
+
+    /**
+     * Reverse a posted purchase on the main connection: remove its attachments and
+     * line items, then the purchase row itself, all in one transaction. Best-effort
+     * on the child tables (they may not exist / differ in prod) — the purchase row
+     * delete is the load-bearing part.
+     */
+    private function reversePurchase(int $purchaseId): void
+    {
+        DB::transaction(function () use ($purchaseId) {
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('purchase_attach')) {
+                    DB::table('purchase_attach')->where('purchase_id', $purchaseId)->delete();
+                }
+            } catch (\Throwable $e) {
+                // best-effort
+            }
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('purchase_items')) {
+                    DB::table('purchase_items')->where('purchase_id', $purchaseId)->delete();
+                }
+            } catch (\Throwable $e) {
+                // best-effort
+            }
+            DB::table('purchase')->where('purchase_id', $purchaseId)->delete();
+        });
     }
 
     /**

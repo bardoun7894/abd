@@ -576,6 +576,18 @@ class ShopController extends Controller
                 $row[] = $x->rentpay_price;
                 $row[] = $x->rentpay_note;
                 $row[] = Carbon::parse($x->created_at)->format('d-m-Y');
+
+                // Paid/unpaid badge — click to toggle (Perm 33 required).
+                $isPaid = ($x->rentpay_status ?? 'unpaid') === 'paid';
+                $paidTxt = $isPaid ? 'مدفوع' : 'غير مدفوع';
+                $paidCls = $isPaid ? 'btn-success' : 'btn-light-danger';
+                if (Perm::get_function_access(33)) {
+                    $row[] = '<button type="button" class="btn btn-sm ' . $paidCls . ' toggle_rentpay" onclick="toggle_rentpay(' . "'" . $x->rentpay_id . "'" . ')" title="اضغط لتغيير الحالة">' . $paidTxt . '</button>';
+                } else {
+                    $badge = $isPaid ? 'badge-light-success' : 'badge-light-danger';
+                    $row[] = '<span class="badge ' . $badge . '">' . $paidTxt . '</span>';
+                }
+
                 if (Perm::get_function_access(37)||Perm::get_function_access(38)) {
                     $opt = '<div class="btn-group btn-group-sm" role="group"  >';
                     if (Perm::get_function_access(33)) {
@@ -637,6 +649,94 @@ class ShopController extends Controller
             $shop_rentpay = DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->first();
             return view('dashboard.shop.change_rentpay', compact('shop_rentpay'));
         }
+    }
+
+    /**
+     * Auto-generate shop_rentpay rows from AI-extracted lease terms carried on the
+     * shop document form (hidden fields). Reuses the pure LeaseScheduleGenerator.
+     * Safe/idempotent: does nothing when inputs are missing or the shop already has
+     * payments — it must never overwrite manually-entered دفعات.
+     */
+    private function maybeGenerateRentPayments(Request $request, $shop_id): void
+    {
+        if (! $shop_id) {
+            return;
+        }
+        $numPayments = (int) $request->input('rent_sched_num', 0);
+        $rentValue = (float) $request->input('rent_sched_rentval', 0);
+        $paymentValue = $request->input('rent_sched_value');
+        $frequency = $request->input('rent_sched_freq');
+        $startDate = trim((string) $request->input('rent_sdt', ''));
+
+        // Need at least a start date and something to size the schedule with.
+        if ($startDate === '' || ($numPayments < 1 && $rentValue <= 0 && ! is_numeric($paymentValue))) {
+            return;
+        }
+
+        // Never duplicate: skip if this shop already has any payment rows.
+        if (DB::table('shop_rentpay')->where('shop_id', $shop_id)->exists()) {
+            return;
+        }
+
+        try {
+            $rows = (new \App\Services\LeaseScheduleGenerator())->generate([
+                'start_date' => $startDate,
+                'num_payments' => $numPayments > 0 ? $numPayments : 1,
+                'rent_value' => $rentValue,
+                'payment_value' => $paymentValue,
+                'payment_frequency' => $frequency,
+            ]);
+        } catch (\Throwable $e) {
+            return; // bad/missing start date — silently skip auto-generation
+        }
+
+        $now = Carbon::now();
+        foreach ($rows as $row) {
+            DB::table('shop_rentpay')->insert([
+                'shop_id' => $shop_id,
+                'rentpay_dt' => $row['due_date'],
+                'rentpay_price' => $row['amount'],
+                'rentpay_note' => 'مُولّد آلياً من عقد الإيجار (المستخرَج بالذكاء الاصطناعي)',
+                'rentpay_status' => 'unpaid',
+                'created_at' => $now,
+                'updated_at' => $now,
+                'create_user' => Auth::user()->id,
+                'update_user' => Auth::user()->id,
+            ]);
+        }
+    }
+
+    /**
+     * Client feedback (2026-07): an employee clicks a rent payment to flip it between
+     * مدفوع (paid) and غير مدفوع (unpaid). Sets/clears paid_date accordingly.
+     */
+    public function toggle_rentpay(Request $request)
+    {
+        if (! Perm::get_function_access(33)) {
+            return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية'], 403);
+        }
+
+        $rentpay_id = $request->id;
+        $row = DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->first();
+        if (! $row) {
+            return response()->json(['status' => false, 'message_out' => 'الدفعة غير موجودة'], 404);
+        }
+
+        $current = $row->rentpay_status ?? 'unpaid';
+        $new = $current === 'paid' ? 'unpaid' : 'paid';
+
+        DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->update([
+            'rentpay_status' => $new,
+            'paid_date' => $new === 'paid' ? Carbon::now()->toDateString() : null,
+            'updated_at' => Carbon::now(),
+            'update_user' => Auth::user()->id,
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'rentpay_status' => $new,
+            'message_out' => $new === 'paid' ? 'تم التحديد كمدفوع' : 'تم التحديد كغير مدفوع',
+        ]);
     }
 
 
@@ -1149,7 +1249,11 @@ class ShopController extends Controller
                             ]
                         );
 
-
+                    // Client feedback (2026-07): when a lease PDF was AI-extracted, auto-generate
+                    // the rent payments (دفعات الإيجار) into shop_rentpay so they show up in
+                    // "ادارة دفعات الايجار". Only when the form carried schedule inputs, a start
+                    // date exists, and the shop has no payments yet (never overwrite/duplicate).
+                    $this->maybeGenerateRentPayments($request, $shop_id);
 
                     $result2 = DB::table('shop_defence')
                         ->updateOrInsert(
@@ -1991,6 +2095,9 @@ class ShopController extends Controller
                 'expiry_date' => $data['expiry_date'],
                 'owner_name' => $data['owner_name'],
                 'rent_amount' => $data['rent_amount'],
+                'num_payments' => $data['num_payments'] ?? null,
+                'payment_value' => $data['payment_value'] ?? null,
+                'payment_frequency' => $data['payment_frequency'] ?? null,
                 'confidence' => $data['field_confidence'],
                 'document_url' => $fileUrl,
             ],

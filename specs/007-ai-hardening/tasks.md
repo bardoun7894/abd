@@ -92,3 +92,27 @@ Harden the entire AI layer: fix error handling, queue resilience, JSON decoding,
 
 21. Re-verify
     - Re-run targeted tests and deploy to test server for smoke test.
+
+---
+
+## Client feedback round (2026-07-18) — AI extraction glue
+
+Source: client voice note + shop-rent UI screenshots. Leases must flow into the
+EXISTING shop rent system (`shop_rent` + `shop_rentpay`), same DB.
+
+- [x] WS1 — Invoice delete (+ reverse posted purchase): `InvoiceController::destroy/destroyInvoice`,
+      `reversePurchase()`, DELETE routes, delete buttons in invoices index/show. `AuditLogger::DELETE`.
+- [x] WS2 — Surface duplicate blocking on post: list skipped exact + fuzzy duplicates in invoices/show.
+- [x] WS3c — `shop_rentpay` paid/unpaid: additive migration (`rentpay_status`,`paid_date`),
+      `ShopController::toggle_rentpay` + route, badge/toggle in `ajax_search_rentpay` + `tbl_rentpay` blade.
+- [x] WS3a/b — Lease PDF → payments: `ShopAiExtractor` returns schedule inputs; `updfile()`
+      `maybeGenerateRentPayments()` reuses `LeaseScheduleGenerator` → `shop_rentpay` (idempotent).
+- [x] WS3d — Contract PDF link (`عرض عقد الإيجار`) on payments modal (`upd_rentpay`).
+- [x] WS3e — Financial rollup: `ReportController::rent_summary` + view + route + sidebar link
+      (contracts paid vs unpaid off `shop_rentpay.rentpay_status`).
+- [~] WS4 — AI subscription (expiry + quota, full enforcement): `ai_subscriptions` table + model,
+      `AiSubscriptionGate` hooked in `GeminiClient` + upload controllers, admin Settings UI + renew,
+      quota banner. (in progress — backend-engineer)
+
+Deploy note: run `php artisan migrate` on the server (adds `rentpay_status`/`paid_date` +
+`ai_subscriptions`). All new unit failures locally are `QueryException` (no local MySQL) — environmental.

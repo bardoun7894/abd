@@ -143,6 +143,7 @@
                     <th>حالة</th>
                     <th>المرفق</th>
                     <th class="d-print-table-cell">رمز ZATCA</th>
+                    <th class="d-print-none text-center">إجراء</th>
                 </tr>
             </thead>
             <tbody id="rows"></tbody>
@@ -241,9 +242,11 @@
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')
                     + '<td>' + qualityBadge(v.image_quality) + '</td>'
                     + '<td>' + flag + '</td><td>' + attachment(v) + '</td>'
-                    + '<td>' + zatcaQr(v) + '</td></tr>';
+                    + '<td>' + zatcaQr(v) + '</td>'
+                    + '<td class="d-print-none text-center"><button type="button" class="btn btn-sm btn-icon btn-light-danger js-del-inv" data-id="' + v.id + '" data-posted="' + (v.purchase_id ? 1 : 0) + '" title="حذف الفاتورة"><i class="bi bi-trash"></i></button></td>'
+                    + '</tr>';
             });
-            $('#rows').html(html || '<tr><td colspan="12" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
+            $('#rows').html(html || '<tr><td colspan="13" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
         }
 
         function poll() {
@@ -252,6 +255,26 @@
                 if (d.status == 'done' || d.status == 'failed') { clearInterval(timer); }
             });
         }
+
+        $(document).on('click', '.js-del-inv', function () {
+            var id = $(this).data('id');
+            var posted = String($(this).data('posted')) === '1';
+            var msg = posted
+                ? 'هذه الفاتورة مُرحّلة إلى المشتريات. سيتم حذفها وعكس ترحيلها (حذف قيد المشتريات).\nهل أنت متأكد؟'
+                : 'سيتم حذف هذه الفاتورة.\nهل أنت متأكد؟';
+            if (!confirm(msg)) return;
+            $.ajax({
+                url: correctBase + '/{{ $batch->id }}/invoice/' + id,
+                method: 'DELETE',
+                success: function (r) {
+                    if (r && r.status) { poll(); }
+                    else { alert((r && r.message_out) || 'تعذّر الحذف'); }
+                },
+                error: function (xhr) {
+                    alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحذف');
+                }
+            });
+        });
 
         $(document).on('blur', '.edit', function () {
             var $c = $(this), id = $c.data('id'), field = $c.data('field'), value = $c.text().trim();
@@ -275,8 +298,20 @@
                 .done(function (r) {
                     var cls = r.status ? 'text-success' : 'text-danger';
                     var extra = '';
-                    if (r.summary && r.summary.duplicates && r.summary.duplicates.length) {
-                        extra = '<div class="text-muted mt-1">مكررة: ' + r.summary.duplicates.map(esc).join(', ') + '</div>';
+                    var s = r.summary || {};
+                    if (s.duplicates && s.duplicates.length) {
+                        extra += '<div class="alert alert-warning py-2 px-3 mt-2 mb-0 fs-8">'
+                            + '<i class="bi bi-exclamation-triangle me-1"></i>'
+                            + '<b>فواتير مكرّرة لم تُرحّل (' + s.duplicates.length + '):</b> '
+                            + s.duplicates.map(esc).join('، ')
+                            + '<div class="text-muted mt-1">هذه الأرقام موجودة مسبقاً في المشتريات — مُنع تكرارها.</div></div>';
+                    }
+                    if (s.fuzzy_duplicates && s.fuzzy_duplicates.length) {
+                        var fz = s.fuzzy_duplicates.map(function (f) { return esc(f.invoice_number) + ' (تشابه ' + Math.round((f.score || 0) * 100) + '%)'; });
+                        extra += '<div class="alert alert-warning py-2 px-3 mt-2 mb-0 fs-8">'
+                            + '<i class="bi bi-search me-1"></i>'
+                            + '<b>مشتبه بتكرارها — تحتاج مراجعة (' + s.fuzzy_duplicates.length + '):</b> '
+                            + fz.join('، ') + '</div>';
                     }
                     $('#pushResult').html('<span class="' + cls + '">' + esc(r.message_out) + '</span>' + extra);
                     poll();

@@ -8,6 +8,7 @@ use App\Models\LeaseBatch;
 use App\Models\LeaseContract;
 use App\Models\LeaseExtraction;
 use App\Models\LeasePayment;
+use App\Services\AiSubscriptionGate;
 use App\Services\LeaseScheduleGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -44,11 +45,24 @@ class LeaseController extends Controller
     {
         $page_title = 'رفع عقد إيجار PDF';
 
-        return view('dashboard.leases.upload', compact('page_title'));
+        // Spec 007 — remaining-quota banner on the upload screen.
+        $subscription = app(AiSubscriptionGate::class)->check();
+
+        return view('dashboard.leases.upload', compact('page_title', 'subscription'));
     }
 
     public function store(Request $request)
     {
+        // Spec 007 — block the upload up front (before any file I/O or job
+        // dispatch) when the AI subscription is inactive/expired/quota-
+        // exhausted, with a clear Arabic message instead of a mid-pipeline
+        // failure or 500.
+        try {
+            app(AiSubscriptionGate::class)->assertAllowed();
+        } catch (\RuntimeException $e) {
+            return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
+        }
+
         $validated = $request->validate([
             'pdf' => 'required|file|mimes:pdf|max:51200', // 50 MB
         ]);

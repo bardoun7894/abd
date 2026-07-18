@@ -37,6 +37,9 @@ Route::group([
         // Spec 005 — admin API-key / integration settings (super-admin only)
         Route::get('/settings', [\App\Http\Controllers\Dashboard\SettingsController::class, 'index'])->name('settings.index');
         Route::post('/settings/update', [\App\Http\Controllers\Dashboard\SettingsController::class, 'update'])->name('settings.update');
+        // Spec 007 — AI subscription config + renew (super-admin only)
+        Route::post('/settings/subscription/update', [\App\Http\Controllers\Dashboard\SettingsController::class, 'updateSubscription'])->name('settings.subscription.update');
+        Route::post('/settings/subscription/renew', [\App\Http\Controllers\Dashboard\SettingsController::class, 'renewSubscription'])->name('settings.subscription.renew');
 
         Route::resource('/categories', CategoriesController::class);
 
@@ -204,6 +207,7 @@ Route::group([
         Route::post('/shop/ajax_search_rentpay', [shopController::class, 'ajax_search_rentpay'])->name('shop.ajax_search_rentpay');
         Route::post('/shop/del_rentpay', [shopController::class, 'del_rentpay'])->name('shop.del_rentpay');
         Route::post('/shop/change_rentpay', [shopController::class, 'change_rentpay'])->name('shop.change_rentpay');
+        Route::post('/shop/toggle_rentpay', [shopController::class, 'toggle_rentpay'])->name('shop.toggle_rentpay');
 
 
 
@@ -417,6 +421,7 @@ Route::group([
         Route::post('/report/print_worker_pdf', [ReportController::class, 'print_worker_pdf'])->name('report.print_worker_pdf');
         Route::post('/report/print_worker_xlsx', [ReportController::class, 'print_worker_xlsx'])->name('report.print_worker_xlsx');
 
+        Route::get('/report/rent_summary', [ReportController::class, 'rent_summary'])->name('report.rent_summary');
         Route::post('/report/print_shop_pdf', [ReportController::class, 'print_shop_pdf'])->name('report.print_shop_pdf');
         Route::post('/report/print_shop_xlsx', [ReportController::class, 'print_shop_xlsx'])->name('report.print_shop_xlsx');
 
@@ -451,6 +456,8 @@ Route::group([
         Route::post('/invoices/{id}/correct', [InvoiceController::class, 'correct'])->whereNumber('id')->name('invoices.correct');
         Route::post('/invoices/{id}/push-to-purchase', [InvoiceController::class, 'pushToPurchase'])->whereNumber('id')->name('invoices.push');
         Route::post('/invoices/{id}/rescan', [InvoiceController::class, 'rescan'])->whereNumber('id')->name('invoices.rescan');
+        Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy'])->whereNumber('id')->name('invoices.destroy');
+        Route::delete('/invoices/{batch}/invoice/{invoiceId}', [InvoiceController::class, 'destroyInvoice'])->whereNumber('batch')->whereNumber('invoiceId')->name('invoices.invoice.destroy');
 
         // Invoice review / approval / error / reports (Spec 002 FR-107/108/109)
         Route::get('/invoices/report', [InvoiceController::class, 'report'])->name('invoices.report');

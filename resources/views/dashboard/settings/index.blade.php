@@ -15,6 +15,80 @@
                 </div>
             @endif
 
+            {{-- Spec 007 — AI subscription status + config --}}
+            @php
+                $subBlocked = $subscription->isBlocked();
+                $subRemainingPages = $subscription->remainingPages();
+                $subRemainingDays = $subscription->remainingDays();
+            @endphp
+            <div class="card mb-5">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa fa-robot text-primary me-2"></i>
+                        <h2 class="fw-bold">اشتراك الذكاء الاصطناعي</h2>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="alert {{ $subBlocked ? 'alert-danger' : 'alert-light-success' }} d-flex align-items-center mb-6">
+                        <i class="fa {{ $subBlocked ? 'fa-ban' : 'fa-check-circle' }} me-2"></i>
+                        <div>
+                            <div class="fw-bold">
+                                {{ $subBlocked ? 'الاشتراك متوقف — كل عمليات الاستخراج بالذكاء الاصطناعي معطّلة حتى التجديد' : 'الاشتراك فعّال' }}
+                            </div>
+                            <div class="fs-7 mt-1">
+                                الصفحات المتبقية: {{ $subRemainingPages === null ? 'غير محدودة' : number_format($subRemainingPages) }}
+                                (المستخدم {{ number_format($subscription->used_pages) }}{{ $subscription->quota_pages !== null ? ' / '.number_format($subscription->quota_pages) : '' }})
+                                — الأيام المتبقية: {{ $subRemainingDays === null ? 'بلا انتهاء' : number_format($subRemainingDays) }}
+                                @if ($subscription->renewed_at)
+                                    — آخر تجديد: {{ $subscription->renewed_at->format('Y-m-d') }}
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+
+                    <form action="{{ route('dashboard.settings.subscription.update') }}" method="POST" class="row g-5 align-items-end mb-6">
+                        @csrf
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">حالة الاشتراك</label>
+                            <select name="sub_active" class="form-select form-select-solid">
+                                <option value="1" @selected($subscription->active)>مفعّل</option>
+                                <option value="0" @selected(! $subscription->active)>موقوف</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">تاريخ الانتهاء</label>
+                            <input type="date" name="sub_expires_at" class="form-control form-control-solid"
+                                value="{{ $subscription->expires_at?->format('Y-m-d') }}" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">حصة الصفحات (اتركه فارغاً لغير محدود)</label>
+                            <input type="number" min="0" name="sub_quota_pages" class="form-control form-control-solid"
+                                value="{{ $subscription->quota_pages }}" placeholder="غير محدود" />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fa fa-save me-1"></i> حفظ إعدادات الاشتراك
+                            </button>
+                        </div>
+                    </form>
+
+                    <form action="{{ route('dashboard.settings.subscription.renew') }}" method="POST" class="row g-5 align-items-end border-top pt-5">
+                        @csrf
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">تجديد الاشتراك حتى تاريخ</label>
+                            <input type="date" name="renew_expires_at" class="form-control form-control-solid" />
+                            <div class="form-text text-muted">اتركه فارغاً للتجديد سنة كاملة من اليوم.</div>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="fa fa-rotate-right me-1"></i> تجديد الاشتراك
+                            </button>
+                            <div class="form-text text-muted">يُصفّر الصفحات المستخدَمة ويُفعّل الاشتراك.</div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div class="card mb-5">
                 <div class="card-header">
                     <div class="card-title">

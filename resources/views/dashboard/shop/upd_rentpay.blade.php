@@ -41,6 +41,16 @@
                             </div>
                         </div>
                     </div>
+                    @if (!empty($shop->rent_attach_url))
+                        <div class="text-center mb-4">
+                            <a href="{{ $shop->rent_attach_url }}" target="_blank" class="btn btn-sm btn-light-primary fw-bold">
+                                <i class="fas fa-file-contract fa-fw"></i> عرض عقد الإيجار
+                            </a>
+                            @if (!empty($shop->rent_name))
+                                <span class="text-muted fs-8 ms-2">المؤجر: {{ $shop->rent_name }}</span>
+                            @endif
+                        </div>
+                    @endif
                     <div class="alert alert-dismissible   d-flex flex-column flex-sm-row w-100 p-5 mb-6"
                         id="errorBox_shop" style="display: none !important">
                         <span class="svg-icon svg-icon-2hx svg-icon-light me-4 mb-5 mb-sm-0">

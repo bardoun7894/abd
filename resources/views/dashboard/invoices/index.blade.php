@@ -77,6 +77,10 @@
                                     <a href="{{ route('dashboard.invoices.show', $b->id) }}" class="btn btn-sm btn-light-primary fw-bold">
                                         عرض <i class="bi bi-arrow-left ms-1"></i>
                                     </a>
+                                    <button type="button" class="btn btn-sm btn-light-danger fw-bold js-del-batch"
+                                            data-id="{{ $b->id }}" data-name="{{ $b->original_filename }}" title="حذف الدفعة">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                         @empty
@@ -112,4 +116,30 @@
             @endif
         </div>
     </div>
+@endsection
+@section('scripts')
+    <script>
+        $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') } });
+        var invIndexUrl = "{{ url('dashboard/invoices') }}";
+        $(document).on('click', '.js-del-batch', function () {
+            var id = $(this).data('id');
+            var name = $(this).data('name') || ('#' + id);
+            if (!confirm('سيتم حذف الدفعة "' + name + '" وكل فواتيرها.\nأي فاتورة مُرحّلة إلى المشتريات سيتم عكس ترحيلها أيضاً.\nهل أنت متأكد؟')) return;
+            var $row = $(this).closest('tr');
+            $.ajax({
+                url: invIndexUrl + '/' + id,
+                method: 'DELETE',
+                success: function (res) {
+                    if (res && res.status) {
+                        $row.fadeOut(200, function () { $(this).remove(); });
+                    } else {
+                        alert((res && res.message_out) || 'تعذّر الحذف');
+                    }
+                },
+                error: function (xhr) {
+                    alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحذف');
+                }
+            });
+        });
+    </script>
 @endsection

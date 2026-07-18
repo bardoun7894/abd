@@ -20,6 +20,7 @@ class AuditLogger
     public const EXTRACT = 'extract';
     public const DUP_OVERRIDE = 'dup_override';
     public const READ = 'read';
+    public const DELETE = 'delete';
 
     /**
      * @param  string  $documentType  'invoice' | 'lease'

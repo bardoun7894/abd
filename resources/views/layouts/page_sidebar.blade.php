@@ -211,6 +211,18 @@
                         </a>
                     </div>
                     <?php  }?>
+                    <?php if(Perm::get_function_access(33)){?>
+                    <div class="menu-item">
+                        <a class="menu-link @if (Route::currentRouteName() == 'dashboard.report.rent_summary') active @endif"
+                           href="{{ route('dashboard.report.rent_summary') }}" data-bs-toggle="tooltip"
+                           data-bs-trigger="hover" data-bs-dismiss="click" data-bs-placement="right">
+                            <span class="menu-bullet">
+                                <span class="bullet bullet-dot"></span>
+                            </span>
+                            <span class="menu-title text-dark">ملخص عقود الإيجار (مدفوع/غير مدفوع)</span>
+                        </a>
+                    </div>
+                    <?php  }?>
                 </div>
             </div>
             <?php } ?>
