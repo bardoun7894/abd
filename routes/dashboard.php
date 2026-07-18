@@ -210,6 +210,9 @@ Route::group([
         Route::post('/shop/del_rentpay', [shopController::class, 'del_rentpay'])->name('shop.del_rentpay');
         Route::post('/shop/change_rentpay', [shopController::class, 'change_rentpay'])->name('shop.change_rentpay');
         Route::post('/shop/toggle_rentpay', [shopController::class, 'toggle_rentpay'])->name('shop.toggle_rentpay');
+        // Phase 3 — async AI document extraction (upload → queue → poll)
+        Route::post('/shop/ai-extract-async', [shopController::class, 'aiExtractAsync'])->name('shop.ai_extract_async');
+        Route::get('/shop/ai-extract-status/{job}', [shopController::class, 'aiExtractStatus'])->whereNumber('job')->name('shop.ai_extract_status');
 
 
 

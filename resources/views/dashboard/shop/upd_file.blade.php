@@ -187,78 +187,79 @@
                             <script>
                             (function(){
                                 var btn=document.getElementById('ai_shop_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
+                                var statusBase = "{{ url('dashboard/shop/ai-extract-status') }}";
+
+                                function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
+
+                                // Fill the form from an extraction result (shared by async result handling).
+                                function applyExtraction(d, st){
+                                    var typeLabel='';
+                                    if(d.document_type==='commercial_registration'){
+                                        typeLabel='السجل التجاري';
+                                        setv('comme_no', d.document_number); setv('comme_sdt', d.issue_date); setv('comme_edt', d.expiry_date);
+                                    } else if(d.document_type==='municipal_license'){
+                                        typeLabel='رخصة البلدية';
+                                        setv('municip_no', d.document_number); setv('municip_sdt', d.issue_date); setv('municip_edt', d.expiry_date);
+                                    } else if(d.document_type==='lease'){
+                                        typeLabel='عقد الإيجار';
+                                        setv('rent_no', d.document_number); setv('rent_sdt', d.issue_date); setv('rent_edt', d.expiry_date); setv('rent_name', d.owner_name);
+                                        // Payment-schedule inputs → hidden fields; on save the server
+                                        // auto-generates the دفعات into shop_rentpay (client feedback 2026-07).
+                                        setv('rent_sched_num', d.num_payments); setv('rent_sched_value', d.payment_value);
+                                        setv('rent_sched_freq', d.payment_frequency); setv('rent_sched_rentval', d.rent_amount);
+                                    }
+                                    // Confidence highlighting for low-confidence fields.
+                                    try {
+                                        var _conf = d.confidence || {};
+                                        var _idMap = null;
+                                        if (d.document_type==='commercial_registration') { _idMap = { document_number:'comme_no', issue_date:'comme_sdt', expiry_date:'comme_edt' }; }
+                                        else if (d.document_type==='municipal_license') { _idMap = { document_number:'municip_no', issue_date:'municip_sdt', expiry_date:'municip_edt' }; }
+                                        else if (d.document_type==='lease') { _idMap = { document_number:'rent_no', issue_date:'rent_sdt', expiry_date:'rent_edt', owner_name:'rent_name' }; }
+                                        if (_idMap) {
+                                            Object.keys(_idMap).forEach(function(k){
+                                                var el = document.getElementById(_idMap[k]); if (!el) return;
+                                                var c = _conf[k];
+                                                var old = document.getElementById('conf_hint_'+_idMap[k]); if (old) old.remove();
+                                                el.classList.remove('ai-low-conf');
+                                                if (typeof c === 'number' && c < 0.7) {
+                                                    el.classList.add('ai-low-conf');
+                                                    var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_idMap[k];
+                                                    h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                                                    el.parentNode.insertBefore(h, el.nextSibling);
+                                                }
+                                            });
+                                        }
+                                    } catch(e) {}
+                                    var extra='';
+                                    if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
+                                    if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
+                                    st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
+                                }
+
                                 btn.addEventListener('click', function(){
                                     var f=document.getElementById('ai_shop_document'); var st=document.getElementById('ai_shop_extract_status');
                                     if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف المستند أولاً</span>'; return; }
                                     var fd=new FormData(); fd.append('document', f.files[0]); fd.append('_token','{{ csrf_token() }}');
-                                    st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
-                                    // Client-side timeout so a slow AI call ends with a clear message
-                                    // instead of an endless spinner (server also fails fast in ~40s).
-                                    var _ac = ('AbortController' in window) ? new AbortController() : null;
-                                    var _to = setTimeout(function(){ if(_ac) _ac.abort(); }, 58000);
-                                    fetch('{{ route('dashboard.shop.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'},signal:_ac?_ac.signal:undefined})
+                                    st.textContent='جارٍ رفع المستند...'; btn.disabled=true;
+
+                                    // 1) Queue the extraction (returns instantly with a job id).
+                                    fetch('{{ route('dashboard.shop.ai_extract_async') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
                                     .then(function(r){return r.json();}).then(function(res){
-                                        clearTimeout(_to);
-                                        btn.disabled=false;
-                                        if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
-                                        var d=res.data;
-                                        function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
-                                        var typeLabel='';
-                                        if(d.document_type==='commercial_registration'){
-                                            typeLabel='السجل التجاري';
-                                            setv('comme_no', d.document_number);
-                                            setv('comme_sdt', d.issue_date);
-                                            setv('comme_edt', d.expiry_date);
-                                        } else if(d.document_type==='municipal_license'){
-                                            typeLabel='رخصة البلدية';
-                                            setv('municip_no', d.document_number);
-                                            setv('municip_sdt', d.issue_date);
-                                            setv('municip_edt', d.expiry_date);
-                                        } else if(d.document_type==='lease'){
-                                            typeLabel='عقد الإيجار';
-                                            setv('rent_no', d.document_number);
-                                            setv('rent_sdt', d.issue_date);
-                                            setv('rent_edt', d.expiry_date);
-                                            setv('rent_name', d.owner_name);
-                                            // Payment-schedule inputs → hidden fields; on save the server
-                                            // auto-generates the دفعات into shop_rentpay (client feedback 2026-07).
-                                            setv('rent_sched_num', d.num_payments);
-                                            setv('rent_sched_value', d.payment_value);
-                                            setv('rent_sched_freq', d.payment_frequency);
-                                            setv('rent_sched_rentval', d.rent_amount);
-                                        }
-                                        // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
-                                        try {
-                                            var _conf = (res.data && res.data.confidence) || {};
-                                            var _idMap = null;
-                                            if (d.document_type==='commercial_registration') { _idMap = { document_number:'comme_no', issue_date:'comme_sdt', expiry_date:'comme_edt' }; }
-                                            else if (d.document_type==='municipal_license') { _idMap = { document_number:'municip_no', issue_date:'municip_sdt', expiry_date:'municip_edt' }; }
-                                            else if (d.document_type==='lease') { _idMap = { document_number:'rent_no', issue_date:'rent_sdt', expiry_date:'rent_edt', owner_name:'rent_name' }; }
-                                            if (_idMap) {
-                                                Object.keys(_idMap).forEach(function(k){
-                                                    var el = document.getElementById(_idMap[k]);
-                                                    if (!el) return;
-                                                    var c = _conf[k];
-                                                    var old = document.getElementById('conf_hint_'+_idMap[k]); if (old) old.remove();
-                                                    el.classList.remove('ai-low-conf');
-                                                    if (typeof c === 'number' && c < 0.7) {
-                                                        el.classList.add('ai-low-conf');
-                                                        var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_idMap[k];
-                                                        h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
-                                                        el.parentNode.insertBefore(h, el.nextSibling);
-                                                    }
-                                                });
-                                            }
-                                        } catch(e) {}
-                                        var extra='';
-                                        if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
-                                        if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
-                                        st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
-                                    }).catch(function(err){
-                                        clearTimeout(_to); btn.disabled=false;
-                                        if(err && err.name==='AbortError'){ st.innerHTML='<span class="text-danger">استغرق الاستخراج وقتاً طويلاً — حاول مرة أخرى أو أدخل البيانات يدوياً</span>'; }
-                                        else { st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; }
-                                    });
+                                        if(!res.status || !res.job_id){ btn.disabled=false; st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل بدء الاستخراج')+'</span>'; return; }
+                                        st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...';
+                                        // 2) Poll for the result (works whether the job ran inline or on a worker).
+                                        var tries=0, maxTries=80; // ~2 min at 1.5s
+                                        var iv=setInterval(function(){
+                                            tries++;
+                                            if(tries>maxTries){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">استغرق الاستخراج وقتاً طويلاً — حاول مرة أخرى أو أدخل البيانات يدوياً</span>'; return; }
+                                            fetch(statusBase+'/'+res.job_id,{headers:{'X-Requested-With':'XMLHttpRequest'}})
+                                            .then(function(r){return r.json();}).then(function(s){
+                                                if(!s.status){ return; }
+                                                if(s.state==='done'){ clearInterval(iv); btn.disabled=false; applyExtraction(s.data||{}, st); }
+                                                else if(s.state==='failed'){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">'+(s.error||'فشل الاستخراج')+'</span>'; }
+                                            }).catch(function(){ /* transient — keep polling */ });
+                                        }, 1500);
+                                    }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
                                 });
                             })();
                             </script>

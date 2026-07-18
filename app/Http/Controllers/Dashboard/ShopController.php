@@ -2103,4 +2103,81 @@ class ShopController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Phase 3 — async version of aiExtract: store the upload, queue the extraction,
+     * and return a job id immediately so the request never blocks on Gemini. The form
+     * polls aiExtractStatus. With a queue worker this is truly background; with
+     * QUEUE_CONNECTION=sync it still works (the job runs inline during dispatch).
+     */
+    public function aiExtractAsync(Request $request)
+    {
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
+        ]);
+
+        // Fail fast if the AI subscription is blocked (before storing/queueing).
+        try {
+            app(\App\Services\AiSubscriptionGate::class)->assertAllowed();
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
+        }
+
+        $ds = app(\App\Services\DocumentStorage::class);
+        $stored = $ds->store($request->file('document'), 'shop');
+        $fileUrl = route('dashboard.documents.serve', ['module' => 'shop', 'filename' => $stored['filename']]);
+
+        $job = \App\Models\AiExtractionJob::create([
+            'user_id' => Auth::id(),
+            'module' => 'shop',
+            'status' => 'pending',
+            'file_path' => $stored['filename'],
+            'file_url' => $fileUrl,
+        ]);
+
+        \App\Jobs\ProcessInteractiveExtraction::dispatch($job->id);
+
+        \App\Services\AuditLogger::log('shop', null, \App\Services\AuditLogger::EXTRACT, [
+            'note' => 'استخراج مستند محل بالذكاء الاصطناعي (غير متزامن)',
+        ]);
+
+        return response()->json(['status' => true, 'job_id' => $job->id]);
+    }
+
+    /** Phase 3 — poll an async extraction job; returns state + (when done) the fields. */
+    public function aiExtractStatus($jobId)
+    {
+        $job = \App\Models\AiExtractionJob::find($jobId);
+        if (! $job) {
+            return response()->json(['status' => false, 'message_out' => 'الطلب غير موجود'], 404);
+        }
+        if ($job->user_id && (int) $job->user_id !== (int) Auth::id() && (int) (Auth::user()->emp_job ?? 0) !== 1) {
+            return response()->json(['status' => false, 'message_out' => 'غير مصرح'], 403);
+        }
+
+        $data = null;
+        if ($job->status === 'done') {
+            $d = $job->result_json ?? [];
+            $data = [
+                'document_type' => $d['document_type'] ?? null,
+                'document_number' => $d['document_number'] ?? null,
+                'issue_date' => $d['issue_date'] ?? null,
+                'expiry_date' => $d['expiry_date'] ?? null,
+                'owner_name' => $d['owner_name'] ?? null,
+                'rent_amount' => $d['rent_amount'] ?? null,
+                'num_payments' => $d['num_payments'] ?? null,
+                'payment_value' => $d['payment_value'] ?? null,
+                'payment_frequency' => $d['payment_frequency'] ?? null,
+                'confidence' => $d['field_confidence'] ?? [],
+                'document_url' => $job->file_url,
+            ];
+        }
+
+        return response()->json([
+            'status' => true,
+            'state' => $job->status, // pending | processing | done | failed
+            'data' => $data,
+            'error' => $job->status === 'failed' ? ($job->error ?: 'فشل الاستخراج') : null,
+        ]);
+    }
 }
