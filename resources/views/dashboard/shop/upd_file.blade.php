@@ -176,7 +176,10 @@
                                                     <span class="ai-dropzone__filename" id="ai_shop_document_filename"></span>
                                                 </span>
                                             </label>
-                                            <input type="file" id="ai_shop_document" accept=".pdf,.jpg,.jpeg,.png,.webp" class="form-control form-control-sm ai-dropzone__input">
+                                            {{-- MIME types (not extensions): jQuery-Validate reads `accept` as the
+                                                 accept RULE which matches MIME, and setDefaults ignore:"" validates every
+                                                 field. Extensions like ".pdf" fail that rule → "valid mimetype" error. --}}
+                                            <input type="file" id="ai_shop_document" data-rule-accept="false" data-rule-extension="false" accept="application/pdf,image/jpeg,image/png,image/webp" class="form-control form-control-sm ai-dropzone__input">
                                             <button type="button" id="ai_shop_extract_btn" class="btn btn-sm btn-primary text-nowrap"><i class="fa fa-magic me-1"></i>استخراج</button>
                                         </div>
                                         <div id="ai_preview_shop" class="mt-2"></div>
