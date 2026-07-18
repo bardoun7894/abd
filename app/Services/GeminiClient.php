@@ -173,7 +173,7 @@ class GeminiClient
      *
      * @throws RuntimeException on config/HTTP/JSON failure
      */
-    public function extract(string $prompt, string $filePath, array $schema, ?string $model = null, ?string $thinking = null): array
+    public function extract(string $prompt, string $filePath, array $schema, ?string $model = null, ?string $thinking = null, ?int $timeout = null, ?int $maxAttempts = null): array
     {
         // Spec 007 — central AI-subscription gate. Throws (Arabic message)
         // when the subscription is inactive, expired, or quota-exhausted.
@@ -213,7 +213,12 @@ class GeminiClient
         ];
 
         $url = "{$base}/models/{$model}:generateContent?key={$key}";
-        $maxAttempts = (int) config('services.gemini.retries', 4);
+        // Interactive callers (shop/purchase/worker/... AJAX prefill) pass a short
+        // timeout + few retries so a slow/overloaded model fails fast instead of
+        // holding a PHP-FPM worker for minutes; background pipelines omit these and
+        // keep the generous config defaults.
+        $maxAttempts = $maxAttempts ?? (int) config('services.gemini.retries', 4);
+        $httpTimeout = $timeout ?? (int) config('services.gemini.page_timeout', 120);
         $attempt = 0;
         $resp = null;
         $lastStatus = null;
@@ -221,7 +226,7 @@ class GeminiClient
         while (true) {
             $attempt++;
             try {
-                $resp = Http::timeout((int) config('services.gemini.page_timeout', 120))->acceptJson()->post($url, $body);
+                $resp = Http::timeout($httpTimeout)->acceptJson()->post($url, $body);
             } catch (ConnectionException $e) {
                 $lastStatus = 'connection';
                 $lastBody = $e->getMessage();

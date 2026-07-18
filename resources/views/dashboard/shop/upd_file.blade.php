@@ -192,8 +192,13 @@
                                     if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف المستند أولاً</span>'; return; }
                                     var fd=new FormData(); fd.append('document', f.files[0]); fd.append('_token','{{ csrf_token() }}');
                                     st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
-                                    fetch('{{ route('dashboard.shop.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
+                                    // Client-side timeout so a slow AI call ends with a clear message
+                                    // instead of an endless spinner (server also fails fast in ~40s).
+                                    var _ac = ('AbortController' in window) ? new AbortController() : null;
+                                    var _to = setTimeout(function(){ if(_ac) _ac.abort(); }, 58000);
+                                    fetch('{{ route('dashboard.shop.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'},signal:_ac?_ac.signal:undefined})
                                     .then(function(r){return r.json();}).then(function(res){
+                                        clearTimeout(_to);
                                         btn.disabled=false;
                                         if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
                                         var d=res.data;
@@ -249,7 +254,11 @@
                                         if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
                                         if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
                                         st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
-                                    }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
+                                    }).catch(function(err){
+                                        clearTimeout(_to); btn.disabled=false;
+                                        if(err && err.name==='AbortError'){ st.innerHTML='<span class="text-danger">استغرق الاستخراج وقتاً طويلاً — حاول مرة أخرى أو أدخل البيانات يدوياً</span>'; }
+                                        else { st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; }
+                                    });
                                 });
                             })();
                             </script>

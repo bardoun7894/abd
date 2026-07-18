@@ -36,7 +36,8 @@ class MoraslatAiExtractor
      */
     public function analyze(string $filePath, iterable $types, iterable $categories, iterable $statuses, ?string $model = null): array
     {
-        $raw = $this->gemini->extract($this->analyzePrompt($types, $categories, $statuses), $filePath, $this->analyzeSchema(), $model);
+        // Interactive prefill — fast-fail budget so a slow model can't freeze the request.
+        $raw = $this->gemini->extract($this->analyzePrompt($types, $categories, $statuses), $filePath, $this->analyzeSchema(), $model, null, (int) config('services.gemini.interactive_timeout', 25), (int) config('services.gemini.interactive_retries', 2));
 
         [$typeId, $typeName, $typeScore] = $this->suggestFromList($raw['type_hint'] ?? null, $types, 'moraslat_type_id', 'moraslat_type_name');
         [$catId, $catName, $catScore] = $this->suggestFromList($raw['category_hint'] ?? null, $categories, 'moraslat_categoty_id', 'moraslat_categoty_name');

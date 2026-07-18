@@ -56,6 +56,11 @@ return [
         // Per-page HTTP timeout and deadline buffer for AI calls inside pipelines.
         'page_timeout' => env('GEMINI_PAGE_TIMEOUT', 120),
         'retries' => env('GEMINI_RETRIES', 4),
+        // Interactive (synchronous, in-request) AI extract — shop/purchase/worker/... form
+        // prefill. Short fast-fail budget so a slow/overloaded model does not hold a
+        // PHP-FPM worker for minutes and freeze the browser. The user can just retry.
+        'interactive_timeout' => env('GEMINI_INTERACTIVE_TIMEOUT', 25),
+        'interactive_retries' => env('GEMINI_INTERACTIVE_RETRIES', 2),
         // Pricing for the cost estimate shown in the UI (USD per 1M tokens).
         'price_in_per_m' => env('GEMINI_PRICE_IN', 1.50),
         'price_out_per_m' => env('GEMINI_PRICE_OUT', 9.00),

@@ -25,7 +25,18 @@ class ShopAiExtractor
      */
     public function extract(string $filePath, ?string $model = null): array
     {
-        $raw = $this->gemini->extract($this->prompt(), $filePath, $this->schema(), $model);
+        // Interactive path (synchronous AJAX prefill): fast-fail budget so a slow or
+        // overloaded model returns an error in ~40s instead of blocking the request
+        // (and a PHP-FPM worker) for minutes. Background pipelines don't pass these.
+        $raw = $this->gemini->extract(
+            $this->prompt(),
+            $filePath,
+            $this->schema(),
+            $model,
+            null,
+            (int) config('services.gemini.interactive_timeout', 40),
+            (int) config('services.gemini.interactive_retries', 2),
+        );
 
         return [
             'document_type' => $this->normalizeType($raw['document_type'] ?? null),

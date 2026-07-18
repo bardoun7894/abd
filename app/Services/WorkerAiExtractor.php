@@ -24,7 +24,8 @@ class WorkerAiExtractor
      */
     public function extract(string $filePath, ?string $model = null): array
     {
-        $raw = $this->gemini->extract($this->prompt(), $filePath, $this->schema(), $model);
+        // Interactive prefill — fast-fail budget so a slow model can't freeze the request.
+        $raw = $this->gemini->extract($this->prompt(), $filePath, $this->schema(), $model, null, (int) config('services.gemini.interactive_timeout', 25), (int) config('services.gemini.interactive_retries', 2));
 
         $workerName = $this->cleanStr($raw['worker_name'] ?? null);
         $ssn = $this->idStr($raw['ssn'] ?? null);
