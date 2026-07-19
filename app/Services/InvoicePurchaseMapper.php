@@ -74,6 +74,41 @@ class InvoicePurchaseMapper
     }
 
     /**
+     * Copy an AI invoice page image from the invoices-module public dir into the
+     * purchases' own public dir (uploads/users/images) — the same location a manual
+     * purchase attachment lives — and return the new relative path. This decouples the
+     * posted purchase's attachment from the invoices storage so it keeps working even
+     * if the invoice batch is later deleted. Fail-open: returns the original path on any
+     * problem (that path is still served via asset() after the viewer fix).
+     */
+    public static function copyImageToPurchases(?string $imagePath): ?string
+    {
+        if (! $imagePath) {
+            return $imagePath;
+        }
+        try {
+            $clean = explode('#', $imagePath)[0]; // strip any #page=N fragment for the copy
+            $src = public_path($clean);
+            if (! is_file($src)) {
+                return $imagePath;
+            }
+            $ext = pathinfo($clean, PATHINFO_EXTENSION) ?: 'png';
+            $destDir = public_path('uploads/users/images');
+            if (! is_dir($destDir)) {
+                @mkdir($destDir, 0775, true);
+            }
+            $name = 'inv_'.\Illuminate\Support\Str::random(12).'.'.$ext;
+            if (@copy($src, $destDir.'/'.$name)) {
+                return 'uploads/users/images/'.$name;
+            }
+        } catch (\Throwable $e) {
+            // fall through to the original path
+        }
+
+        return $imagePath;
+    }
+
+    /**
      * Decide how to insert a row into `purchase_attach` (المرفقات) given its real
      * column list — there is no migration/insert in the codebase to copy, so we
      * adapt to whatever the prod schema actually has. Returns the FK + file
@@ -238,6 +273,12 @@ class InvoicePurchaseMapper
                         'note' => 'تم تجاوز التحقق من التكرار وترحيل الفاتورة إلى المشتريات',
                     ]);
                 }
+
+                // Copy the invoice page image into the purchases' own public dir so the
+                // attachment is decoupled from the invoices-module storage (survives a
+                // later batch delete) and is served by the exact public path a manual
+                // purchase attachment uses. Fail-open: on any issue keep the original path.
+                $a['image_path'] = self::copyImageToPurchases($a['image_path'] ?? null);
 
                 $row = self::buildPurchaseRow($a, $shopId, $managerId, $userId);
                 $row['supplier_id'] = $this->resolveSupplierId($a, $userId);   // Spec 002 FR-105
