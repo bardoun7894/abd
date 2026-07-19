@@ -4,22 +4,25 @@
 @section('title', "$page_title")
 @section('content')
     <style>
-        .inv-drop{border:2px dashed var(--bs-gray-300);border-radius:1rem;background:var(--bs-gray-100);
-            padding:48px 24px;text-align:center;cursor:pointer;transition:.2s ease;position:relative}
-        .inv-drop:hover,.inv-drop.drag{border-color:#ffb822;background:#fff8e7;transform:translateY(-1px)}
-        .inv-drop .ico{width:64px;height:64px;border-radius:14px;background:#fff;border:1px solid var(--bs-gray-300);
-            display:grid;place-items:center;margin:0 auto 14px;font-size:30px;box-shadow:0 6px 18px -10px rgba(0,0,0,.3)}
-        .inv-drop .fname{margin-top:10px;font-weight:600;color:#1b8a5a;word-break:break-all}
+        .inv-drop{border:2px dashed var(--sn-line);border-radius:var(--sn-r-lg);background:var(--sn-paper-2);
+            padding:48px 24px;text-align:center;cursor:pointer;transition:border-color var(--sn-dur-base) var(--sn-ease-out),
+            background-color var(--sn-dur-base) var(--sn-ease-out),transform var(--sn-dur-base) var(--sn-ease-out);position:relative}
+        .inv-drop:hover,.inv-drop.drag{border-color:var(--sn-emerald);background:var(--sn-emerald-tint);transform:translateY(-1px)}
+        .inv-drop .ico{width:64px;height:64px;border-radius:var(--sn-r-md);background:var(--sn-card);border:1px solid var(--sn-line);
+            display:grid;place-items:center;margin:0 auto 14px;font-size:28px;color:var(--sn-emerald);
+            box-shadow:var(--sn-shadow-sm);transition:border-color var(--sn-dur-base) var(--sn-ease-out),transform var(--sn-dur-base) var(--sn-ease-out)}
+        .inv-drop:hover .ico,.inv-drop.drag .ico{border-color:var(--sn-emerald);transform:translateY(-2px)}
+        .inv-drop .fname{margin-top:10px;font-weight:600;color:var(--sn-emerald-deep);word-break:break-all}
         .inv-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
-        .inv-ov{position:fixed;inset:0;z-index:1090;display:none;place-items:center;background:rgba(27,27,30,.55);backdrop-filter:blur(3px)}
+        .inv-ov{position:fixed;inset:0;z-index:1090;display:none;place-items:center;background:rgba(10,20,16,.6);backdrop-filter:blur(3px)}
         .inv-ov.on{display:grid}
-        .inv-scan{width:150px;height:190px;background:#fff;border-radius:12px;position:relative;overflow:hidden;padding:20px 16px;
-            box-shadow:0 30px 60px -20px rgba(0,0,0,.5)}
-        .inv-scan .ln{height:6px;border-radius:3px;background:var(--bs-gray-200);margin-bottom:11px}
+        .inv-scan{width:150px;height:190px;background:var(--sn-card);border-radius:var(--sn-r-md);position:relative;overflow:hidden;padding:20px 16px;
+            box-shadow:var(--sn-shadow-lg)}
+        .inv-scan .ln{height:6px;border-radius:3px;background:var(--sn-line);margin-bottom:11px}
         .inv-scan .ln:nth-child(2){width:72%}.inv-scan .ln:nth-child(4){width:86%}.inv-scan .ln:nth-child(5){width:55%}
         .inv-scan .beam{position:absolute;left:0;right:0;height:34px;top:-34px;
-            background:linear-gradient(180deg,transparent,rgba(255,184,34,.55),transparent);
-            box-shadow:0 0 18px 4px rgba(255,184,34,.5);animation:invscan 1.4s ease-in-out infinite}
+            background:linear-gradient(180deg,transparent,rgba(14,107,79,.55),transparent);
+            box-shadow:0 0 18px 4px rgba(14,107,79,.45);animation:invscan 1.4s ease-in-out infinite}
         @keyframes invscan{0%{top:-12%}100%{top:104%}}
         .inv-ov .lbl{color:#fff;text-align:center;margin-top:22px;font-weight:700;font-size:17px}
         .inv-ov .lbl small{display:block;opacity:.8;font-weight:400;font-size:13px;margin-top:5px}
@@ -37,7 +40,7 @@
             <div class="card-body">
                 <p class="text-muted fs-7 mb-4">اسحب ملف PDF وأفلته هنا، أو انقر للاختيار. تُقرأ كل فاتورة على حدة وتُستخرج بياناتها وصورتها — ثم رحّلها إلى المشتريات.</p>
                 <label class="inv-drop" id="drop">
-                    <div class="ico">📄</div>
+                    <div class="ico"><i class="bi bi-file-earmark-arrow-up"></i></div>
                     <div class="fs-5 fw-bold text-gray-800">أفلت ملف الفاتورة (PDF) هنا</div>
                     <div class="text-muted fs-7 mt-1">أو انقر للاختيار — فاتورة واحدة أو عدة فواتير (حتى أكثر من 100)</div>
                     <div class="fname" id="fname"></div>

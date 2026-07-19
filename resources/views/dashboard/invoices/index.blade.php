@@ -36,9 +36,17 @@
     </div>
 
     <div class="card">
-        <div class="card-body">
+        <div class="card-header border-0 pt-6">
+            <div class="card-title">
+                <h3 class="fw-bold mb-0">سجل عمليات الاستخراج</h3>
+            </div>
+            <div class="card-toolbar">
+                <span class="text-muted fs-7 sn-num">{{ $batches->total() }} دفعة</span>
+            </div>
+        </div>
+        <div class="card-body pt-0">
             <div class="table-responsive">
-                <table class="table table-row-dashed table-hover sn-thead align-middle gy-4">
+                <table class="table table-row-dashed sn-thead align-middle gy-4">
                     <thead>
                         <tr class="fw-bold fs-7 text-uppercase">
                             <th class="ps-4">#</th>
@@ -52,7 +60,7 @@
                     </thead>
                     <tbody>
                         @forelse ($batches as $b)
-                            <tr>
+                            <tr class="sn-row-hover">
                                 <td class="ps-4 sn-num text-muted">{{ $b->id }}</td>
                                 <td>
                                     <div class="d-flex align-items-center gap-3">
@@ -86,8 +94,8 @@
                         @empty
                             <tr>
                                 <td colspan="7">
-                                    <div class="d-flex flex-column align-items-center text-center py-10">
-                                        <span class="badge badge-light-primary mb-4" style="width:64px;height:64px;border-radius:16px;font-size:28px;display:inline-flex;align-items:center;justify-content:center">
+                                    <div class="d-flex flex-column align-items-center text-center py-12">
+                                        <span class="mb-4" style="width:72px;height:72px;border-radius:var(--sn-r-lg);font-size:30px;display:inline-flex;align-items:center;justify-content:center;background:var(--sn-emerald-tint);color:var(--sn-emerald-deep)">
                                             <i class="bi bi-inboxes"></i>
                                         </span>
                                         <div class="fs-5 fw-bold text-gray-800 mb-1">
@@ -97,7 +105,13 @@
                                                 لا توجد عمليات بعد
                                             @endif
                                         </div>
-                                        <div class="text-muted mb-5">ابدأ برفع فاتورة PDF ليستخرجها النظام تلقائياً.</div>
+                                        <div class="text-muted mb-5">
+                                            @if (($filters['q'] ?? '') !== '' || ($filters['status'] ?? '') !== '')
+                                                جرّب تعديل كلمة البحث أو تغيير الفلتر.
+                                            @else
+                                                ابدأ برفع فاتورة PDF ليستخرجها النظام تلقائياً.
+                                            @endif
+                                        </div>
                                         <a href="{{ route('dashboard.invoices.create') }}" class="btn btn-primary fw-bold">
                                             <i class="bi bi-plus-lg me-1"></i> رفع فاتورة جديدة
                                         </a>
