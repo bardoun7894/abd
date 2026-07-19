@@ -61,6 +61,16 @@ return [
         // PHP-FPM worker for minutes and freeze the browser. The user can just retry.
         'interactive_timeout' => env('GEMINI_INTERACTIVE_TIMEOUT', 25),
         'interactive_retries' => env('GEMINI_INTERACTIVE_RETRIES', 2),
+        // Adaptive model escalation (interactive extractors): the first pass runs on
+        // the cheap default model; when the mean field_confidence is below the floor
+        // (hard/unclear scan) the SAME prepared page is re-read once on a stronger
+        // model with deeper thinking. Escalation never breaks extraction — on error
+        // the first-pass result is kept. Thinking ladder: minimal (pass 1) → medium
+        // (escalation); the manual re-scan action can go higher via rescan_model.
+        'interactive_escalate' => env('GEMINI_INTERACTIVE_ESCALATE', true),
+        'escalation_model' => env('GEMINI_ESCALATION_MODEL', 'gemini-3.5-flash'),
+        'escalation_thinking' => env('GEMINI_ESCALATION_THINKING', 'medium'),
+        'escalation_confidence_floor' => env('GEMINI_ESCALATION_CONFIDENCE', 0.5),
         // Interactive doc prep (Spec 007): only page 1 of a multi-page PDF is sent to
         // Gemini for the synchronous form-prefill path, rasterized at a lower DPI than
         // the background pipelines and images downscaled if oversized — cuts billed
@@ -77,6 +87,13 @@ return [
         // Pricing for the cost estimate shown in the UI (USD per 1M tokens).
         'price_in_per_m' => env('GEMINI_PRICE_IN', 1.50),
         'price_out_per_m' => env('GEMINI_PRICE_OUT', 9.00),
+        // Per-model rates (July 2026) — flash-lite is 6× cheaper than 3.5-flash, so a
+        // single flat rate overstates the cost of the flash-lite-first strategy.
+        'model_prices' => [
+            'gemini-flash-lite-latest' => [0.25, 1.50],
+            'gemini-3.1-flash-lite-latest' => [0.25, 1.50],
+            'gemini-3.5-flash' => [1.50, 9.00],
+        ],
         'usd_to_sar' => env('USD_TO_SAR', 3.75),
     ],
 

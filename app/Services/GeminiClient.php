@@ -28,6 +28,12 @@ class GeminiClient
     /** usageMetadata (token counts) from the most recent call. */
     public array $lastUsage = [];
 
+    /** Model used by the most recent extract()/generateText() call. */
+    public ?string $lastModel = null;
+
+    /** True when extractAdaptive()'s escalation pass produced the returned result. */
+    public bool $lastEscalated = false;
+
     public function lastInputTokens(): int
     {
         return (int) ($this->lastUsage['promptTokenCount'] ?? 0);
@@ -36,6 +42,90 @@ class GeminiClient
     public function lastOutputTokens(): int
     {
         return (int) ($this->lastUsage['candidatesTokenCount'] ?? 0) + (int) ($this->lastUsage['thoughtsTokenCount'] ?? 0);
+    }
+
+    /**
+     * Adaptive extraction: first pass on the cheap default model; if the mean
+     * field_confidence is below the configured floor (hard/unclear scan), re-read
+     * the SAME file once on the stronger escalation model with deeper thinking.
+     * The escalated result wins only when its confidence is actually higher, and
+     * any escalation failure silently keeps the first-pass result — escalation is
+     * an upgrade, never a new way to break.
+     *
+     * @param  array  $schema  Gemini responseSchema (OBJECT)
+     * @return array decoded JSON object
+     *
+     * @throws RuntimeException on config/HTTP/JSON failure of the FIRST pass
+     */
+    public function extractAdaptive(string $prompt, string $filePath, array $schema, ?string $model = null, ?int $timeout = null, ?int $maxAttempts = null): array
+    {
+        $this->lastEscalated = false;
+
+        $raw = $this->extract($prompt, $filePath, $schema, $model, null, $timeout, $maxAttempts);
+        $firstModel = $this->lastModel;
+        $firstUsage = $this->lastUsage;
+
+        if (! (bool) config('services.gemini.interactive_escalate', true)) {
+            return $raw;
+        }
+        $strong = (string) config('services.gemini.escalation_model', 'gemini-3.5-flash');
+        $floor = (float) config('services.gemini.escalation_confidence_floor', 0.5);
+        if ($strong === $firstModel || $this->confidenceScore($raw) >= $floor) {
+            return $raw; // clear scan — or already on the strong model
+        }
+
+        try {
+            $better = $this->extract($prompt, $filePath, $schema, $strong, config('services.gemini.escalation_thinking', 'medium'), $timeout, $maxAttempts);
+            if ($this->confidenceScore($better) > $this->confidenceScore($raw)) {
+                $this->lastEscalated = true;
+                Log::info('AI escalation improved extraction confidence', ['from' => $firstModel, 'to' => $strong]);
+
+                return $better;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AI escalation failed; keeping first-pass result', ['model' => $strong, 'error' => $e->getMessage()]);
+        }
+
+        // Escalated pass didn't win (or failed) — restore first-pass bookkeeping
+        // so callers report the model/tokens of the result they actually got.
+        $this->lastModel = $firstModel;
+        $this->lastUsage = $firstUsage;
+
+        return $raw;
+    }
+
+    /**
+     * 0..1 quality score for a decoded extraction: mean of field_confidence when
+     * present, otherwise the share of filled non-meta fields.
+     */
+    private function confidenceScore(array $raw): float
+    {
+        $fc = $raw['field_confidence'] ?? null;
+        if (is_array($fc) && $fc !== []) {
+            $sum = 0.0;
+            $n = 0;
+            foreach ($fc as $v) {
+                if (is_numeric($v)) {
+                    $sum += (float) $v;
+                    $n++;
+                }
+            }
+
+            return $n ? $sum / $n : 0.0;
+        }
+        $filled = 0;
+        $total = 0;
+        foreach ($raw as $k => $v) {
+            if (str_starts_with((string) $k, '_')) {
+                continue;
+            }
+            $total++;
+            if ($v !== null && $v !== '') {
+                $filled++;
+            }
+        }
+
+        return $total ? $filled / $total : 0.0;
     }
 
     /**
@@ -57,6 +147,7 @@ class GeminiClient
             throw new RuntimeException('GEMINI_API_KEY is not configured.');
         }
         $model = $model ?: config('services.gemini.default_model');
+        $this->lastModel = $model;
         $base = rtrim(config('services.gemini.base_url'), '/');
 
         $body = [
@@ -193,6 +284,7 @@ class GeminiClient
             throw new RuntimeException("File not found: {$filePath}");
         }
         $model = $model ?: config('services.gemini.default_model');
+        $this->lastModel = $model;
         $base = rtrim(config('services.gemini.base_url'), '/');
 
         $generationConfig = [
@@ -227,7 +319,9 @@ class GeminiClient
         // any cache/DB/lock hiccup must never block or break extraction. ---
         $cacheEnabled = (bool) config('services.gemini.cache_enabled', true);
         $module = $this->guessModule();
-        $cacheKey = $cacheEnabled ? $this->extractionCacheKey($model, $prompt, $schema, $filePath) : null;
+        // Thinking level is part of the key: an escalated deeper-thinking re-read
+        // must not be served the shallow first pass's cached result.
+        $cacheKey = $cacheEnabled ? $this->extractionCacheKey($model.'@'.($level ?: 'default'), $prompt, $schema, $filePath) : null;
         if ($cacheKey !== null) {
             $cached = $this->readExtractionCache($cacheKey);
             if ($cached !== null) {
@@ -332,7 +426,7 @@ class GeminiClient
         if ($cacheKey !== null) {
             $this->writeExtractionCache($cacheKey, $module, $model, $filePath, $decoded, $this->lastInputTokens(), $this->lastOutputTokens());
         }
-        $this->logAiUsage($module, $model, false, $this->lastInputTokens(), $this->lastOutputTokens(), $this->estCostUsd($this->lastInputTokens(), $this->lastOutputTokens()));
+        $this->logAiUsage($module, $model, false, $this->lastInputTokens(), $this->lastOutputTokens(), $this->estCostUsd($this->lastInputTokens(), $this->lastOutputTokens(), $model));
 
         return $decoded;
         } finally {
@@ -514,7 +608,7 @@ class GeminiClient
                     'result_json' => json_encode($result, JSON_UNESCAPED_UNICODE),
                     'input_tokens' => $in,
                     'output_tokens' => $out,
-                    'est_cost_usd' => $this->estCostUsd($in, $out),
+                    'est_cost_usd' => $this->estCostUsd($in, $out, $model),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
@@ -542,12 +636,17 @@ class GeminiClient
         }
     }
 
-    private function estCostUsd(int $in, int $out): float
+    private function estCostUsd(int $in, int $out, ?string $model = null): float
     {
-        $pin = (float) config('services.gemini.price_in_per_m', 0);
-        $pout = (float) config('services.gemini.price_out_per_m', 0);
+        $prices = (array) config('services.gemini.model_prices', []);
+        if ($model !== null && isset($prices[$model])) {
+            [$pin, $pout] = $prices[$model];
+        } else {
+            $pin = (float) config('services.gemini.price_in_per_m', 0);
+            $pout = (float) config('services.gemini.price_out_per_m', 0);
+        }
 
-        return round($in / 1_000_000 * $pin + $out / 1_000_000 * $pout, 6);
+        return round($in / 1_000_000 * (float) $pin + $out / 1_000_000 * (float) $pout, 6);
     }
 
     /**

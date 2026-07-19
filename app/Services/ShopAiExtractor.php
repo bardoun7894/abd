@@ -31,12 +31,11 @@ class ShopAiExtractor
         // Billing: only page 1, downscaled, is sent — see InteractiveDocPrep.
         $prep = $this->docPrep->prepare($filePath);
         try {
-            $raw = $this->gemini->extract(
+            $raw = $this->gemini->extractAdaptive(
                 $this->prompt(),
                 $prep['path'],
                 $this->schema(),
                 $model,
-                null,
                 (int) config('services.gemini.interactive_timeout', 40),
                 (int) config('services.gemini.interactive_retries', 2),
             );
@@ -59,6 +58,8 @@ class ShopAiExtractor
             'field_confidence' => $this->confidence($raw['field_confidence'] ?? null),
             '_in' => $this->gemini->lastInputTokens(),
             '_out' => $this->gemini->lastOutputTokens(),
+            '_model' => $this->gemini->lastModel,
+            '_escalated' => $this->gemini->lastEscalated,
         ];
     }
 

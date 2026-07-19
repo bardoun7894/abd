@@ -236,6 +236,9 @@
                                     var extra='';
                                     if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
                                     if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
+                                    // When the scan was hard, the adaptive layer re-read it on the
+                                    // stronger model — tell the user this is the high-accuracy result.
+                                    if(d.escalated){ extra+=' <span class="badge badge-light-primary fw-bold">🔍 فحص دقيق بالنموذج الأقوى</span>'; }
                                     st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
                                 }
 

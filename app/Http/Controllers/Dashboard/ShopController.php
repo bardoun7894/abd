@@ -2099,6 +2099,8 @@ class ShopController extends Controller
                 'payment_value' => $data['payment_value'] ?? null,
                 'payment_frequency' => $data['payment_frequency'] ?? null,
                 'confidence' => $data['field_confidence'],
+                'model' => $data['_model'] ?? null,
+                'escalated' => (bool) ($data['_escalated'] ?? false),
                 'document_url' => $fileUrl,
             ],
         ]);
@@ -2169,6 +2171,8 @@ class ShopController extends Controller
                 'payment_value' => $d['payment_value'] ?? null,
                 'payment_frequency' => $d['payment_frequency'] ?? null,
                 'confidence' => $d['field_confidence'] ?? [],
+                'model' => $d['_model'] ?? null,
+                'escalated' => (bool) ($d['_escalated'] ?? false),
                 'document_url' => $job->file_url,
             ];
         }
