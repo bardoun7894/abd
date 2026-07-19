@@ -45,7 +45,9 @@ Route::group([
 
         Route::resource('/categories', CategoriesController::class);
 
-        Route::get('/workers/index', [WorkersController::class, 'index'])->name('workers.index');
+        // No ->name() here: Route::resource('/workers') below already owns
+        // workers.index — a duplicate name breaks `php artisan route:cache`.
+        Route::get('/workers/index', [WorkersController::class, 'index']);
         Route::get('/workers/import', [WorkersController::class, 'import'])->name('workers.import');
         Route::post('/workers/impfile', [WorkersController::class, 'impfile'])->name('workers.impfile');
 
