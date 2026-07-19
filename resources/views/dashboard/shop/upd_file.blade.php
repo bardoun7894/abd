@@ -130,6 +130,9 @@
                             @keyframes ai-spin{to{transform:rotate(360deg);}}
                             .ai-low-conf { outline:2px solid #f1b44c !important; outline-offset:1px; background:#fff8ec !important; }
                             .ai-conf-hint { color:#e0a800; font-size:.72rem; margin-top:2px; display:block; }
+                            /* Persistent tint on AI-filled fields until the user edits them */
+                            .ai-extracted { background:#e9f7f0 !important; border-color:#0E6B4F !important; transition:background .8s ease; }
+                            select.ai-extracted + .select2 .select2-selection { background:#e9f7f0 !important; border-color:#0E6B4F !important; }
                             /* T6-motion: analyzing / result-reveal / low-conf pulse / dropzone affordance / card entrance (additive) */
                             @keyframes ai-card-in{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
                             .ai-card{animation:ai-card-in .4s cubic-bezier(0.22,1,0.36,1) both;}
@@ -192,7 +195,35 @@
                                 var btn=document.getElementById('ai_shop_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
                                 var statusBase = "{{ url('dashboard/shop/ai-extract-status') }}";
 
-                                function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
+                                function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); markExtracted(el); } }
+
+                                // Persistent emerald tint on AI-filled fields (until the user edits them)
+                                // + collect them for the post-extract scroll.
+                                var extractedEls = [];
+                                function markExtracted(el){
+                                    if (!el || !el.value) { return; }
+                                    el.classList.add('ai-extracted');
+                                    if (extractedEls.indexOf(el) < 0) { extractedEls.push(el); }
+                                    if (!el.dataset.aiTintBound) {
+                                        el.dataset.aiTintBound = '1';
+                                        el.addEventListener('input', function(){ el.classList.remove('ai-extracted'); });
+                                    }
+                                }
+
+                                // City fields are select2 dropdowns keyed by city_id — match the
+                                // extracted city NAME against the option texts.
+                                function setCity(id, name){
+                                    var el = document.getElementById(id); if (!el || !name) { return; }
+                                    var want = String(name).trim();
+                                    for (var i = 0; i < el.options.length; i++) {
+                                        if (el.options[i].text.trim() === want) {
+                                            el.value = el.options[i].value.trim();
+                                            el.dispatchEvent(new Event('change'));
+                                            markExtracted(el);
+                                            return;
+                                        }
+                                    }
+                                }
 
                                 // Fill the form from an extraction result (shared by async result handling).
                                 function applyExtraction(d, st){
@@ -200,16 +231,29 @@
                                     if(d.document_type==='commercial_registration'){
                                         typeLabel='السجل التجاري';
                                         setv('comme_no', d.document_number); setv('comme_sdt', d.issue_date); setv('comme_edt', d.expiry_date);
+                                        setv('comme_sso', d.unified_number);
+                                        setCity('comme_city', d.city);
                                     } else if(d.document_type==='municipal_license'){
                                         typeLabel='رخصة البلدية';
                                         setv('municip_no', d.document_number); setv('municip_sdt', d.issue_date); setv('municip_edt', d.expiry_date);
+                                        setv('municip_width', d.shop_area);
+                                        setCity('municip_city', d.city);
                                     } else if(d.document_type==='lease'){
                                         typeLabel='عقد الإيجار';
                                         setv('rent_no', d.document_number); setv('rent_sdt', d.issue_date); setv('rent_edt', d.expiry_date); setv('rent_name', d.owner_name);
+                                        setv('rent_mobile', d.owner_mobile);
                                         // Payment-schedule inputs → hidden fields; on save the server
                                         // auto-generates the دفعات into shop_rentpay (client feedback 2026-07).
                                         setv('rent_sched_num', d.num_payments); setv('rent_sched_value', d.payment_value);
                                         setv('rent_sched_freq', d.payment_frequency); setv('rent_sched_rentval', d.rent_amount);
+                                        // The EJAR lease also carries the tenant's CR block — fill the
+                                        // commercial-registration section from the same upload.
+                                        setv('comme_sso', d.unified_number);
+                                        setv('comme_no', d.tenant_cr_number);
+                                        setv('comme_sdt', d.tenant_cr_date);
+                                        setv('municip_width', d.shop_area);
+                                        setCity('comme_city', d.city);
+                                        setCity('municip_city', d.city);
                                     }
                                     // Confidence highlighting for low-confidence fields.
                                     try {
@@ -240,6 +284,11 @@
                                     // stronger model — tell the user this is the high-accuracy result.
                                     if(d.escalated){ extra+=' <span class="badge badge-light-primary fw-bold">🔍 فحص دقيق بالنموذج الأقوى</span>'; }
                                     st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
+                                    // Smooth-scroll to the first AI-filled field so the user reviews
+                                    // what changed (fields are tinted emerald via .ai-extracted).
+                                    if (extractedEls.length) {
+                                        setTimeout(function(){ extractedEls[0].scrollIntoView({behavior:'smooth', block:'center'}); }, 300);
+                                    }
                                 }
 
                                 btn.addEventListener('click', function(){
@@ -389,7 +438,7 @@
                                     });
                                     mo.observe(el, {childList: true, characterData: true, subtree: true});
                                 }
-                                aiMotion({statusId: 'ai_shop_extract_status', fieldIds: ['comme_no', 'comme_sdt', 'comme_edt', 'municip_no', 'municip_sdt', 'municip_edt', 'rent_no', 'rent_sdt', 'rent_edt', 'rent_name'], analyzeBtnId: 'ai_shop_extract_btn'});
+                                aiMotion({statusId: 'ai_shop_extract_status', fieldIds: ['comme_no', 'comme_sdt', 'comme_edt', 'comme_sso', 'comme_city', 'municip_no', 'municip_sdt', 'municip_edt', 'municip_width', 'municip_city', 'rent_no', 'rent_sdt', 'rent_edt', 'rent_name', 'rent_mobile'], analyzeBtnId: 'ai_shop_extract_btn'});
                             })();
                             </script>
 

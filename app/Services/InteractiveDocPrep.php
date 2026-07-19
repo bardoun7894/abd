@@ -17,11 +17,15 @@ class InteractiveDocPrep
     public function __construct(private PdfPageRasterizer $rasterizer) {}
 
     /**
-     * @return array{path:string, cleanup:callable}
+     * @param  int  $maxPages  how many leading PDF pages to rasterize (1 = page 1
+     *                          only). Shop leases use 3: the EJAR unified contract
+     *                          keeps the financial data (rent, payment schedule) on
+     *                          page 3, so page-1-only misses the whole rent block.
+     * @return array{path:string, paths:array<int,string>, cleanup:callable}
      */
-    public function prepare(string $filePath): array
+    public function prepare(string $filePath, int $maxPages = 1): array
     {
-        $noop = ['path' => $filePath, 'cleanup' => function () {}];
+        $noop = ['path' => $filePath, 'paths' => [$filePath], 'cleanup' => function () {}];
 
         if (! is_file($filePath)) {
             return $noop;
@@ -30,16 +34,16 @@ class InteractiveDocPrep
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
 
         $prepared = $ext === 'pdf'
-            ? $this->preparePdf($filePath)
+            ? $this->preparePdf($filePath, $maxPages)
             : $this->prepareImage($filePath);
 
         return $prepared ?? $noop;
     }
 
     /**
-     * @return array{path:string, cleanup:callable}|null
+     * @return array{path:string, paths:array<int,string>, cleanup:callable}|null
      */
-    private function preparePdf(string $filePath): ?array
+    private function preparePdf(string $filePath, int $maxPages = 1): ?array
     {
         if (! $this->rasterizer->available()) {
             return null;
@@ -48,24 +52,17 @@ class InteractiveDocPrep
         try {
             $outDir = sys_get_temp_dir().'/interactive_doc_prep_'.uniqid('', true);
             $dpi = (int) config('services.gemini.interactive_dpi', 130);
-            // Only page 1 is needed — ask poppler for it directly so a long
-            // multi-page scan doesn't rasterize pages we would delete unread.
-            $pages = $this->rasterizer->rasterize($filePath, $outDir, $dpi, 1, 1);
+            // Only the leading pages are needed — ask poppler for them directly so
+            // a long multi-page scan doesn't rasterize pages we would delete unread.
+            $pages = $this->rasterizer->rasterize($filePath, $outDir, $dpi, 1, max(1, $maxPages));
 
             if (empty($pages)) {
                 return null;
             }
 
-            $page1 = $pages[0];
-
-            // Safety net: rasterize() is asked for page 1 only, but if anything
-            // extra landed in the temp dir, drop it before handing back.
-            foreach (array_slice($pages, 1) as $extraPage) {
-                @unlink($extraPage);
-            }
-
             return [
-                'path' => $page1,
+                'path' => $pages[0],
+                'paths' => array_values($pages),
                 'cleanup' => function () use ($outDir) {
                     $this->removeDir($outDir);
                 },
@@ -128,6 +125,7 @@ class InteractiveDocPrep
 
             return [
                 'path' => $outPath,
+                'paths' => [$outPath],
                 'cleanup' => function () use ($outDir) {
                     $this->removeDir($outDir);
                 },

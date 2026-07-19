@@ -77,6 +77,11 @@ return [
         // input tokens without touching accuracy (page 1 has the data we need).
         'interactive_dpi' => env('GEMINI_INTERACTIVE_DPI', 130),
         'interactive_max_px' => env('GEMINI_INTERACTIVE_MAX_PX', 1600),
+        // Leading pages sent for interactive extraction. EJAR unified leases keep
+        // the financial block (annual rent, #payments, cycle) on page 3 — page-1
+        // only misses the whole rent schedule. 3 pages at 130dpi ≈ ~1.7k input
+        // tokens on flash-lite — still fractions of a halala per call.
+        'interactive_pages' => env('GEMINI_INTERACTIVE_PAGES', 3),
         // Result cache (dedup identical calls → 0 cost on re-send) + concurrency cap
         // (a burst of AI calls can't starve PHP-FPM workers). Fail-open — any cache/DB
         // hiccup never blocks extraction.

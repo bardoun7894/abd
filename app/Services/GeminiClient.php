@@ -57,7 +57,7 @@ class GeminiClient
      *
      * @throws RuntimeException on config/HTTP/JSON failure of the FIRST pass
      */
-    public function extractAdaptive(string $prompt, string $filePath, array $schema, ?string $model = null, ?int $timeout = null, ?int $maxAttempts = null): array
+    public function extractAdaptive(string $prompt, string|array $filePath, array $schema, ?string $model = null, ?int $timeout = null, ?int $maxAttempts = null): array
     {
         $this->lastEscalated = false;
 
@@ -267,7 +267,7 @@ class GeminiClient
      *
      * @throws RuntimeException on config/HTTP/JSON failure
      */
-    public function extract(string $prompt, string $filePath, array $schema, ?string $model = null, ?string $thinking = null, ?int $timeout = null, ?int $maxAttempts = null): array
+    public function extract(string $prompt, string|array $filePath, array $schema, ?string $model = null, ?string $thinking = null, ?int $timeout = null, ?int $maxAttempts = null): array
     {
         // Spec 007 — central AI-subscription gate. Throws (Arabic message)
         // when the subscription is inactive, expired, or quota-exhausted.
@@ -280,8 +280,13 @@ class GeminiClient
         if (empty($key)) {
             throw new RuntimeException('GEMINI_API_KEY is not configured.');
         }
-        if (! is_file($filePath)) {
-            throw new RuntimeException("File not found: {$filePath}");
+        // Multi-page support: an array of image paths is sent as multiple
+        // inline_data parts in ONE call (EJAR leases spread data over pages 1-3).
+        $files = is_array($filePath) ? array_values($filePath) : [$filePath];
+        foreach ($files as $f) {
+            if (! is_file($f)) {
+                throw new RuntimeException("File not found: {$f}");
+            }
         }
         $model = $model ?: config('services.gemini.default_model');
         $this->lastModel = $model;
@@ -297,12 +302,14 @@ class GeminiClient
             $generationConfig['thinkingConfig'] = ['thinkingLevel' => $level];
         }
 
+        $parts = [['text' => $prompt]];
+        foreach ($files as $f) {
+            $parts[] = ['inline_data' => ['mime_type' => $this->mimeFor($f), 'data' => base64_encode(file_get_contents($f))]];
+        }
+
         $body = [
             'contents' => [[
-                'parts' => [
-                    ['text' => $prompt],
-                    ['inline_data' => ['mime_type' => $this->mimeFor($filePath), 'data' => base64_encode(file_get_contents($filePath))]],
-                ],
+                'parts' => $parts,
             ]],
             'generationConfig' => $generationConfig,
         ];
@@ -321,7 +328,7 @@ class GeminiClient
         $module = $this->guessModule();
         // Thinking level is part of the key: an escalated deeper-thinking re-read
         // must not be served the shallow first pass's cached result.
-        $cacheKey = $cacheEnabled ? $this->extractionCacheKey($model.'@'.($level ?: 'default'), $prompt, $schema, $filePath) : null;
+        $cacheKey = $cacheEnabled ? $this->extractionCacheKey($model.'@'.($level ?: 'default'), $prompt, $schema, $files) : null;
         if ($cacheKey !== null) {
             $cached = $this->readExtractionCache($cacheKey);
             if ($cached !== null) {
@@ -424,7 +431,7 @@ class GeminiClient
 
         // Cache the result (dedup future identical calls) + log the usage (miss).
         if ($cacheKey !== null) {
-            $this->writeExtractionCache($cacheKey, $module, $model, $filePath, $decoded, $this->lastInputTokens(), $this->lastOutputTokens());
+            $this->writeExtractionCache($cacheKey, $module, $model, is_array($filePath) ? $filePath : [$filePath], $decoded, $this->lastInputTokens(), $this->lastOutputTokens());
         }
         $this->logAiUsage($module, $model, false, $this->lastInputTokens(), $this->lastOutputTokens(), $this->estCostUsd($this->lastInputTokens(), $this->lastOutputTokens(), $model));
 
@@ -559,15 +566,20 @@ class GeminiClient
     }
 
     /** Deterministic cache key: model + prompt + schema + file content hash. */
-    private function extractionCacheKey(string $model, string $prompt, array $schema, string $filePath): ?string
+    private function extractionCacheKey(string $model, string $prompt, array $schema, string|array $filePath): ?string
     {
         try {
-            $fileHash = @hash_file('sha256', $filePath);
-            if ($fileHash === false) {
-                return null;
+            $files = is_array($filePath) ? $filePath : [$filePath];
+            $hashes = [];
+            foreach ($files as $f) {
+                $h = @hash_file('sha256', $f);
+                if ($h === false) {
+                    return null;
+                }
+                $hashes[] = $h;
             }
 
-            return hash('sha256', $model.'|'.$prompt.'|'.json_encode($schema).'|'.$fileHash);
+            return hash('sha256', $model.'|'.$prompt.'|'.json_encode($schema).'|'.implode(',', $hashes));
         } catch (\Throwable $e) {
             return null;
         }
@@ -596,7 +608,7 @@ class GeminiClient
         }
     }
 
-    private function writeExtractionCache(string $key, ?string $module, ?string $model, string $filePath, array $result, int $in, int $out): void
+    private function writeExtractionCache(string $key, ?string $module, ?string $model, array $files, array $result, int $in, int $out): void
     {
         try {
             DB::table('ai_extractions')->updateOrInsert(
@@ -604,7 +616,7 @@ class GeminiClient
                 [
                     'module' => $module,
                     'model' => $model,
-                    'file_hash' => @hash_file('sha256', $filePath) ?: null,
+                    'file_hash' => @hash_file('sha256', $files[0] ?? '') ?: null,
                     'result_json' => json_encode($result, JSON_UNESCAPED_UNICODE),
                     'input_tokens' => $in,
                     'output_tokens' => $out,

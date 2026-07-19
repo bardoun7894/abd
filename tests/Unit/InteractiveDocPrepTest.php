@@ -93,6 +93,32 @@ it('rasterizes a PDF and returns only the page-1 image', function () {
     @unlink($page2);
 });
 
+it('returns leading page paths when maxPages > 1 (EJAR lease financials live on page 3)', function () {
+    $file = tmpPdfFile();
+
+    $pages = [];
+    foreach ([1, 2, 3] as $i) {
+        $p = tempnam(sys_get_temp_dir(), "page{$i}").'.png';
+        file_put_contents($p, "fake-png-{$i}");
+        $pages[] = $p;
+    }
+
+    $rasterizer = Mockery::mock(PdfPageRasterizer::class);
+    $rasterizer->shouldReceive('available')->andReturn(true);
+    $rasterizer->shouldReceive('rasterize')->once()
+        ->withArgs(fn ($path, $outDir, $dpi, $first, $last) => $first === 1 && $last === 3)
+        ->andReturn($pages);
+    app()->instance(PdfPageRasterizer::class, $rasterizer);
+
+    $result = app(InteractiveDocPrep::class)->prepare($file, 3);
+
+    expect($result['path'])->toBe($pages[0]);
+    expect($result['paths'])->toBe($pages);
+
+    ($result['cleanup'])();
+    @unlink($file);
+});
+
 it('falls back to the original file when the rasterizer is unavailable', function () {
     $file = tmpPdfFile();
 
