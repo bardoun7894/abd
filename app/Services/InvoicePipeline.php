@@ -157,6 +157,9 @@ class InvoicePipeline
         return $made;
     }
 
+    /** @var \Illuminate\Support\Collection<int, \App\Models\Invoice>|null */
+    private ?\Illuminate\Support\Collection $dupPool = null;
+
     /**
      * Duplicate filter (user requirement): an invoice that is provably the SAME
      * document as one already in the database is never persisted again — re-uploading
@@ -172,26 +175,22 @@ class InvoicePipeline
             return false;
         }
 
-        $candidates = Invoice::on($batch->getConnectionName())
-            ->where('batch_id', '!=', $batch->id)
-            ->where('status', '!=', 'failed')
-            ->where(function ($q) use ($data) {
-                $q->where('invoice_number', $data['invoice_number']);
-                if (! empty($data['supplier_tax_number'])) {
-                    $q->orWhere('supplier_tax_number', $data['supplier_tax_number']);
-                }
-            })
-            ->limit(50)
-            ->get();
-        if ($candidates->isEmpty()) {
-            return false;
+        // One pooled fetch per pipeline run (4 narrow columns, capped) — compared in
+        // PHP because stored values are raw while extracted ones vary in spacing/case.
+        if ($this->dupPool === null) {
+            $this->dupPool = Invoice::on($batch->getConnectionName())
+                ->where('batch_id', '!=', $batch->id)
+                ->where('status', '!=', 'failed')
+                ->orderByDesc('id')
+                ->limit((int) config('services.gemini.dup_filter_pool', 20000))
+                ->get(['id', 'invoice_number', 'supplier_tax_number', 'file_hash']);
         }
 
         $norm = InvoiceExtractionService::normNumber($data['invoice_number']);
         $newTax = preg_replace('/\D+/', '', (string) ($data['supplier_tax_number'] ?? ''));
         $newHash = ! empty($data['_image']) ? DuplicateDetector::fileHash(public_path($data['_image'])) : null;
 
-        foreach ($candidates as $cand) {
+        foreach ($this->dupPool as $cand) {
             $identicalFile = $newHash && $cand->file_hash && hash_equals((string) $cand->file_hash, $newHash);
             $sameNumber = InvoiceExtractionService::normNumber((string) $cand->invoice_number) === $norm;
             $oldTax = preg_replace('/\D+/', '', (string) $cand->supplier_tax_number);
