@@ -76,7 +76,11 @@ it('rasterizes a PDF and returns only the page-1 image', function () {
 
     $rasterizer = Mockery::mock(PdfPageRasterizer::class);
     $rasterizer->shouldReceive('available')->andReturn(true);
-    $rasterizer->shouldReceive('rasterize')->once()->andReturn([$page1, $page2]);
+    // Interactive prep asks poppler for page 1 only — a long scan must not
+    // rasterize pages that would be deleted unread.
+    $rasterizer->shouldReceive('rasterize')->once()
+        ->withArgs(fn ($path, $outDir, $dpi, $first, $last) => $first === 1 && $last === 1)
+        ->andReturn([$page1, $page2]);
     app()->instance(PdfPageRasterizer::class, $rasterizer);
 
     $result = app(InteractiveDocPrep::class)->prepare($file);

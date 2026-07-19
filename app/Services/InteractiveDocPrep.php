@@ -48,7 +48,9 @@ class InteractiveDocPrep
         try {
             $outDir = sys_get_temp_dir().'/interactive_doc_prep_'.uniqid('', true);
             $dpi = (int) config('services.gemini.interactive_dpi', 130);
-            $pages = $this->rasterizer->rasterize($filePath, $outDir, $dpi);
+            // Only page 1 is needed — ask poppler for it directly so a long
+            // multi-page scan doesn't rasterize pages we would delete unread.
+            $pages = $this->rasterizer->rasterize($filePath, $outDir, $dpi, 1, 1);
 
             if (empty($pages)) {
                 return null;
@@ -56,7 +58,8 @@ class InteractiveDocPrep
 
             $page1 = $pages[0];
 
-            // Only page 1 is needed — delete the rest right away.
+            // Safety net: rasterize() is asked for page 1 only, but if anything
+            // extra landed in the temp dir, drop it before handing back.
             foreach (array_slice($pages, 1) as $extraPage) {
                 @unlink($extraPage);
             }

@@ -24,8 +24,12 @@ class PdfPageRasterizer
      * Convert each page of $pdfPath to a PNG under $outDir. Returns the ordered
      * list of PNG paths (page-1.png, page-2.png, …). Throws PdfSplitException so
      * the pipeline can fall back to whole-document mode.
+     *
+     * Pass $firstPage/$lastPage to render only a page range — the interactive
+     * doc-prep path uses (1, 1) so a 30-page scan doesn't rasterize 29 pages
+     * that get deleted unread.
      */
-    public function rasterize(string $pdfPath, string $outDir, ?int $dpi = null): array
+    public function rasterize(string $pdfPath, string $outDir, ?int $dpi = null, ?int $firstPage = null, ?int $lastPage = null): array
     {
         if (! $this->available()) {
             throw new PdfSplitException('pdftoppm (poppler) is not available');
@@ -38,10 +42,16 @@ class PdfPageRasterizer
         $timeout = (int) config('services.gemini.page_timeout', 120);
         $prefix = $outDir.'/page';
 
+        $range = '';
+        if ($firstPage !== null && $lastPage !== null) {
+            $range = sprintf(' -f %d -l %d', $firstPage, $lastPage);
+        }
+
         $cmd = sprintf(
-            'timeout %d pdftoppm -png -r %d %s %s 2>&1',
+            'timeout %d pdftoppm -png -r %d%s %s %s 2>&1',
             $timeout,
             $dpi,
+            $range,
             escapeshellarg($pdfPath),
             escapeshellarg($prefix)
         );
