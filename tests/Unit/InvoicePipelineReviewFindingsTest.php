@@ -305,3 +305,51 @@ it('keeps a lease batch done when at least one page succeeds', function () {
     expect($fresh->status)->toBe('done');
     expect($fresh->processed_pages)->toBe(1);
 });
+
+// ---- duplicate filter: provable duplicates never reach the database ----------
+
+it('skips persisting an invoice that is an exact duplicate (same number + same supplier tax)', function () {
+    $batch1 = makeInvoiceBatch();
+    makePipelineInvoice($batch1->id, [
+        'invoice_number' => 'INV-900',
+        'supplier_tax_number' => '300123456700003',
+    ]);
+
+    $batch2 = makeInvoiceBatch();
+    $pipeline = new InvoicePipeline(new PdfPageSplitter(), new InvoiceExtractionService(), new PdfPageRasterizer());
+
+    $method = new ReflectionMethod($pipeline, 'skipExactDuplicate');
+    $method->setAccessible(true);
+
+    $skip = $method->invoke($pipeline, $batch2, [
+        'invoice_number' => 'inv-900 ', // spacing/case variant — still the same invoice
+        'supplier_tax_number' => '300-1234-5670-0003',
+    ]);
+    expect($skip)->toBeTrue();
+    expect(Invoice::where('invoice_number', 'inv-900 ')->count())->toBe(0);
+});
+
+it('does NOT skip when only the invoice number matches a different supplier', function () {
+    $batch1 = makeInvoiceBatch();
+    makePipelineInvoice($batch1->id, [
+        'invoice_number' => '100',
+        'supplier_tax_number' => '300123456700003',
+    ]);
+
+    $batch2 = makeInvoiceBatch();
+    $pipeline = new InvoicePipeline(new PdfPageSplitter(), new InvoiceExtractionService(), new PdfPageRasterizer());
+
+    $method = new ReflectionMethod($pipeline, 'skipExactDuplicate');
+    $method->setAccessible(true);
+
+    // Same number, different supplier tax → a DIFFERENT invoice, must be kept.
+    $skip = $method->invoke($pipeline, $batch2, [
+        'invoice_number' => '100',
+        'supplier_tax_number' => '399999999900003',
+    ]);
+    expect($skip)->toBeFalse();
+
+    // Same number, tax missing on the new extraction → human decides (needs_review), never auto-drop.
+    $skip2 = $method->invoke($pipeline, $batch2, ['invoice_number' => '100']);
+    expect($skip2)->toBeFalse();
+});
