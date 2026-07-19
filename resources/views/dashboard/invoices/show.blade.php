@@ -251,10 +251,17 @@
         }
 
         function poll() {
-            $.getJSON(statusUrl).done(function (d) {
-                render(d);
-                if (d.status == 'done' || d.status == 'failed') { clearInterval(timer); }
-            });
+            $.getJSON(statusUrl)
+                .done(function (d) {
+                    render(d);
+                    if (d.status == 'done' || d.status == 'failed') { clearInterval(timer); }
+                })
+                .fail(function (xhr) {
+                    clearInterval(timer);
+                    $('#st').text('error');
+                    $('#meta').text((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الاتصال بالخادم — توقفت المتابعة التلقائية');
+                    $('#bar').css('width', '0%').text('');
+                });
         }
 
         $(document).on('click', '.js-del-inv', function () {

@@ -216,7 +216,8 @@ it('marks remaining invoice pages failed when deadline is exceeded', function ()
     $pipeline->run($batch, __FILE__, null, null, 'split', microtime(true) - 1);
 
     $batch->refresh();
-    expect($batch->status)->toBe('done');
+    // Every page failed (deadline before any AI call) — batch must NOT claim 'done'.
+    expect($batch->status)->toBe('failed');
     expect($batch->invoices()->count())->toBe(2);
     expect($batch->invoices()->where('status', 'failed')->count())->toBe(2);
 });
@@ -292,7 +293,8 @@ it('marks remaining lease pages failed when deadline is exceeded', function () {
     $pipeline->run($batch, __FILE__, null, null, microtime(true) - 1);
 
     $batch->refresh();
-    expect($batch->status)->toBe('done');
+    // Every page failed (deadline before any AI call) — batch must NOT claim 'done'.
+    expect($batch->status)->toBe('failed');
     expect($batch->extractions()->count())->toBe(2);
     expect($batch->extractions()->where('status', 'failed')->count())->toBe(2);
 });

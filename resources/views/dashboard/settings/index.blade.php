@@ -164,7 +164,8 @@
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">القيمة</label>
-                                            <input type="text" name="custom_value[]" class="form-control form-control-solid" value="{{ $cv }}" />
+                                            <input type="password" name="custom_value[]" class="form-control form-control-solid"
+                                                placeholder="{{ $cv !== null && $cv !== '' ? '•••••••••• (اتركه فارغاً للإبقاء)' : 'القيمة' }}" />
                                         </div>
                                     </div>
                                 @empty
@@ -177,7 +178,7 @@
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label">القيمة</label>
-                                        <input type="text" name="custom_value[]" class="form-control form-control-solid" placeholder="القيمة" />
+                                        <input type="password" name="custom_value[]" class="form-control form-control-solid" placeholder="القيمة" />
                                     </div>
                                 </div>
                             </div>

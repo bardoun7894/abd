@@ -77,6 +77,9 @@
 
 <script>
 (function(){
+    function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+    function setStatus(el, cls, text) { el.textContent = ''; var sp = document.createElement('span'); sp.className = cls; sp.textContent = text; el.appendChild(sp); }
+
     function fromToParams() {
         var f = document.getElementById('report_ai_date_from').value;
         var t = document.getElementById('report_ai_date_to').value;
@@ -102,11 +105,11 @@
                 .then(function(r){ return r.json(); })
                 .then(function(res){
                     nbtn.disabled = false;
-                    if (!res.status) { st.innerHTML = '<span class="text-danger">' + (res.message_out || 'فشل توليد الملخص') + '</span>'; return; }
+                    if (!res.status) { setStatus(st, 'text-danger', res.message_out || 'فشل توليد الملخص'); return; }
                     out.value = res.data.summary;
-                    st.innerHTML = '<span class="text-success">تم ✓</span>';
+                    setStatus(st, 'text-success', 'تم ✓');
                 })
-                .catch(function(){ nbtn.disabled = false; st.innerHTML = '<span class="text-danger">خطأ في الاتصال</span>'; });
+                .catch(function(){ nbtn.disabled = false; setStatus(st, 'text-danger', 'خطأ في الاتصال'); });
         });
     }
 
@@ -117,7 +120,7 @@
             var q = document.getElementById('report_ai_question').value.trim();
             var st = document.getElementById('report_ai_ask_status');
             var out = document.getElementById('report_ai_answer');
-            if (!q) { st.innerHTML = '<span class="text-danger">اكتب سؤالاً أولاً</span>'; return; }
+            if (!q) { setStatus(st, 'text-danger', 'اكتب سؤالاً أولاً'); return; }
             var params = fromToParams();
             params.question = q;
             st.textContent = 'جارٍ البحث عن إجابة...';
@@ -130,11 +133,11 @@
                 .then(function(r){ return r.json(); })
                 .then(function(res){
                     abtn.disabled = false;
-                    if (!res.status) { st.innerHTML = '<span class="text-danger">' + (res.message_out || 'تعذّرت الإجابة') + '</span>'; return; }
+                    if (!res.status) { setStatus(st, 'text-danger', res.message_out || 'تعذّرت الإجابة'); return; }
                     out.textContent = res.data.answer;
-                    st.innerHTML = '<span class="text-success">تم ✓</span>';
+                    setStatus(st, 'text-success', 'تم ✓');
                 })
-                .catch(function(){ abtn.disabled = false; st.innerHTML = '<span class="text-danger">خطأ في الاتصال</span>'; });
+                .catch(function(){ abtn.disabled = false; setStatus(st, 'text-danger', 'خطأ في الاتصال'); });
         });
     }
 })();

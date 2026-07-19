@@ -29,9 +29,15 @@ class InvoiceController extends Controller
 {
     use ApimtitTrait; // provides get_manager() (admin -> all, others -> assigned)
 
+    public function __construct()
+    {
+        // Same permission pattern as Shop/Workers/Moraslat dashboards.
+        // Admins (emp_job == 1) bypass; other users need a function under per_controller id 100.
+        $this->middleware('ishaveaccess:100');
+    }
+
     // NOTE: the parent dashboard route group already applies `auth`. Permission
-    // wiring (ishaveaccess) can be added once a per_controller row is seeded;
-    // admins (emp_job==1) bypass it anyway.
+    // wiring (ishaveaccess) is now active above.
 
     public function index(Request $request)
     {
@@ -152,7 +158,15 @@ class InvoiceController extends Controller
             return response()->json(['status' => false, 'message_out' => 'اختر قائد مجموعة أو محل وليس كليهما'], 422);
         }
 
-        $summary = app(InvoicePurchaseMapper::class)->push($batch, $shopId, $managerId, Auth::id());
+        // Per-invoice duplicate override: confirm_duplicate[] carries the invoice IDs
+        // the human reviewed and confirmed as NOT duplicates. Plain boolean true is
+        // accepted as an explicit batch-wide escape hatch (audited per invoice).
+        $confirm = $request->input('confirm_duplicate', []);
+        $dupOverride = $confirm === true || $confirm === 'true' || $confirm === '1' || $confirm === 1
+            ? true
+            : array_map('intval', (array) $confirm);
+
+        $summary = app(InvoicePurchaseMapper::class)->push($batch, $shopId, $managerId, Auth::id(), $dupOverride);
 
         $msg = 'تم ترحيل '.$summary['pushed'].' فاتورة إلى المشتريات';
         if ($summary['attached']) {

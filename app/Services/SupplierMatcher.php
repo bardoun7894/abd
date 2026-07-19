@@ -15,6 +15,9 @@ class SupplierMatcher
     /** Name-similarity threshold (0..1) above which a name match is "confident". */
     public const NAME_THRESHOLD = 0.86;
 
+    /** In-memory cache of the suppliers master for the duration of the request/batch. */
+    private static ?array $supplierCache = null;
+
     /**
      * Resolve against the live suppliers table.
      *
@@ -22,6 +25,7 @@ class SupplierMatcher
      */
     public function match(?string $taxNumber, ?string $name): array
     {
+        // Tax-number match is authoritative and cheap — try it first, per invoice.
         $tax = self::digits($taxNumber);
         if ($tax !== '') {
             $byTax = Supplier::where('tax_number', $tax)->first();
@@ -35,17 +39,38 @@ class SupplierMatcher
             return ['match' => null, 'suggestions' => [], 'reason' => 'no_name'];
         }
 
-        $all = Supplier::select('id', 'name', 'tax_number')->get()
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'tax_number' => $s->tax_number])->all();
-        $ranked = self::rankByName($all, $name);
+        $all = self::cachedSuppliers();
+        $ranked = self::rankByName(
+            array_map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'tax_number' => $s->tax_number], $all),
+            $name
+        );
 
         if ($ranked && $ranked[0]['score'] >= self::NAME_THRESHOLD) {
-            $best = Supplier::find($ranked[0]['id']);
+            $best = collect($all)->first(fn ($s) => $s->id == $ranked[0]['id']);
 
             return ['match' => $best, 'suggestions' => array_slice($ranked, 0, 3), 'reason' => 'name'];
         }
 
         return ['match' => null, 'suggestions' => array_slice($ranked, 0, 3), 'reason' => 'suggest'];
+    }
+
+    /**
+     * Load the suppliers master once per process and cache it for subsequent calls.
+     * Caching full models avoids the extra `find()` query on every name match.
+     */
+    private static function cachedSuppliers(): array
+    {
+        if (self::$supplierCache === null) {
+            self::$supplierCache = Supplier::select('id', 'name', 'tax_number')->get()->all();
+        }
+
+        return self::$supplierCache;
+    }
+
+    /** Clear the in-memory supplier cache (useful in long-running tests). */
+    public static function flushCache(): void
+    {
+        self::$supplierCache = null;
     }
 
     /**

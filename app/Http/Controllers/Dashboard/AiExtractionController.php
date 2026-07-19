@@ -66,11 +66,8 @@ class AiExtractionController extends Controller
     public function status($jobId)
     {
         $job = AiExtractionJob::find($jobId);
-        if (! $job) {
+        if (! $job || ($job->user_id && (int) $job->user_id !== (int) Auth::id() && (int) (Auth::user()->emp_job ?? 0) !== 1)) {
             return response()->json(['status' => false, 'message_out' => 'الطلب غير موجود'], 404);
-        }
-        if ($job->user_id && (int) $job->user_id !== (int) Auth::id() && (int) (Auth::user()->emp_job ?? 0) !== 1) {
-            return response()->json(['status' => false, 'message_out' => 'غير مصرح'], 403);
         }
 
         $data = null;

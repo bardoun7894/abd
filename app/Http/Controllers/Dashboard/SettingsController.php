@@ -102,6 +102,8 @@ class SettingsController extends Controller
         }
 
         // Custom key/value rows (repeatable): custom_key[] + custom_value[].
+        // Values render as empty password inputs — blank means "keep the stored
+        // value" (same contract as registry secrets above), never wipe to ''.
         $ckeys = (array) $request->input('custom_key', []);
         $cvals = (array) $request->input('custom_value', []);
         foreach ($ckeys as $i => $ck) {
@@ -110,7 +112,11 @@ class SettingsController extends Controller
                 continue;
             }
             $ck = preg_replace('/[^a-zA-Z0-9_\.]/', '_', $ck);
-            Settings::set($ck, trim((string) ($cvals[$i] ?? '')));
+            $cv = trim((string) ($cvals[$i] ?? ''));
+            if ($cv === '') {
+                continue; // leave stored value untouched
+            }
+            Settings::set($ck, $cv);
             $changed[] = $ck;
         }
 
@@ -202,7 +208,7 @@ class SettingsController extends Controller
             $hits = (clone $base)->where('cache_hit', true)->count();
             $inTok = (int) (clone $base)->sum('input_tokens');
             $outTok = (int) (clone $base)->sum('output_tokens');
-            $cost = (float) (clone $base)->sum('est_cost_usd');
+            $cost = (float) (clone $base)->where('cache_hit', false)->sum('est_cost_usd');
             $sar = (float) config('services.gemini.usd_to_sar', 3.75);
 
             $stats = [
@@ -224,7 +230,7 @@ class SettingsController extends Controller
                     DB::raw('SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
                     DB::raw('SUM(input_tokens) as in_tok'),
                     DB::raw('SUM(output_tokens) as out_tok'),
-                    DB::raw('SUM(est_cost_usd) as cost'))
+                    DB::raw('SUM(CASE WHEN cache_hit = 0 THEN est_cost_usd ELSE 0 END) as cost'))
                 ->groupBy('module')->orderByDesc('cost')->get();
 
             $byDay = DB::table('ai_usage_log')
@@ -232,7 +238,7 @@ class SettingsController extends Controller
                 ->select(DB::raw('DATE(created_at) as d'),
                     DB::raw('COUNT(*) as calls'),
                     DB::raw('SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
-                    DB::raw('SUM(est_cost_usd) as cost'))
+                    DB::raw('SUM(CASE WHEN cache_hit = 0 THEN est_cost_usd ELSE 0 END) as cost'))
                 ->groupBy(DB::raw('DATE(created_at)'))->orderByDesc('d')->limit(31)->get();
         } catch (\Throwable $e) {
             // tables not migrated yet → empty state

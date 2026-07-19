@@ -113,6 +113,9 @@
 
 <script>
 (function(){
+    function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+    function setStatus(el, cls, text) { el.textContent = ''; var sp = document.createElement('span'); sp.className = cls; sp.textContent = text; el.appendChild(sp); }
+
     var abtn = document.getElementById('ai_analyze_btn');
     if (abtn && !abtn.dataset.bound) {
         abtn.dataset.bound = 1;
@@ -129,7 +132,7 @@
                 .then(function(r){ return r.json(); })
                 .then(function(res){
                     abtn.disabled = false;
-                    if (!res.status) { st.innerHTML = '<span class="text-danger">' + (res.message_out || 'فشل التحليل') + '</span>'; return; }
+                    if (!res.status) { setStatus(st, 'text-danger', res.message_out || 'فشل التحليل'); return; }
                     var d = res.data;
                     function setv(id, v) {
                         var el = document.getElementById(id);
@@ -164,10 +167,17 @@
                             }
                         });
                     } catch(e) {}
-                    var msg = '<span class="text-success">تم التحليل ✓ راجع الحقول ثم احفظ</span>';
-                    if (d.category_name) { msg += ' — التصنيف المقترح: ' + d.category_name; }
-                    if (d.type_name) { msg += ' — نوع المراسلة المقترح: ' + d.type_name + ' (غيّره أعلاه يدوياً إن اختلف عن النوع الحالي)'; }
-                    st.innerHTML = msg;
+                    var msg = document.createElement('span'); msg.className = 'text-success'; msg.textContent = 'تم التحليل ✓ راجع الحقول ثم احفظ';
+                    st.textContent = '';
+                    st.appendChild(msg);
+                    if (d.category_name) {
+                        var cat = document.createElement('span'); cat.textContent = ' — التصنيف المقترح: ' + d.category_name;
+                        st.appendChild(cat);
+                    }
+                    if (d.type_name) {
+                        var typ = document.createElement('span'); typ.textContent = ' — نوع المراسلة المقترح: ' + d.type_name + ' (غيّره أعلاه يدوياً إن اختلف عن النوع الحالي)';
+                        st.appendChild(typ);
+                    }
                 })
                 .catch(function(){ abtn.disabled = false; st.innerHTML = '<span class="text-danger">خطأ في الاتصال</span>'; });
         });
@@ -191,9 +201,9 @@
                 .then(function(r){ return r.json(); })
                 .then(function(res){
                     dbtn.disabled = false;
-                    if (!res.status) { st.innerHTML = '<span class="text-danger">' + (res.message_out || 'فشلت الصياغة') + '</span>'; return; }
+                    if (!res.status) { setStatus(st, 'text-danger', res.message_out || 'فشلت الصياغة'); return; }
                     document.getElementById('ai_reply_draft').value = res.data.draft;
-                    st.innerHTML = '<span class="text-success">تم ✓</span>';
+                    setStatus(st, 'text-success', 'تم ✓');
                 })
                 .catch(function(){ dbtn.disabled = false; st.innerHTML = '<span class="text-danger">خطأ في الاتصال</span>'; });
         });
@@ -263,7 +273,11 @@
             var img=document.createElement('img'); img.src=URL.createObjectURL(f);
             img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
         } else {
-            box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+            var badge = document.createElement('span'); badge.className = 'badge badge-light-primary';
+            var icon = document.createElement('i'); icon.className = 'fa fa-file-pdf me-1';
+            badge.appendChild(icon);
+            badge.appendChild(document.createTextNode(f.name));
+            box.appendChild(badge);
         }
     });
 })();

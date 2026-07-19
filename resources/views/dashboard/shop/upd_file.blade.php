@@ -194,6 +194,8 @@
                             (function(){
                                 var btn=document.getElementById('ai_shop_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
                                 var statusBase = "{{ url('dashboard/shop/ai-extract-status') }}";
+                                function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+                                function setStatus(el, cls, text) { el.textContent = ''; var sp = document.createElement('span'); sp.className = cls; sp.textContent = text; el.appendChild(sp); }
 
                                 function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); markExtracted(el); } }
 
@@ -206,7 +208,9 @@
                                     if (extractedEls.indexOf(el) < 0) { extractedEls.push(el); }
                                     if (!el.dataset.aiTintBound) {
                                         el.dataset.aiTintBound = '1';
-                                        el.addEventListener('input', function(){ el.classList.remove('ai-extracted'); });
+                                        var clearTint = function(){ el.classList.remove('ai-extracted'); };
+                                        el.addEventListener('input', clearTint);
+                                        el.addEventListener('change', clearTint);
                                     }
                                 }
 
@@ -277,13 +281,27 @@
                                             });
                                         }
                                     } catch(e) {}
-                                    var extra='';
-                                    if(d.owner_name && d.document_type!=='lease'){ extra+=' — الاسم: '+d.owner_name; }
-                                    if(d.rent_amount!=null && d.rent_amount!==''){ extra+=' — قيمة الإيجار المقترحة: '+d.rent_amount; }
+                                    var extra=[];
+                                    if(d.owner_name && d.document_type!=='lease'){ extra.push('الاسم: ' + d.owner_name); }
+                                    if(d.rent_amount!=null && d.rent_amount!==''){ extra.push('قيمة الإيجار المقترحة: ' + d.rent_amount); }
+                                    st.textContent = '';
+                                    var ok = document.createElement('span'); ok.className = 'text-success'; ok.textContent = 'تم الاستخراج ✓ راجع الحقول ثم احفظ';
+                                    st.appendChild(ok);
+                                    if (typeLabel) {
+                                        var tl = document.createElement('span'); tl.textContent = ' — نوع المستند: ' + typeLabel;
+                                        st.appendChild(tl);
+                                    }
+                                    extra.forEach(function(part){
+                                        var p = document.createElement('span'); p.textContent = ' — ' + part;
+                                        st.appendChild(p);
+                                    });
                                     // When the scan was hard, the adaptive layer re-read it on the
                                     // stronger model — tell the user this is the high-accuracy result.
-                                    if(d.escalated){ extra+=' <span class="badge badge-light-primary fw-bold">🔍 فحص دقيق بالنموذج الأقوى</span>'; }
-                                    st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>'+(typeLabel?(' — نوع المستند: '+typeLabel):'')+extra;
+                                    if(d.escalated){
+                                        var badge = document.createElement('span'); badge.className = 'badge badge-light-primary fw-bold'; badge.textContent = '🔍 فحص دقيق بالنموذج الأقوى';
+                                        st.appendChild(document.createTextNode(' '));
+                                        st.appendChild(badge);
+                                    }
                                     // Smooth-scroll to the first AI-filled field so the user reviews
                                     // what changed (fields are tinted emerald via .ai-extracted).
                                     if (extractedEls.length) {
@@ -300,21 +318,21 @@
                                     // 1) Queue the extraction (returns instantly with a job id).
                                     fetch('{{ route('dashboard.shop.ai_extract_async') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
                                     .then(function(r){return r.json();}).then(function(res){
-                                        if(!res.status || !res.job_id){ btn.disabled=false; st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل بدء الاستخراج')+'</span>'; return; }
+                                        if(!res.status || !res.job_id){ btn.disabled=false; setStatus(st, 'text-danger', res.message_out || 'فشل بدء الاستخراج'); return; }
                                         st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...';
                                         // 2) Poll for the result (works whether the job ran inline or on a worker).
                                         var tries=0, maxTries=80; // ~2 min at 1.5s
                                         var iv=setInterval(function(){
                                             tries++;
-                                            if(tries>maxTries){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">استغرق الاستخراج وقتاً طويلاً — حاول مرة أخرى أو أدخل البيانات يدوياً</span>'; return; }
+                                            if(tries>maxTries){ clearInterval(iv); btn.disabled=false; setStatus(st, 'text-danger', 'استغرق الاستخراج وقتاً طويلاً — حاول مرة أخرى أو أدخل البيانات يدوياً'); return; }
                                             fetch(statusBase+'/'+res.job_id,{headers:{'X-Requested-With':'XMLHttpRequest'}})
                                             .then(function(r){return r.json();}).then(function(s){
-                                                if(!s.status){ return; }
+                                                if(!s.status){ clearInterval(iv); btn.disabled=false; setStatus(st, 'text-danger', s.message_out || 'تعذّر الاستعلام عن حالة الاستخراج'); return; }
                                                 if(s.state==='done'){ clearInterval(iv); btn.disabled=false; applyExtraction(s.data||{}, st); }
-                                                else if(s.state==='failed'){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">'+(s.error||'فشل الاستخراج')+'</span>'; }
+                                                else if(s.state==='failed'){ clearInterval(iv); btn.disabled=false; setStatus(st, 'text-danger', s.error || 'فشل الاستخراج'); }
                                             }).catch(function(){ /* transient — keep polling */ });
                                         }, 1500);
-                                    }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
+                                    }).catch(function(){ btn.disabled=false; setStatus(st, 'text-danger', 'خطأ في الاتصال'); });
                                 });
                             })();
                             </script>
@@ -379,7 +397,11 @@
                                         var img=document.createElement('img'); img.src=URL.createObjectURL(f);
                                         img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
                                     } else {
-                                        box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+                                        var badge = document.createElement('span'); badge.className = 'badge badge-light-primary';
+                                        var icon = document.createElement('i'); icon.className = 'fa fa-file-pdf me-1';
+                                        badge.appendChild(icon);
+                                        badge.appendChild(document.createTextNode(f.name));
+                                        box.appendChild(badge);
                                     }
                                 });
                             })();

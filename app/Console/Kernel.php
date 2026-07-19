@@ -36,6 +36,9 @@ class Kernel extends ConsoleKernel
      // Spec 003 FR-204 — daily lease due/expiry alert scan (in-app + email + SMS).
      $schedule->command('leases:scan-alerts')->dailyAt('06:00')->runInBackground();
 
+     // Recover AI extraction jobs left in `processing` by a crashed/killed queue worker.
+     $schedule->command('ai:recover-stale-jobs')->everyTenMinutes();
+
     }
 
     /**

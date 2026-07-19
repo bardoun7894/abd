@@ -3,6 +3,14 @@
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+// PHP 8.5 compatibility shim: PHPUnit 10.1 moved the framework exception class
+// into a deeper namespace, but some installed dependencies still reference the
+// old name. Alias it only when the legacy class is missing.
+if (! class_exists(\PHPUnit\Framework\Exception::class)
+    && class_exists(\PHPUnit\Framework\Exception\Exception::class)) {
+    class_alias(\PHPUnit\Framework\Exception\Exception::class, \PHPUnit\Framework\Exception::class);
+}
+
 /*
 |--------------------------------------------------------------------------
 | Test Case

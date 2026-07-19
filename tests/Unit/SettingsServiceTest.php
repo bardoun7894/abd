@@ -15,6 +15,12 @@ uses(Tests\TestCase::class);
  * with a safe fallback when the table is absent.
  */
 beforeEach(function () {
+    // Run against an isolated SQLite :memory: DB so tests do not require a local MySQL server.
+    config()->set('database.default', 'sqlite');
+    config()->set('database.connections.sqlite.database', ':memory:');
+    DB::purge('sqlite');
+    DB::setDefaultConnection('sqlite');
+
     Cache::flush();
     if (! Schema::hasTable('app_settings')) {
         Schema::create('app_settings', function ($t) {
@@ -35,6 +41,47 @@ it('returns the default when a key is unset', function () {
 it('stores and reads a value', function () {
     Settings::set('gemini_api_key', 'KEY_ABC');
     expect(Settings::get('gemini_api_key'))->toBe('KEY_ABC');
+});
+
+it('encrypts secret registry keys at rest and decrypts transparently on read', function () {
+    Settings::set('gemini_api_key', 'SECRET_GEMINI_KEY');
+    Settings::set('sms_api_key', 'SECRET_SMS_KEY');
+
+    $raw = DB::table('app_settings')->pluck('svalue', 'skey');
+
+    expect($raw['gemini_api_key'])->not->toBe('SECRET_GEMINI_KEY')
+        ->and($raw['sms_api_key'])->not->toBe('SECRET_SMS_KEY')
+        ->and(Settings::get('gemini_api_key'))->toBe('SECRET_GEMINI_KEY')
+        ->and(Settings::get('sms_api_key'))->toBe('SECRET_SMS_KEY')
+        ->and(Settings::all()['gemini_api_key'])->toBe('SECRET_GEMINI_KEY');
+});
+
+it('encrypts custom secret-like keys at rest', function () {
+    Settings::set('openai_api_key', 'CUSTOM_SECRET');
+    Settings::set('some_password', 'P4SS');
+
+    $raw = DB::table('app_settings')->pluck('svalue', 'skey');
+
+    expect($raw['openai_api_key'])->not->toBe('CUSTOM_SECRET')
+        ->and(Settings::get('openai_api_key'))->toBe('CUSTOM_SECRET')
+        ->and(Settings::get('some_password'))->toBe('P4SS');
+});
+
+it('reads legacy plaintext secrets as fallback and re-encrypts on next set', function () {
+    DB::table('app_settings')->insert([
+        'skey' => 'gemini_api_key',
+        'svalue' => 'LEGACY_PLAINTEXT',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    Settings::forgetCache();
+
+    expect(Settings::get('gemini_api_key'))->toBe('LEGACY_PLAINTEXT');
+
+    Settings::set('gemini_api_key', 'NEW_SECRET');
+    $raw = DB::table('app_settings')->where('skey', 'gemini_api_key')->value('svalue');
+    expect($raw)->not->toBe('NEW_SECRET')
+        ->and(Settings::get('gemini_api_key'))->toBe('NEW_SECRET');
 });
 
 it('treats empty string as unset and returns the default', function () {

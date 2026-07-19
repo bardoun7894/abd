@@ -149,6 +149,7 @@ class GeminiClient
         $model = $model ?: config('services.gemini.default_model');
         $this->lastModel = $model;
         $base = rtrim(config('services.gemini.base_url'), '/');
+        $module = $this->guessModule();
 
         $body = [
             'contents' => [[
@@ -164,74 +165,90 @@ class GeminiClient
 
         $url = "{$base}/models/{$model}:generateContent?key={$key}";
         $maxAttempts = (int) config('services.gemini.retries', 4);
+
+        // Concurrency cap: text calls share the same slot pool as extract().
+        $slot = $this->acquireAiSlot();
+        if ($slot === null) {
+            throw new RuntimeException('النظام مشغول بمعالجة طلبات الذكاء الاصطناعي حالياً، يرجى المحاولة بعد قليل.');
+        }
+
         $attempt = 0;
         $resp = null;
         $lastStatus = null;
         $lastBody = null;
-        while (true) {
-            $attempt++;
-            try {
-                $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
-            } catch (ConnectionException $e) {
-                $lastStatus = 'connection';
-                $lastBody = $e->getMessage();
-                if ($attempt < $maxAttempts) {
-                    Log::warning('Gemini transient HTTP error; retrying', [
+        try {
+            while (true) {
+                $attempt++;
+                try {
+                    $resp = Http::timeout((int) config('services.gemini.timeout', 120))->acceptJson()->post($url, $body);
+                } catch (ConnectionException $e) {
+                    $lastStatus = 'connection';
+                    $lastBody = $e->getMessage();
+                    if ($attempt < $maxAttempts) {
+                        Log::warning('Gemini transient HTTP error; retrying', [
+                            'model' => $model,
+                            'status' => 'connection',
+                            'attempt' => $attempt,
+                            'max_attempts' => $maxAttempts,
+                        ]);
+                        usleep((int) ((2 ** $attempt) * 500_000));
+
+                        continue;
+                    }
+                    Log::error('Gemini HTTP request failed after retries', [
                         'model' => $model,
                         'status' => 'connection',
                         'attempt' => $attempt,
                         'max_attempts' => $maxAttempts,
+                        'response' => substr($lastBody, 0, 1000),
                     ]);
-                    usleep((int) ((2 ** $attempt) * 500_000));
+                    throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
+                }
+
+                if ($resp->successful()) {
+                    break;
+                }
+                $status = $resp->status();
+                $lastStatus = $status;
+                $lastBody = $resp->body();
+                if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
+                    Log::warning('Gemini transient HTTP error; retrying', [
+                        'model' => $model,
+                        'status' => $status,
+                        'attempt' => $attempt,
+                        'max_attempts' => $maxAttempts,
+                    ]);
+                    $delaySeconds = $status === 429
+                        ? max($this->retryAfterSeconds($resp), (2 ** $attempt) * 0.5)
+                        : (2 ** $attempt) * 0.5;
+                    $delaySeconds = min($delaySeconds, 60); // sane ceiling
+                    usleep((int) ($delaySeconds * 1_000_000));
 
                     continue;
                 }
                 Log::error('Gemini HTTP request failed after retries', [
                     'model' => $model,
-                    'status' => 'connection',
+                    'status' => $status,
                     'attempt' => $attempt,
                     'max_attempts' => $maxAttempts,
                     'response' => substr($lastBody, 0, 1000),
                 ]);
-                throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
+                throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
             }
 
-            if ($resp->successful()) {
-                break;
-            }
-            $status = $resp->status();
-            $lastStatus = $status;
-            $lastBody = $resp->body();
-            if (in_array($status, [429, 500, 502, 503, 504], true) && $attempt < $maxAttempts) {
-                Log::warning('Gemini transient HTTP error; retrying', [
-                    'model' => $model,
-                    'status' => $status,
-                    'attempt' => $attempt,
-                    'max_attempts' => $maxAttempts,
-                ]);
-                usleep((int) ((2 ** $attempt) * 500_000));
-
-                continue;
-            }
-            Log::error('Gemini HTTP request failed after retries', [
+            $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
+            Log::info('Gemini text generation completed', [
                 'model' => $model,
-                'status' => $status,
-                'attempt' => $attempt,
-                'max_attempts' => $maxAttempts,
-                'response' => substr($lastBody, 0, 1000),
+                'attempts' => $attempt,
+                'input_tokens' => $this->lastInputTokens(),
+                'output_tokens' => $this->lastOutputTokens(),
             ]);
-            throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
+            $this->logAiUsage($module, $model, false, $this->lastInputTokens(), $this->lastOutputTokens(), $this->estCostUsd($this->lastInputTokens(), $this->lastOutputTokens(), $model));
+
+            return $this->extractTextResponse($resp->json());
+        } finally {
+            $this->releaseAiSlot($slot);
         }
-
-        $this->lastUsage = (array) data_get($resp->json(), 'usageMetadata', []);
-        Log::info('Gemini text generation completed', [
-            'model' => $model,
-            'attempts' => $attempt,
-            'input_tokens' => $this->lastInputTokens(),
-            'output_tokens' => $this->lastOutputTokens(),
-        ]);
-
-        return $this->extractTextResponse($resp->json());
     }
 
     /**
@@ -251,9 +268,9 @@ class GeminiClient
             }
         }
 
-        $fallback = data_get($json, 'candidates.0.content.parts.0.text');
-        if (is_string($fallback)) {
-            return $fallback;
+        if ($parts !== []) {
+            // All visible parts were thought-only; return empty rather than leak reasoning.
+            return '';
         }
 
         throw new RuntimeException('Gemini returned no content: '.json_encode($json));
@@ -337,7 +354,7 @@ class GeminiClient
                     'candidatesTokenCount' => (int) ($cached->output_tokens ?? 0),
                 ];
                 $this->bumpExtractionCacheHit($cacheKey);
-                $this->logAiUsage($module, $model, true, (int) $cached->input_tokens, (int) $cached->output_tokens, (float) $cached->est_cost_usd);
+                $this->logAiUsage($module, $model, true, (int) $cached->input_tokens, (int) $cached->output_tokens, 0.0);
                 $decodedCached = json_decode($cached->result_json, true);
                 if (is_array($decodedCached)) {
                     return $decodedCached; // instant, zero-cost hit — no HTTP, no quota
@@ -397,7 +414,11 @@ class GeminiClient
                     'attempt' => $attempt,
                     'max_attempts' => $maxAttempts,
                 ]);
-                usleep((int) ((2 ** $attempt) * 500_000));
+                $delaySeconds = $status === 429
+                    ? max($this->retryAfterSeconds($resp), (2 ** $attempt) * 0.5)
+                    : (2 ** $attempt) * 0.5;
+                $delaySeconds = min($delaySeconds, 60); // sane ceiling
+                usleep((int) ($delaySeconds * 1_000_000));
 
                 continue;
             }
@@ -423,11 +444,10 @@ class GeminiClient
 
         // Spec 007 — count usage against the quota only once extraction of
         // this file actually produced usable JSON (a thrown/failed call
-        // below never reaches here, so it never consumes quota). extract()
-        // is called once per page/file across every extractor in the app,
-        // so "1 call = 1 page" here is the least-invasive, single-choke-point
-        // place to meter pages without touching each module's pipeline.
-        app(AiSubscriptionGate::class)->recordPages(1);
+        // below never reaches here, so it never consumes quota). Multi-page
+        // calls send several images in one billed request, so meter the real
+        // page count instead of assuming one.
+        app(AiSubscriptionGate::class)->recordPages(count($files));
 
         // Cache the result (dedup future identical calls) + log the usage (miss).
         if ($cacheKey !== null) {
@@ -698,5 +718,39 @@ class GeminiClient
         } catch (\Throwable $e) {
             // ignore — the slot's TTL will release it
         }
+    }
+
+    /**
+     * How long to sleep before a 429 retry. Parses the Retry-After response header
+     * (seconds or HTTP-date) and falls back to retryDelay/retry_delay in the JSON
+     * error body. Returns 0 when nothing is provided; callers add their own floor.
+     */
+    private function retryAfterSeconds($resp): int
+    {
+        $header = $resp->header('Retry-After');
+        if ($header !== null && $header !== '') {
+            if (is_numeric($header)) {
+                return (int) $header;
+            }
+            $date = strtotime($header);
+            if ($date !== false) {
+                return max(0, $date - time());
+            }
+        }
+
+        $json = $resp->json();
+        if (is_array($json)) {
+            foreach (['retryDelay', 'retry_delay', 'retryDelaySeconds'] as $key) {
+                $val = data_get($json, $key) ?? data_get($json, "error.{$key}");
+                if (is_numeric($val)) {
+                    return (int) $val;
+                }
+                if (is_string($val) && preg_match('/^(\d+(\.\d+)?)\s*s?$/', $val, $m)) {
+                    return (int) ceil((float) $m[1]);
+                }
+            }
+        }
+
+        return 0;
     }
 }

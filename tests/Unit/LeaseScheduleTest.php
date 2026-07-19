@@ -108,3 +108,96 @@ it('defaults num_payments to 1 when missing or zero', function () {
 
     expect($rows)->toHaveCount(1);
 });
+
+it('reconciles annual rent against contract total using duration', function () {
+    // Real EJAR lease: 40,000 SAR/year × 5 years = 200,000 total.
+    // 10 half-yearly payments × 20,000 = 200,000 — should be accepted verbatim.
+    $result = $this->gen->generateWithWarnings(validLeaseContract([
+        'start_date' => '2020-01-01',
+        'end_date' => '2025-01-01',
+        'duration' => '5 years',
+        'rent_value' => 40000.0,
+        'num_payments' => 10,
+        'payment_value' => 20000.0,
+        'payment_frequency' => 'semi-annual',
+    ]));
+
+    expect($result['warnings'])->toBeEmpty();
+    expect(array_sum(array_column($result['rows'], 'amount')))->toBe(200000.0);
+    expect($result['rows'])->toHaveCount(10);
+});
+
+it('falls back to even split when payment_value diverges from expected total', function () {
+    $result = $this->gen->generateWithWarnings(validLeaseContract([
+        'rent_value' => 12000.0,
+        'num_payments' => 12,
+        'payment_value' => 2000.0, // AI hallucinated; should be 1,000.
+        'payment_frequency' => 'monthly',
+    ]));
+
+    expect($result['warnings'])->not->toBeEmpty();
+    expect(array_sum(array_column($result['rows'], 'amount')))->toBe(12000.0);
+    foreach ($result['rows'] as $r) {
+        expect((float) $r['amount'])->toBe(1000.0);
+    }
+});
+
+it('absorbs rounding remainder into the last payment after reconciliation', function () {
+    // 10,000 total split over 3 payments — last row should absorb the penny.
+    $result = $this->gen->generateWithWarnings(validLeaseContract([
+        'rent_value' => 10000.0,
+        'num_payments' => 3,
+        'payment_value' => null,
+        'payment_frequency' => 'monthly',
+    ]));
+
+    expect((float) $result['rows'][0]['amount'])->toBe(3333.33);
+    expect((float) $result['rows'][1]['amount'])->toBe(3333.33);
+    expect((float) $result['rows'][2]['amount'])->toBe(3333.34);
+    expect(array_sum(array_column($result['rows'], 'amount')))->toBe(10000.0);
+});
+
+it('clamps due dates that exceed end_date and records a warning', function () {
+    $result = $this->gen->generateWithWarnings(validLeaseContract([
+        'start_date' => '2026-01-01',
+        'end_date' => '2026-06-01',
+        'rent_value' => 12000.0,
+        'num_payments' => 12,
+        'payment_value' => 1000.0,
+        'payment_frequency' => 'monthly',
+    ]));
+
+    expect($result['warnings'])->not->toBeEmpty();
+    foreach ($result['rows'] as $r) {
+        expect($r['due_date'] <= '2026-06-01')->toBeTrue();
+    }
+});
+
+it('validateSchedule reports sum divergence', function () {
+    $contract = validLeaseContract([
+        'rent_value' => 12000.0,
+        'num_payments' => 12,
+        'payment_value' => null,
+    ]);
+    $badRows = $this->gen->generate($contract);
+    $badRows[0]['amount'] = 999999.0;
+
+    $errors = $this->gen->validateSchedule($badRows, $contract);
+
+    expect($errors)->not->toBeEmpty();
+    expect(implode(' ', $errors))->toContain('12000');
+});
+
+it('validateSchedule reports dates outside the lease term', function () {
+    $contract = validLeaseContract([
+        'start_date' => '2026-01-01',
+        'end_date' => '2026-06-01',
+    ]);
+    $badRows = $this->gen->generate($contract);
+    $badRows[5]['due_date'] = '2027-01-01';
+
+    $errors = $this->gen->validateSchedule($badRows, $contract);
+
+    expect($errors)->not->toBeEmpty();
+    expect(implode(' ', $errors))->toContain('2027-01-01');
+});

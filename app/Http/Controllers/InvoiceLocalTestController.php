@@ -6,21 +6,26 @@ use App\Models\Invoice;
 use App\Models\InvoiceBatch;
 use App\Services\InvoicePipeline;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 /**
- * LOCAL-ONLY harness to interactively test invoice extraction in the browser
- * without the main app DB / auth (which only exist in production). Everything
- * here touches ONLY the isolated `invoices` connection. The pipeline runs
- * synchronously so results render immediately — no queue, no polling.
+ * LOCAL-ONLY harness to interactively test invoice extraction in the browser.
+ * Everything here touches ONLY the isolated `invoices` connection. The pipeline
+ * runs synchronously so results render immediately — no queue, no polling.
  *
  * Gated on env('INVOICE_LOCAL_UI'): unset in prod -> every route 404s.
+ * Also requires auth + admin (emp_job == 1) so the UI is never reachable by
+ * unauthenticated or non-admin users even if the env flag is accidentally set.
  */
 class InvoiceLocalTestController extends Controller
 {
     private function guard(): void
     {
         abort_unless((bool) env('INVOICE_LOCAL_UI', false), 404);
+        abort_unless(Auth::check(), 401);
+        abort_unless((int) (Auth::user()->emp_job ?? 0) === 1, 403);
+
         // Keep the demo UI clean (no injected dev debug bar).
         if (app()->bound('debugbar')) {
             app('debugbar')->disable();

@@ -38,7 +38,9 @@ return [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 90,
+            // retry_after must exceed the longest $timeout of any job on this connection
+            // (currently 1800s from ProcessInvoiceBatch / ProcessLeaseBatch; 2400s gives headroom).
+            'retry_after' => 2400,
             'after_commit' => false,
         ],
 
@@ -49,7 +51,8 @@ return [
             'connection' => 'invoices',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 1800,
+            // Same invariant: the invoice/lease batch jobs time out at 1800s.
+            'retry_after' => 2400,
             'after_commit' => false,
         ],
 
@@ -77,7 +80,9 @@ return [
             'driver' => 'redis',
             'connection' => 'default',
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => 90,
+            // retry_after must exceed the longest $timeout of any job on this connection
+            // (currently 1800s from ProcessInvoiceBatch / ProcessLeaseBatch; 2400s gives headroom).
+            'retry_after' => 2400,
             'block_for' => null,
             'after_commit' => false,
         ],

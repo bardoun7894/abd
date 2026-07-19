@@ -51,9 +51,18 @@ class InvoicePipeline
         // Flag repeated invoice numbers (within this batch and against earlier ones) for review.
         $this->flagDuplicates($batch);
 
+        $counts = $batch->invoices()
+            ->selectRaw("status, count(*) as cnt")
+            ->groupBy('status')
+            ->pluck('cnt', 'status')
+            ->all();
+        $failedCount = (int) ($counts['failed'] ?? 0);
+        $successfulCount = (int) ($batch->invoices()->count() - $failedCount);
+        $batchStatus = ($successfulCount === 0 && $failedCount > 0) ? 'failed' : 'done';
+
         $batch->update([
             'processed_pages' => $batch->invoices()->count(),
-            'status' => 'done',
+            'status' => $batchStatus,
             'input_tokens' => $this->inTokens,
             'output_tokens' => $this->outTokens,
             'est_cost_usd' => round($this->service->costUsd($this->inTokens, $this->outTokens), 5),
@@ -136,11 +145,71 @@ class InvoicePipeline
         }
 
         $invoices = $group ? $this->service->groupByInvoiceNumber($rows) : $rows;
+        $made = 0;
         foreach ($invoices as $inv) {
+            if ($this->skipExactDuplicate($batch, $inv)) {
+                continue;
+            }
             $this->persist($batch, $inv['page_number'] ?? 1, $inv, $inv['_image'] ?? null);
+            $made++;
         }
 
-        return count($invoices);
+        return $made;
+    }
+
+    /**
+     * Duplicate filter (user requirement): an invoice that is provably the SAME
+     * document as one already in the database is never persisted again — re-uploading
+     * an old scan can't re-pollute the invoices table. "Provably the same" means:
+     *   a) identical file bytes (sha256 of the page image), or
+     *   b) same normalized invoice number AND both supplier tax numbers present + equal
+     *      (invoice numbers are only unique per supplier — number alone is NOT enough,
+     *      those stay as needs_review flags for a human, never auto-dropped).
+     */
+    private function skipExactDuplicate(InvoiceBatch $batch, array $data): bool
+    {
+        if (isset($data['_error']) || empty($data['invoice_number'])) {
+            return false;
+        }
+
+        $candidates = Invoice::on($batch->getConnectionName())
+            ->where('batch_id', '!=', $batch->id)
+            ->where('status', '!=', 'failed')
+            ->where(function ($q) use ($data) {
+                $q->where('invoice_number', $data['invoice_number']);
+                if (! empty($data['supplier_tax_number'])) {
+                    $q->orWhere('supplier_tax_number', $data['supplier_tax_number']);
+                }
+            })
+            ->limit(50)
+            ->get();
+        if ($candidates->isEmpty()) {
+            return false;
+        }
+
+        $norm = InvoiceExtractionService::normNumber($data['invoice_number']);
+        $newTax = preg_replace('/\D+/', '', (string) ($data['supplier_tax_number'] ?? ''));
+        $newHash = ! empty($data['_image']) ? DuplicateDetector::fileHash(public_path($data['_image'])) : null;
+
+        foreach ($candidates as $cand) {
+            $identicalFile = $newHash && $cand->file_hash && hash_equals((string) $cand->file_hash, $newHash);
+            $sameNumber = InvoiceExtractionService::normNumber((string) $cand->invoice_number) === $norm;
+            $oldTax = preg_replace('/\D+/', '', (string) $cand->supplier_tax_number);
+            $sameSupplier = $newTax !== '' && $oldTax !== '' && $newTax === $oldTax;
+
+            if ($identicalFile || ($sameNumber && $sameSupplier)) {
+                \Illuminate\Support\Facades\Log::info('InvoicePipeline: skipped exact duplicate', [
+                    'batch_id' => $batch->id,
+                    'invoice_number' => $data['invoice_number'],
+                    'matches_invoice_id' => $cand->id,
+                    'via' => $identicalFile ? 'file_hash' : 'number+tax',
+                ]);
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function wholeDocument(InvoiceBatch $batch, string $pdfPath, string $savedRel, string $model, ?float $deadline = null): int
@@ -180,6 +249,10 @@ class InvoicePipeline
         foreach ($invoices as $idx => $inv) {
             $pageNo = $inv['page_number'] ?: ($idx + 1);
             $image = $pageImages[$pageNo] ?? ($savedRel.'#page='.$pageNo);
+            $inv['_image'] = $image;
+            if ($this->skipExactDuplicate($batch, $inv)) {
+                continue;
+            }
             $this->persist($batch, $pageNo, $inv, $image);
             $made++;
         }
@@ -197,20 +270,54 @@ class InvoicePipeline
         $invoices = $batch->invoices()->get();
         $dupInBatch = InvoiceExtractionService::duplicateNumbers($invoices->pluck('invoice_number')->all());
 
+        // One query for cross-batch candidates: fetch recent normalized matches in memory
+        // instead of running an exists() query per invoice (N+1).
+        $batchNormNumbers = [];
+        foreach ($invoices as $inv) {
+            if (filled($inv->invoice_number)) {
+                $batchNormNumbers[] = InvoiceExtractionService::normNumber($inv->invoice_number);
+            }
+        }
+        $batchNormNumbers = array_unique($batchNormNumbers);
+        $existingNormElsewhere = [];
+        if ($batchNormNumbers) {
+            // Exact raw-number matches: cheap, unbounded — an old invoice with the
+            // identical stored number must always be caught (no recency window).
+            $rawNumbers = $invoices->pluck('invoice_number')->filter()->unique()->all();
+            $exact = Invoice::on($batch->getConnectionName())
+                ->where('batch_id', '!=', $batch->id)
+                ->whereIn('invoice_number', $rawNumbers)
+                ->pluck('invoice_number')
+                ->all();
+
+            // Normalized (spacing/case-tolerant) matches: bounded recent window,
+            // compared in PHP because the table stores raw numbers.
+            $existing = Invoice::on($batch->getConnectionName())
+                ->where('batch_id', '!=', $batch->id)
+                ->whereNotNull('invoice_number')
+                ->orderByDesc('id')
+                ->limit(1000)
+                ->pluck('invoice_number')
+                ->all();
+            $existingNormElsewhere = array_flip(
+                array_filter(
+                    array_map(fn ($n) => InvoiceExtractionService::normNumber($n), array_merge($exact, $existing)),
+                    fn ($n) => in_array($n, $batchNormNumbers, true)
+                )
+            );
+        }
+
         foreach ($invoices as $inv) {
             if (! filled($inv->invoice_number)) {
                 continue;
             }
             $add = [];
+            $norm = InvoiceExtractionService::normNumber($inv->invoice_number);
 
-            if (in_array(InvoiceExtractionService::normNumber($inv->invoice_number), $dupInBatch, true)) {
+            if (in_array($norm, $dupInBatch, true)) {
                 $add[] = 'رقم فاتورة مكرر داخل نفس الدفعة';
             }
-            $existsElsewhere = Invoice::on($batch->getConnectionName())
-                ->where('invoice_number', $inv->invoice_number)
-                ->where('batch_id', '!=', $batch->id)
-                ->exists();
-            if ($existsElsewhere) {
+            if (isset($existingNormElsewhere[$norm])) {
                 $add[] = 'رقم فاتورة موجود في دفعة أخرى — قد تكون مكررة أو مُدخلة سابقًا';
             }
 
