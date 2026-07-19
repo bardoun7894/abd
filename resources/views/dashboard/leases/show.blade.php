@@ -79,9 +79,11 @@
                 var warn = v.needs_review ? ' style="background:#fff4d6"' : '';
                 function cell(f) { return '<td contenteditable="true" data-id="' + v.id + '" data-field="' + f + '" class="edit" title="' + esc(v.validation_notes) + '">' + esc(v[f]) + '</td>'; }
                 var flag = v.status == 'failed' ? '✗' : (v.needs_review ? '⚠' : '✓');
+                var delBtn = ' <button class="btn btn-sm btn-icon btn-light-danger delBtn" data-id="' + v.id + '" data-approved="' + (v.contract_id ? 1 : 0) + '" title="حذف"><i class="fas fa-trash-alt"></i></button>';
                 var action = v.contract_id
-                    ? '<span class="badge badge-light-success" title="رقم العقد ' + esc(v.contract_id) + '">مُعتمد</span>'
-                    : '<button class="btn btn-sm btn-success approveBtn" data-id="' + v.id + '">موافقة</button>';
+                    ? '<span class="badge badge-light-success" title="رقم العقد ' + esc(v.contract_id) + '">مُعتمد</span>' + delBtn
+                    : '<button class="btn btn-sm btn-success approveBtn" data-id="' + v.id + '">موافقة</button>'
+                      + ' <button class="btn btn-sm btn-light-warning rejectBtn" data-id="' + v.id + '">رفض</button>' + delBtn;
                 html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
                     + cell('contract_no') + cell('tenant_name') + cell('landlord_name') + cell('unit')
                     + cell('start_date') + cell('end_date') + cell('rent_value') + cell('num_payments')
@@ -114,6 +116,27 @@
                 alert(m);
                 $btn.prop('disabled', false).text('موافقة');
             });
+        });
+
+        $(document).on('click', '.rejectBtn', function () {
+            if (!confirm('سيتم رفض هذا العقد المستخرَج ولن يظهر للاعتماد. متابعة؟')) return;
+            var $btn = $(this).prop('disabled', true).text('…');
+            var id = $btn.data('id');
+            $.post(correctBase + '/' + id + '/reject').done(function (r) {
+                if (r.status) { poll(); } else { alert(r.message_out || 'تعذّر الرفض'); $btn.prop('disabled', false).text('رفض'); }
+            }).fail(function (xhr) { alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الرفض'); $btn.prop('disabled', false).text('رفض'); });
+        });
+
+        $(document).on('click', '.delBtn', function () {
+            var approved = String($(this).data('approved')) === '1';
+            var msg = approved
+                ? 'هذا العقد معتمد. سيتم حذفه وحذف جدول الدفعات المرتبط به. متابعة؟'
+                : 'سيتم حذف هذا العقد المستخرَج. متابعة؟';
+            if (!confirm(msg)) return;
+            var id = $(this).data('id');
+            $.ajax({ url: correctBase + '/' + id, method: 'DELETE' })
+                .done(function (r) { if (r.status) { poll(); } else { alert(r.message_out || 'تعذّر الحذف'); } })
+                .fail(function (xhr) { alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحذف'); });
         });
 
         // Image lightbox (rows render dynamically → delegated handler)

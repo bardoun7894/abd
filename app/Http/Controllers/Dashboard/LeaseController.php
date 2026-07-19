@@ -244,14 +244,73 @@ class LeaseController extends Controller
         return response()->json(['status' => true, 'contract_id' => $contract->id, 'message_out' => 'تم إنشاء العقد وجدول الدفعات']);
     }
 
+    /**
+     * Reject a lease extraction so it won't be approved (mirrors invoice reject).
+     * Only for un-approved extractions — an approved one is discarded via destroy().
+     */
+    public function reject($id)
+    {
+        $extraction = LeaseExtraction::findOrFail($id);
+        $this->authorizeBatch($extraction->batch);
+
+        if ($extraction->contract_id) {
+            return response()->json(['status' => false, 'message_out' => 'العقد معتمد بالفعل — استخدم الحذف بدل الرفض'], 422);
+        }
+
+        $extraction->forceFill(['status' => 'rejected', 'needs_review' => false])->save();
+
+        \App\Services\AuditLogger::log('lease', (int) $extraction->id, \App\Services\AuditLogger::REJECT, [
+            'batch_id' => $extraction->batch_id,
+            'note' => 'رُفض العقد المستخرَج',
+        ]);
+
+        return response()->json(['status' => true, 'message_out' => 'تم رفض العقد']);
+    }
+
+    /**
+     * Delete a lease extraction. If it was already approved, its LeaseContract and the
+     * generated payment schedule are removed first (reverse), mirroring invoice destroy.
+     */
+    public function destroy($id)
+    {
+        $extraction = LeaseExtraction::findOrFail($id);
+        $this->authorizeBatch($extraction->batch);
+
+        $reversed = false;
+        if ($extraction->contract_id) {
+            $contract = LeaseContract::find($extraction->contract_id);
+            if ($contract) {
+                DB::transaction(function () use ($contract) {
+                    LeasePayment::where('contract_id', $contract->id)->delete();
+                    $contract->forceDelete();
+                });
+                $reversed = true;
+            }
+        }
+
+        $extraction->delete(); // isolated `invoices` connection
+
+        \App\Services\AuditLogger::log('lease', (int) $id, \App\Services\AuditLogger::DELETE, [
+            'note' => 'حُذف العقد المستخرَج'.($reversed ? ' (وحُذف العقد المعتمد وجدول الدفعات)' : ''),
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message_out' => 'تم حذف العقد'.($reversed ? ' وجدول الدفعات المرتبط به' : ''),
+        ]);
+    }
+
     /** Unprocessed-contracts screen (Spec 003 FR-206): failed / needs-review rows. */
     public function unprocessed()
     {
         $page_title = 'عقود غير معالَجة';
 
+        // Grouped so the needs_review OR does not escape the failed-status scope.
         $extractions = LeaseExtraction::query()
-            ->whereIn('status', ['failed'])
-            ->orWhere('needs_review', true)
+            ->where(function ($q) {
+                $q->whereIn('status', ['failed'])->orWhere('needs_review', true);
+            })
+            ->where('status', '!=', 'rejected')
             ->with('batch')
             ->orderByDesc('id')
             ->limit(200)
