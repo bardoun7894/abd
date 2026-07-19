@@ -243,7 +243,7 @@
                                     @if ($purchase->purchasefile)
                                         <a class="btn btn-lg   btn-success  "
                                             style="padding: 0.7rem 1rem !important;border-radius: 0;" target='_new'
-                                            href=" {{ $purchase->purchasefile }}">
+                                            href="{{ asset($purchase->purchasefile) }}">
                                             <span>
                                                 <i class="la  la-cloud-download" style="color:#fff"></i>
                                             </span>
@@ -266,12 +266,12 @@
                                 </div>
 
                                 @if($view == "true")
-                                <a href="{{ $purchase->purchasefile }}" target="_blank">
+                                <a href="{{ asset($purchase->purchasefile) }}" target="_blank">
 
                                 <div class="col">
                                     <label >
                                         الفاتورة</label>
-                                            <iframe  style="width: 100%; height:700px"  src="https://noor-alsabah.com/{{ $purchase->purchasefile }}" alt="الفاتورة"></iframe>
+                                            <iframe  style="width: 100%; height:700px"  src="{{ asset($purchase->purchasefile) }}" alt="الفاتورة"></iframe>
 
                                 </div>
                             </a>
