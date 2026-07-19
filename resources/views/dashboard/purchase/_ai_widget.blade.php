@@ -248,10 +248,14 @@
                 var chk = document.createElement('span'); chk.className = 'ai-check-pop'; chk.textContent = '✓';
                 success.insertBefore(chk, success.firstChild);
             }
-            var oldChip = el.querySelector('.ai-fields-chip'); if (oldChip) { oldChip.remove(); }
-            if (n > 0) {
+            // Idempotent: this MutationObserver watches el's subtree — blindly removing/
+            // re-adding the chip re-triggers the observer forever and FREEZES the page.
+            var chipText = 'تم استخراج ' + n + ' حقول — راجع المميّزة';
+            var oldChip = el.querySelector('.ai-fields-chip');
+            if (oldChip && (n <= 0 || oldChip.textContent !== chipText)) { oldChip.remove(); oldChip = null; }
+            if (!oldChip && n > 0) {
                 var chip = document.createElement('span'); chip.className = 'ai-fields-chip';
-                chip.textContent = 'تم استخراج ' + n + ' حقول — راجع المميّزة';
+                chip.textContent = chipText;
                 el.appendChild(chip);
             }
             if (btn && !btn.dataset.reanalyzeAdded) {
