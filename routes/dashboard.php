@@ -152,7 +152,9 @@ Route::group([
         Route::post('/emps/updrole', [empsController::class, 'updrole'])->name('emps.updrole');
         Route::resource('/emps', empsController::class);
 
-        Route::post('/accountings/create', [accountingsController::class, 'create'])->name('accountings.create');
+        // No ->name() here: Route::resource('/accountings') below already owns
+        // accountings.create (GET form). Duplicate names break route:cache.
+        Route::post('/accountings/create', [accountingsController::class, 'create']);
         Route::post('/accountings/storepmonth', [accountingsController::class, 'storepmonth'])->name('accountings.storepmonth');
         Route::post('/accountings/pmonth_tbl', [accountingsController::class, 'pmonth_tbl'])->name('accountings.pmonth_tbl');
         Route::post('/accountings/ajax_search_pmonth', [accountingsController::class, 'ajax_search_pmonth'])->name('accountings.ajax_search_pmonth');
