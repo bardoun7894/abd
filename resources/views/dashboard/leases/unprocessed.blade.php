@@ -51,6 +51,8 @@
                                     <div class="d-flex gap-2 justify-content-end flex-nowrap">
                                         <button class="btn btn-sm btn-light-primary reprocessBtn" data-id="{{ $e->id }}">إعادة القراءة</button>
                                         <a href="{{ route('dashboard.leases.show', $e->batch_id) }}" class="btn btn-sm btn-light">تعديل</a>
+                                        <button class="btn btn-sm btn-light-warning rejectBtn" data-id="{{ $e->id }}">رفض</button>
+                                        <button class="btn btn-sm btn-icon btn-light-danger delBtn" data-id="{{ $e->id }}" title="حذف"><i class="fas fa-trash-alt"></i></button>
                                     </div>
                                 </td>
                             </tr>
@@ -66,11 +68,26 @@
 @section('scripts')
     <script>
         $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') } });
+        var lbase = "{{ url('dashboard/leases') }}";
         $(document).on('click', '.reprocessBtn', function () {
             var $btn = $(this).prop('disabled', true).text('جارٍ إعادة الجدولة…');
-            $.post("{{ url('dashboard/leases') }}/" + $btn.data('id') + '/reprocess')
+            $.post(lbase + "/" + $btn.data('id') + '/reprocess')
                 .done(function (r) { if (r.status) { location.reload(); } })
                 .fail(function () { $btn.prop('disabled', false).text('إعادة القراءة'); });
+        });
+        $(document).on('click', '.rejectBtn', function () {
+            if (!confirm('سيتم رفض هذا العقد ولن يظهر هنا. متابعة؟')) return;
+            var $btn = $(this).prop('disabled', true);
+            $.post(lbase + "/" + $btn.data('id') + '/reject')
+                .done(function (r) { if (r.status) { location.reload(); } else { alert(r.message_out || 'تعذّر الرفض'); $btn.prop('disabled', false); } })
+                .fail(function (xhr) { alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الرفض'); $btn.prop('disabled', false); });
+        });
+        $(document).on('click', '.delBtn', function () {
+            if (!confirm('سيتم حذف هذا العقد المستخرَج نهائياً. متابعة؟')) return;
+            var $btn = $(this).prop('disabled', true);
+            $.ajax({ url: lbase + "/" + $btn.data('id'), method: 'DELETE' })
+                .done(function (r) { if (r.status) { location.reload(); } else { alert(r.message_out || 'تعذّر الحذف'); $btn.prop('disabled', false); } })
+                .fail(function (xhr) { alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحذف'); $btn.prop('disabled', false); });
         });
     </script>
 @endsection

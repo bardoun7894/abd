@@ -495,6 +495,8 @@ Route::group([
         Route::post('/leases/{id}/correct', [LeaseController::class, 'correct'])->whereNumber('id')->name('leases.correct');
         Route::post('/leases/{id}/approve', [LeaseController::class, 'approve'])->whereNumber('id')->name('leases.approve');
         Route::post('/leases/{id}/reprocess', [LeaseController::class, 'reprocess'])->whereNumber('id')->name('leases.reprocess');
+        Route::post('/leases/{id}/reject', [LeaseController::class, 'reject'])->whereNumber('id')->name('leases.reject');
+        Route::delete('/leases/{id}', [LeaseController::class, 'destroy'])->whereNumber('id')->name('leases.destroy');
         Route::get('/leases/{id}/file/{name}', [LeaseController::class, 'file'])->whereNumber('id')->name('leases.file');
 
         // Spec 004 — AI extraction embedded in existing module screens
