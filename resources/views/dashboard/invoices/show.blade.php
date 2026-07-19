@@ -203,6 +203,15 @@
 
         function attachment(v) {
             if (v.image_url) {
+                // FPDI fallback pages are per-page PDFs — offer a link instead of a broken/empty cell.
+                if (/\.pdf($|[?#])/i.test(v.image_url)) {
+                    const a = document.createElement('a');
+                    a.href = v.image_url;
+                    a.target = '_blank';
+                    a.className = 'btn btn-sm btn-light-primary';
+                    a.textContent = '📄 PDF';
+                    return a.outerHTML;
+                }
                 return '<img src="' + v.image_url + '" loading="lazy" class="inv-thumb" data-full="' + v.image_url + '" title="اضغط للتكبير" style="height:46px;width:auto;border:1px solid #eee;border-radius:6px;cursor:zoom-in;transition:transform .15s" onmouseover="this.style.transform=\'scale(1.08)\'" onmouseout="this.style.transform=\'\'">';
             }
             return '<span class="text-muted">—</span>';

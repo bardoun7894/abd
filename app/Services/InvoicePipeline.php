@@ -87,9 +87,20 @@ class InvoicePipeline
             try {
                 $pages = $this->rasterizer->rasterize($pdfPath, $pagesDir);
             } catch (\Throwable $e) {
+                // Fallback produces per-page PDFs (no image attachments) — always log
+                // why, silently degrading to PDF pages cost us batch 9's attachments.
+                \Illuminate\Support\Facades\Log::warning('InvoicePipeline: rasterize failed, falling back to FPDI sub-PDF split', [
+                    'batch_id' => $batch->id,
+                    'reason' => $e->getMessage(),
+                ]);
                 try {
                     $pages = $this->splitter->split($pdfPath, $pagesDir);
                 } catch (PdfSplitException $e2) {
+                    \Illuminate\Support\Facades\Log::warning('InvoicePipeline: FPDI split failed, falling back to whole-document mode', [
+                        'batch_id' => $batch->id,
+                        'reason' => $e2->getMessage(),
+                    ]);
+
                     return $this->wholeDocument($batch, $pdfPath, str_replace(public_path().'/', '', $pagesDir.'/source.pdf'), $model);
                 }
             }

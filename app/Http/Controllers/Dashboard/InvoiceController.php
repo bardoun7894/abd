@@ -650,11 +650,11 @@ class InvoiceController extends Controller
         return response()->json(['status' => true, 'grand_total' => $grand]);
     }
 
-    /** Build a Laravel-served URL for a page image (web servers here don't serve the symlinked uploads dir). */
+    /** Build a Laravel-served URL for a page attachment (web servers here don't serve the symlinked uploads dir). */
     private function imageUrl(int $batchId, ?string $imagePath): ?string
     {
-        if (! $imagePath || ! preg_match('/\.(png|jpe?g|webp|gif)$/i', $imagePath)) {
-            return null; // PDFs / missing
+        if (! $imagePath || ! preg_match('/\.(png|jpe?g|webp|gif|pdf)$/i', $imagePath)) {
+            return null; // missing
         }
 
         return route('dashboard.invoices.file', ['id' => $batchId, 'name' => basename($imagePath)]);
