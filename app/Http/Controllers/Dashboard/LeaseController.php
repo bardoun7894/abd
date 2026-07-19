@@ -201,6 +201,14 @@ class LeaseController extends Controller
             return response()->json(['status' => false, 'message_out' => 'تمت الموافقة على هذا العقد مسبقاً'], 422);
         }
 
+        if ($extraction->needs_review && ! $request->boolean('force')) {
+            return response()->json([
+                'status' => false,
+                'message_out' => 'هذا العقد يحتاج مراجعة يدوية قبل الاعتماد. أكّد المراجعة للمتابعة.',
+                'needs_review' => true,
+            ], 422);
+        }
+
         $data = $extraction->only([
             'contract_no', 'tenant_name', 'tenant_id_no', 'landlord_name', 'landlord_id_no',
             'property_no', 'unit', 'property_type', 'address',
@@ -216,7 +224,17 @@ class LeaseController extends Controller
             return response()->json(['status' => false, 'message_out' => 'لا يمكن الموافقة: تاريخ البداية أو قيمة الإيجار مفقودة'], 422);
         }
 
-        $contract = DB::transaction(function () use ($extraction, $data) {
+        $generator = new LeaseScheduleGenerator();
+        $schedule = $generator->generateWithWarnings($data);
+        $validationErrors = $generator->validateSchedule($schedule['rows'], $data);
+        if (! empty($validationErrors)) {
+            return response()->json([
+                'status' => false,
+                'message_out' => 'جدول الدفعات غير متوافق مع إجمالي العقد أو تواريخه: '.implode(' ', $validationErrors),
+            ], 422);
+        }
+
+        $contract = DB::transaction(function () use ($extraction, $data, $schedule) {
             $contract = LeaseContract::create($data + [
                 'attach_url' => $extraction->image_path,
                 'extracted_text' => $extraction->extracted_text,
@@ -225,8 +243,7 @@ class LeaseController extends Controller
                 'create_user' => Auth::id(),
             ]);
 
-            $rows = (new LeaseScheduleGenerator())->generate($data);
-            foreach ($rows as $row) {
+            foreach ($schedule['rows'] as $row) {
                 LeasePayment::create($row + ['contract_id' => $contract->id]);
             }
 

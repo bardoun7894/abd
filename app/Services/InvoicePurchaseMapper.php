@@ -162,7 +162,7 @@ class InvoicePurchaseMapper
      * Push every eligible invoice of $batch into `purchase`, assigning the given
      * shop XOR manager. Returns a per-outcome summary.
      */
-    public function push(InvoiceBatch $batch, ?int $shopId, ?int $managerId, int $userId): array
+    public function push(InvoiceBatch $batch, ?int $shopId, ?int $managerId, int $userId, bool $allowDuplicate = false): array
     {
         $shopId = $shopId ?: null;
         $managerId = $managerId ?: null;
@@ -208,8 +208,10 @@ class InvoicePurchaseMapper
 
                 // Spec 002 FR-106 — fuzzy/file-hash duplicate against earlier invoices.
                 // Suspected duplicates are NOT auto-created; they're surfaced for a human
-                // decision (override + reason happens in the review UI, not here).
-                if (empty($a['dup_override'])) {
+                // decision. When $allowDuplicate is true the caller has confirmed this
+                // specific invoice, so skip the fuzzy block (exact purchase_no uniqueness
+                // is still enforced by the DB).
+                if (! $allowDuplicate) {
                     $dup = (new DuplicateDetector())->findDuplicate($a, (int) ($a['batch_id'] ?? 0));
                     if ($dup) {
                         $summary['fuzzy_duplicates'][] = [
@@ -221,17 +223,35 @@ class InvoicePurchaseMapper
 
                         continue;
                     }
+                } else {
+                    \App\Services\AuditLogger::log('invoice', (int) $inv->id, \App\Services\AuditLogger::DUP_OVERRIDE, [
+                        'batch_id' => $inv->batch_id,
+                        'note' => 'تم تجاوز التحقق من التكرار وترحيل الفاتورة إلى المشتريات',
+                    ]);
                 }
 
                 $row = self::buildPurchaseRow($a, $shopId, $managerId, $userId);
                 $row['supplier_id'] = $this->resolveSupplierId($a, $userId);   // Spec 002 FR-105
                 $row['created_at'] = now();
-                $purchaseId = DB::table('purchase')->insertGetId($row);
 
-                // Copy extracted line items -> purchase_items (Spec 002 FR-102).
-                $this->copyLineItems($inv, $purchaseId);
+                // Keep the purchase insert, line items, and invoice mapping atomic so a
+                // failure in copyLineItems() cannot leave an orphan purchase row that
+                // permanently blocks this invoice as a "duplicate" purchase_no.
+                $purchaseId = DB::transaction(function () use ($row, $inv) {
+                    $purchaseId = DB::table('purchase')->insertGetId($row);
+
+                    // Copy extracted line items -> purchase_items (Spec 002 FR-102).
+                    $this->copyLineItems($inv, $purchaseId);
+
+                    // Record the link on the isolated side so re-pushing is idempotent.
+                    $inv->forceFill(['purchase_id' => $purchaseId, 'mapped_at' => now()])->save();
+
+                    return $purchaseId;
+                });
 
                 // Spec 001 FR-006 — audit the approval (invoice -> purchase).
+                // Kept outside the transaction: a logging failure must not roll back the
+                // purchase that was already created.
                 \App\Services\AuditLogger::log('invoice', (int) $inv->id, \App\Services\AuditLogger::APPROVE, [
                     'batch_id' => $inv->batch_id,
                     'note' => 'مُرحّلة إلى المشتريات #'.$purchaseId,
@@ -239,9 +259,6 @@ class InvoicePurchaseMapper
 
                 // Also add the invoice image to the purchase's attachments (المرفقات).
                 $this->attachToPurchase($purchaseId, $a['image_path'] ?? null, $userId, $summary);
-
-                // Record the link on the isolated side so re-pushing is idempotent.
-                $inv->forceFill(['purchase_id' => $purchaseId, 'mapped_at' => now()])->save();
 
                 $summary['pushed']++;
                 $summary['pushed_ids'][] = $purchaseId;

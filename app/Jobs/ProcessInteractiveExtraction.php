@@ -45,7 +45,7 @@ class ProcessInteractiveExtraction implements ShouldQueue
             return;
         }
 
-        $row->forceFill(['status' => 'processing'])->save();
+        $row->forceFill(['status' => 'processing'])->save(); // updated_at marks the processing-start time for stale-job recovery.
 
         $tmp = null;
         try {

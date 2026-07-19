@@ -91,9 +91,13 @@ class LeasePipeline
             }
         }
 
+        $successful = $batch->extractions()->where('status', '!=', 'failed')->count();
+        $failed = $batch->extractions()->where('status', 'failed')->count();
+        $batchStatus = ($successful === 0 && $failed > 0) ? 'failed' : 'done';
+
         $batch->update([
-            'processed_pages' => $batch->extractions()->count(),
-            'status' => 'done',
+            'processed_pages' => $successful,
+            'status' => $batchStatus,
             'input_tokens' => $this->inTokens,
             'output_tokens' => $this->outTokens,
             'est_cost_usd' => round($this->service->costUsd($this->inTokens, $this->outTokens), 5),

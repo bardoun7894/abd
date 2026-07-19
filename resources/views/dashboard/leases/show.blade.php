@@ -82,7 +82,7 @@
                 var delBtn = ' <button class="btn btn-sm btn-icon btn-light-danger delBtn" data-id="' + v.id + '" data-approved="' + (v.contract_id ? 1 : 0) + '" title="حذف"><i class="fas fa-trash-alt"></i></button>';
                 var action = v.contract_id
                     ? '<span class="badge badge-light-success" title="رقم العقد ' + esc(v.contract_id) + '">مُعتمد</span>' + delBtn
-                    : '<button class="btn btn-sm btn-success approveBtn" data-id="' + v.id + '">موافقة</button>'
+                    : '<button class="btn btn-sm btn-success approveBtn" data-id="' + v.id + '" data-needs-review="' + (v.needs_review ? 1 : 0) + '">موافقة</button>'
                       + ' <button class="btn btn-sm btn-light-warning rejectBtn" data-id="' + v.id + '">رفض</button>' + delBtn;
                 html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
                     + cell('contract_no') + cell('tenant_name') + cell('landlord_name') + cell('unit')
@@ -109,7 +109,16 @@
         $(document).on('click', '.approveBtn', function () {
             var $btn = $(this).prop('disabled', true).text('جارٍ الموافقة…');
             var id = $btn.data('id');
-            $.post(correctBase + '/' + id + '/approve').done(function (r) {
+            var needsReview = String($btn.data('needs-review')) === '1';
+            var postData = {};
+            if (needsReview) {
+                if (!confirm('هذا العقد محدد للمراجعة. هل تريد الموافقة عليه بالقوة؟')) {
+                    $btn.prop('disabled', false).text('موافقة');
+                    return;
+                }
+                postData.force = 1;
+            }
+            $.post(correctBase + '/' + id + '/approve', postData).done(function (r) {
                 if (r.status) { poll(); } else { alert(r.message_out || 'تعذّرت الموافقة'); $btn.prop('disabled', false).text('موافقة'); }
             }).fail(function (xhr) {
                 var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّرت الموافقة';

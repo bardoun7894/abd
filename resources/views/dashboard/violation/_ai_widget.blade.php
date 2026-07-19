@@ -121,9 +121,22 @@
                         var box = document.getElementById('violation_ai_classify_result');
                         if (box) {
                             box.style.display = 'block';
-                            box.innerHTML = '<strong>الجهة المقترحة:</strong> ' + (d.side || '-') +
-                                '<br><strong>درجة الخطورة:</strong> ' + (d.severity || '-') +
-                                '<br><strong>الإجراء المقترح:</strong> ' + (d.suggested_action || '-');
+                            box.textContent = '';
+                            var side = document.createElement('div');
+                            var sideStrong = document.createElement('strong'); sideStrong.textContent = 'الجهة المقترحة:';
+                            side.appendChild(sideStrong);
+                            side.appendChild(document.createTextNode(' ' + (d.side || '-')));
+                            box.appendChild(side);
+                            var severity = document.createElement('div');
+                            var sevStrong = document.createElement('strong'); sevStrong.textContent = 'درجة الخطورة:';
+                            severity.appendChild(sevStrong);
+                            severity.appendChild(document.createTextNode(' ' + (d.severity || '-')));
+                            box.appendChild(severity);
+                            var action = document.createElement('div');
+                            var actStrong = document.createElement('strong'); actStrong.textContent = 'الإجراء المقترح:';
+                            action.appendChild(actStrong);
+                            action.appendChild(document.createTextNode(' ' + (d.suggested_action || '-')));
+                            box.appendChild(action);
                         }
                         showResultBox();
                     })

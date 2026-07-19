@@ -84,19 +84,39 @@ class DuplicateDetector
      */
     public function findDuplicate(array $data, ?int $excludeBatchId = null): ?array
     {
-        $query = Invoice::query()
-            ->where('status', '!=', 'failed')
-            ->where(function ($q) use ($data) {
-                $q->when(! empty($data['file_hash']), fn ($q) => $q->orWhere('file_hash', $data['file_hash']))
-                  ->when(! empty($data['invoice_number']), fn ($q) => $q->orWhere('invoice_number', $data['invoice_number']))
-                  ->when(! empty($data['supplier_tax_number']), fn ($q) => $q->orWhere('supplier_tax_number', $data['supplier_tax_number']));
-            });
-        if ($excludeBatchId) {
-            $query->where('batch_id', '!=', $excludeBatchId);
+        $candidates = collect();
+
+        // Authoritative matches: identical file hash or supplier tax number.
+        if (! empty($data['file_hash']) || ! empty($data['supplier_tax_number'])) {
+            $query = Invoice::query()
+                ->where('status', '!=', 'failed')
+                ->where(function ($q) use ($data) {
+                    $q->when(! empty($data['file_hash']), fn ($q) => $q->orWhere('file_hash', $data['file_hash']))
+                      ->when(! empty($data['supplier_tax_number']), fn ($q) => $q->orWhere('supplier_tax_number', $data['supplier_tax_number']));
+                });
+            if ($excludeBatchId) {
+                $query->where('batch_id', '!=', $excludeBatchId);
+            }
+            $candidates = $candidates->merge($query->limit(200)->get());
+        }
+
+        // Invoice-number matches after normalization (spacing/case tolerant).
+        // We do the normalization in PHP because the table stores the raw number.
+        if (! empty($data['invoice_number'])) {
+            $norm = InvoiceExtractionService::normNumber($data['invoice_number']);
+            $byNumber = Invoice::query()
+                ->where('status', '!=', 'failed')
+                ->whereNotNull('invoice_number')
+                ->when($excludeBatchId, fn ($q) => $q->where('batch_id', '!=', $excludeBatchId))
+                ->orderByDesc('id')
+                ->limit(200)
+                ->get()
+                ->filter(fn ($c) => InvoiceExtractionService::normNumber($c->invoice_number) === $norm);
+            $candidates = $candidates->merge($byNumber)->unique('id');
         }
 
         $best = null;
-        foreach ($query->limit(200)->get() as $cand) {
+        foreach ($candidates as $cand) {
             $s = self::score($data, $cand->getAttributes());
             if ($s >= self::BLOCK_THRESHOLD && (! $best || $s > $best['score'])) {
                 $best = ['invoice' => $cand, 'score' => $s];

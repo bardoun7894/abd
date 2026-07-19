@@ -108,6 +108,8 @@
                                 (function(){
                                     var btn=document.getElementById('ai_manager_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
                                     var statusBase = "{{ url('dashboard/ai-extract/status') }}";
+                                    function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
+                                    function setStatus(el, cls, text) { el.textContent = ''; var sp = document.createElement('span'); sp.className = cls; sp.textContent = text; el.appendChild(sp); }
 
                                     function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
 
@@ -144,7 +146,7 @@
                                         // 1) Queue the extraction (returns instantly with a job id).
                                         fetch('{{ route('dashboard.ai_extract.start', ['module' => 'manager']) }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
                                         .then(function(r){return r.json();}).then(function(res){
-                                            if(!res.status || !res.job_id){ btn.disabled=false; st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل بدء الاستخراج')+'</span>'; return; }
+                                            if(!res.status || !res.job_id){ btn.disabled=false; setStatus(st, 'text-danger', res.message_out || 'فشل بدء الاستخراج'); return; }
                                             st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...';
                                             // 2) Poll for the result (works whether the job ran inline or on a worker).
                                             var tries=0, maxTries=80; // ~2 min at 1.5s
@@ -155,7 +157,7 @@
                                                 .then(function(r){return r.json();}).then(function(s){
                                                     if(!s.status){ return; }
                                                     if(s.state==='done'){ clearInterval(iv); btn.disabled=false; applyExtraction(s.data||{}, st); }
-                                                    else if(s.state==='failed'){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">'+(s.error||'فشل الاستخراج')+'</span>'; }
+                                                    else if(s.state==='failed'){ clearInterval(iv); btn.disabled=false; setStatus(st, 'text-danger', s.error || 'فشل الاستخراج'); }
                                                 }).catch(function(){ /* transient — keep polling */ });
                                             }, 1500);
                                         }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
@@ -223,7 +225,11 @@
                                             var img=document.createElement('img'); img.src=URL.createObjectURL(f);
                                             img.style.cssText='max-height:120px;border:1px solid #eee;border-radius:8px'; box.appendChild(img);
                                         } else {
-                                            box.innerHTML='<span class="badge badge-light-primary"><i class="fa fa-file-pdf me-1"></i>'+f.name+'</span>';
+                                            var badge = document.createElement('span'); badge.className = 'badge badge-light-primary';
+                                            var icon = document.createElement('i'); icon.className = 'fa fa-file-pdf me-1';
+                                            badge.appendChild(icon);
+                                            badge.appendChild(document.createTextNode(f.name));
+                                            box.appendChild(badge);
                                         }
                                     });
                                 })();

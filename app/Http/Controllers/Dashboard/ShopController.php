@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Perm;
 use PDF;
@@ -667,6 +668,7 @@ class ShopController extends Controller
         $paymentValue = $request->input('rent_sched_value');
         $frequency = $request->input('rent_sched_freq');
         $startDate = trim((string) $request->input('rent_sdt', ''));
+        $endDate = trim((string) $request->input('rent_edt', ''));
 
         // Need at least a start date and something to size the schedule with.
         if ($startDate === '' || ($numPayments < 1 && $rentValue <= 0 && ! is_numeric($paymentValue))) {
@@ -678,20 +680,40 @@ class ShopController extends Controller
             return;
         }
 
+        $contract = [
+            'start_date' => $startDate,
+            'end_date' => $endDate !== '' ? $endDate : null,
+            'num_payments' => $numPayments > 0 ? $numPayments : 1,
+            'rent_value' => $rentValue,
+            'payment_value' => $paymentValue,
+            'payment_frequency' => $frequency,
+        ];
+
         try {
-            $rows = (new \App\Services\LeaseScheduleGenerator())->generate([
-                'start_date' => $startDate,
-                'num_payments' => $numPayments > 0 ? $numPayments : 1,
-                'rent_value' => $rentValue,
-                'payment_value' => $paymentValue,
-                'payment_frequency' => $frequency,
-            ]);
+            $generator = new \App\Services\LeaseScheduleGenerator();
+            $schedule = $generator->generateWithWarnings($contract);
+            $errors = $generator->validateSchedule($schedule['rows'], $contract);
+            if (! empty($errors)) {
+                Log::warning('Shop rent payment auto-generation skipped: schedule validation failed.', [
+                    'shop_id' => $shop_id,
+                    'errors' => $errors,
+                    'contract' => $contract,
+                ]);
+
+                return;
+            }
         } catch (\Throwable $e) {
-            return; // bad/missing start date — silently skip auto-generation
+            Log::warning('Shop rent payment auto-generation skipped: schedule generation failed.', [
+                'shop_id' => $shop_id,
+                'error' => $e->getMessage(),
+                'contract' => $contract,
+            ]);
+
+            return; // bad/missing start date or unparseable input — skip auto-generation
         }
 
         $now = Carbon::now();
-        foreach ($rows as $row) {
+        foreach ($schedule['rows'] as $row) {
             DB::table('shop_rentpay')->insert([
                 'shop_id' => $shop_id,
                 'rentpay_dt' => $row['due_date'],

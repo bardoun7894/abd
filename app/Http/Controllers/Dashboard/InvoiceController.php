@@ -152,7 +152,9 @@ class InvoiceController extends Controller
             return response()->json(['status' => false, 'message_out' => 'اختر قائد مجموعة أو محل وليس كليهما'], 422);
         }
 
-        $summary = app(InvoicePurchaseMapper::class)->push($batch, $shopId, $managerId, Auth::id());
+        $allowDuplicate = (bool) $request->input('confirm_duplicate', false);
+
+        $summary = app(InvoicePurchaseMapper::class)->push($batch, $shopId, $managerId, Auth::id(), $allowDuplicate);
 
         $msg = 'تم ترحيل '.$summary['pushed'].' فاتورة إلى المشتريات';
         if ($summary['attached']) {
