@@ -98,3 +98,19 @@ it('returns null when the purchase_attach schema has no recognizable file column
     expect(InvoicePurchaseMapper::detectAttachColumns(['purchase_attach_id', 'purchase_id', 'foo', 'bar']))->toBeNull();
     expect(InvoicePurchaseMapper::detectAttachColumns(['id', 'name']))->toBeNull();
 });
+
+it('classifies a duplicate-key DB violation as a duplicate (blocked, not an error)', function () {
+    $prev = new \PDOException("SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'NHD-1' for key 'purchase_no'");
+    $prev->errorInfo = ['23000', 1062, "Duplicate entry 'NHD-1'"];
+    $qe = new \Illuminate\Database\QueryException('mysql', 'insert into `purchase` ...', [], $prev);
+
+    expect(\App\Services\InvoicePurchaseMapper::isDuplicateKeyViolation($qe))->toBeTrue();
+});
+
+it('does NOT misclassify an unrelated DB error as a duplicate', function () {
+    $prev = new \PDOException("SQLSTATE[HY000]: General error: 1364 Field 'x' doesn't have a default value");
+    $prev->errorInfo = ['HY000', 1364, "Field 'x' has no default"];
+    $qe = new \Illuminate\Database\QueryException('mysql', 'insert into `purchase` ...', [], $prev);
+
+    expect(\App\Services\InvoicePurchaseMapper::isDuplicateKeyViolation($qe))->toBeFalse();
+});

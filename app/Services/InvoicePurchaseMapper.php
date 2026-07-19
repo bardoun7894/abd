@@ -245,12 +245,37 @@ class InvoicePurchaseMapper
 
                 $summary['pushed']++;
                 $summary['pushed_ids'][] = $purchaseId;
+            } catch (\Illuminate\Database\QueryException $qe) {
+                // Belt-and-suspenders: the exists() check above can lose a race with a
+                // concurrent push (or a manual insert) between check and insert. If the
+                // DB rejects the row as a duplicate key on purchase_no, classify it as a
+                // duplicate (blocked) rather than a generic error.
+                if (self::isDuplicateKeyViolation($qe)) {
+                    $summary['duplicates'][] = $no;
+                } else {
+                    $summary['errors'][] = ['invoice_number' => $no, 'message' => $qe->getMessage()];
+                }
             } catch (\Throwable $e) {
                 $summary['errors'][] = ['invoice_number' => $no, 'message' => $e->getMessage()];
             }
         }
 
         return $summary;
+    }
+
+    /** True when a QueryException is a unique/duplicate-key violation (any driver). */
+    public static function isDuplicateKeyViolation(\Illuminate\Database\QueryException $e): bool
+    {
+        $sqlState = (string) ($e->errorInfo[0] ?? '');
+        $driverCode = (string) ($e->errorInfo[1] ?? '');
+        $msg = strtolower($e->getMessage());
+
+        return $sqlState === '23000'              // integrity constraint violation (MySQL/others)
+            || $sqlState === '23505'              // unique_violation (Postgres)
+            || $driverCode === '1062'             // MySQL ER_DUP_ENTRY
+            || $driverCode === '1'                // SQLite constraint
+            || str_contains($msg, 'duplicate')
+            || str_contains($msg, 'unique constraint');
     }
 
     /**

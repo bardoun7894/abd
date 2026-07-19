@@ -237,6 +237,7 @@
                 function cell(f) { return '<td contenteditable="true" data-id="' + v.id + '" data-field="' + f + '" class="edit" title="' + esc(v.validation_notes) + '">' + esc(v[f]) + '</td>'; }
                 var flag = v.status == 'failed' ? '✗' : (v.needs_review ? '⚠' : '✓');
                 if (v.purchase_id) { flag += ' <span class="badge badge-light-success" title="رقم المشترى ' + esc(v.purchase_id) + '">مُرحّلة</span>'; }
+                else if (v.duplicate_in_purchase) { flag += ' <span class="badge badge-light-danger" title="رقم الفاتورة موجود مسبقاً في المشتريات — سيتم تخطيها">مكرّرة</span>'; }
                 html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')

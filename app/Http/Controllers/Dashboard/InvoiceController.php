@@ -527,7 +527,21 @@ class InvoiceController extends Controller
         $batch = $this->findOwned($id);
         $total = max(1, (int) $batch->total_pages);
 
-        $invoices = $batch->invoices()->orderBy('page_number')->get()->map(function (Invoice $i) use ($batch) {
+        $batchInvoices = $batch->invoices()->orderBy('page_number')->get();
+
+        // Proactive duplicate flag: which of this batch's invoice numbers already exist
+        // in the main `purchase` table (i.e. would be blocked on push). One cheap query.
+        $existingNos = [];
+        try {
+            $numbers = $batchInvoices->pluck('invoice_number')->filter()->map(fn ($n) => trim((string) $n))->unique()->values()->all();
+            if (! empty($numbers)) {
+                $existingNos = array_flip(array_map('strval', DB::table('purchase')->whereIn('purchase_no', $numbers)->pluck('purchase_no')->all()));
+            }
+        } catch (\Throwable $e) {
+            $existingNos = [];
+        }
+
+        $invoices = $batchInvoices->map(function (Invoice $i) use ($batch, $existingNos) {
             // ZATCA Phase-1 QR — only for invoices that have a total (i.e.
             // extraction actually produced numbers worth encoding).
             $zatcaQr = null;
@@ -559,6 +573,10 @@ class InvoiceController extends Controller
                 'image_url' => $this->imageUrl($batch->id, $i->image_path),
                 'image_quality' => $i->image_quality,
                 'purchase_id' => $i->purchase_id,
+                // True when this invoice number already exists in purchases from another
+                // batch (would be skipped as a duplicate on push). Not flagged for the
+                // invoice that is itself already mapped (that shows the "posted" badge).
+                'duplicate_in_purchase' => ! $i->purchase_id && isset($existingNos[trim((string) $i->invoice_number)]),
                 'zatca_qr' => $zatcaQr, // base64 TLV payload (Phase-1)
                 'zatca_qr_image' => $zatcaQrImage, // data:image/png;base64,... rendered via TCPDF 2D barcode
             ];
