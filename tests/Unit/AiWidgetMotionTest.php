@@ -28,24 +28,30 @@ $widgets = [
         'ids' => ['ai_extract_btn', 'ai_receipt', 'ai_extract_status', 'ai_receipt_dropzone',
             'ai_receipt_filename', 'ai_preview_expense', 'expense_price', 'expense_respon',
             'expense_month_desc', 'expense_categoty_id'],
-        'routes' => ["route('dashboard.expense.ai_extract')"],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=expense) instead of the blocking dashboard.expense.ai_extract call.
+        'routes' => ["route('dashboard.ai_extract.start', ['module' => 'expense'])"],
     ],
     'resources/views/dashboard/shop/upd_file.blade.php' => [
         'ids' => ['ai_shop_extract_btn', 'ai_shop_document', 'ai_shop_extract_status', 'ai_shop_document_dropzone',
             'ai_shop_document_filename', 'ai_preview_shop', 'comme_no', 'municip_no', 'rent_no', 'rent_name'],
-        'routes' => ["route('dashboard.shop.ai_extract')"],
+        'routes' => ["route('dashboard.shop.ai_extract_async')"],
     ],
     'resources/views/dashboard/workers/index.blade.php' => [
         'ids' => ['ai_worker_extract_btn', 'ai_worker_document', 'ai_worker_extract_status',
             'ai_worker_document_dropzone', 'ai_worker_document_filename', 'ai_preview_workers',
             'worker_name', 'ssn', 'passport_no'],
-        'routes' => ["route('dashboard.workers.ai_extract')"],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=worker) instead of the blocking dashboard.workers.ai_extract call.
+        'routes' => ["route('dashboard.ai_extract.start', ['module' => 'worker'])"],
     ],
     'resources/views/vehicles/add.blade.php' => [
         'ids' => ['ai_vehicle_extract_btn', 'ai_vehicle_document', 'ai_vehicle_extract_status',
             'ai_vehicle_document_dropzone', 'ai_vehicle_document_filename', 'plate_number', 'owner_name',
             'model', 'license_expiry', 'insurance_expiry', 'operation_card_expiry'],
-        'routes' => ['route("vehicles.ai_extract")'],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=vehicle) instead of the blocking vehicles.ai_extract call.
+        'routes' => ["route('dashboard.ai_extract.start', ['module' => 'vehicle'])"],
     ],
 ];
 

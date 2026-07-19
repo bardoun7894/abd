@@ -43,6 +43,11 @@ Route::group([
         // Phase 4 — AI usage & cost dashboard (super-admin only)
         Route::get('/settings/ai-usage', [\App\Http\Controllers\Dashboard\SettingsController::class, 'aiUsage'])->name('settings.ai_usage');
 
+        // P2 — generic async document extraction (upload → queue → poll). One endpoint
+        // for worker/expense/manager/vehicle/shop so no AI form blocks the web request.
+        Route::post('/ai-extract/{module}', [\App\Http\Controllers\Dashboard\AiExtractionController::class, 'start'])->name('ai_extract.start');
+        Route::get('/ai-extract/status/{job}', [\App\Http\Controllers\Dashboard\AiExtractionController::class, 'status'])->whereNumber('job')->name('ai_extract.status');
+
         Route::resource('/categories', CategoriesController::class);
 
         // No ->name() here: Route::resource('/workers') below already owns

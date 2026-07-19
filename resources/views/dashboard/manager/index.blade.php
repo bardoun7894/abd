@@ -107,37 +107,57 @@
                                 <script>
                                 (function(){
                                     var btn=document.getElementById('ai_manager_extract_btn'); if(!btn||btn.dataset.bound) return; btn.dataset.bound=1;
+                                    var statusBase = "{{ url('dashboard/ai-extract/status') }}";
+
+                                    function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
+
+                                    // Fill the form from an extraction result (shared by async result handling).
+                                    function applyExtraction(d, st){
+                                        setv('manager_name', d.manager_name); setv('manager_mobile', d.manager_mobile);
+                                        // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
+                                        try {
+                                            var _conf = d.confidence || {};
+                                            var _map = { manager_name:'manager_name', manager_mobile:'manager_mobile' };
+                                            Object.keys(_map).forEach(function(k){
+                                                var el = document.getElementById(_map[k]);
+                                                if (!el) return;
+                                                var c = _conf[k];
+                                                var old = document.getElementById('conf_hint_'+_map[k]); if (old) old.remove();
+                                                el.classList.remove('ai-low-conf');
+                                                if (typeof c === 'number' && c < 0.7) {
+                                                    el.classList.add('ai-low-conf');
+                                                    var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_map[k];
+                                                    h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
+                                                    el.parentNode.insertBefore(h, el.nextSibling);
+                                                }
+                                            });
+                                        } catch(e) {}
+                                        st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>';
+                                    }
+
                                     btn.addEventListener('click', function(){
                                         var f=document.getElementById('ai_manager_document'); var st=document.getElementById('ai_manager_extract_status');
                                         if(!f.files.length){ st.innerHTML='<span class="text-danger">اختر ملف الوثيقة أولاً</span>'; return; }
                                         var fd=new FormData(); fd.append('document', f.files[0]); fd.append('_token','{{ csrf_token() }}');
-                                        st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...'; btn.disabled=true;
-                                        fetch('{{ route('dashboard.manager.ai_extract') }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
+                                        st.textContent='جارٍ رفع المستند...'; btn.disabled=true;
+
+                                        // 1) Queue the extraction (returns instantly with a job id).
+                                        fetch('{{ route('dashboard.ai_extract.start', ['module' => 'manager']) }}',{method:'POST',body:fd,headers:{'X-Requested-With':'XMLHttpRequest'}})
                                         .then(function(r){return r.json();}).then(function(res){
-                                            btn.disabled=false;
-                                            if(!res.status){ st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل الاستخراج')+'</span>'; return; }
-                                            var d=res.data;
-                                            function setv(id,v){ var el=document.getElementById(id); if(el&&v!=null&&v!==''){ el.value=v; el.dispatchEvent(new Event('change')); } }
-                                            setv('manager_name', d.manager_name); setv('manager_mobile', d.manager_mobile);
-                                            // --- T6-1: confidence highlighting, appended after the existing prefill lines ---
-                                            try {
-                                                var _conf = (res.data && res.data.confidence) || {};
-                                                var _map = { manager_name:'manager_name', manager_mobile:'manager_mobile' };
-                                                Object.keys(_map).forEach(function(k){
-                                                    var el = document.getElementById(_map[k]);
-                                                    if (!el) return;
-                                                    var c = _conf[k];
-                                                    var old = document.getElementById('conf_hint_'+_map[k]); if (old) old.remove();
-                                                    el.classList.remove('ai-low-conf');
-                                                    if (typeof c === 'number' && c < 0.7) {
-                                                        el.classList.add('ai-low-conf');
-                                                        var h = document.createElement('small'); h.className='ai-conf-hint'; h.id='conf_hint_'+_map[k];
-                                                        h.textContent = '⚠ ثقة منخفضة ('+Math.round(c*100)+'%) — راجع الحقل';
-                                                        el.parentNode.insertBefore(h, el.nextSibling);
-                                                    }
-                                                });
-                                            } catch(e) {}
-                                            st.innerHTML='<span class="text-success">تم الاستخراج ✓ راجع الحقول ثم احفظ</span>';
+                                            if(!res.status || !res.job_id){ btn.disabled=false; st.innerHTML='<span class="text-danger">'+(res.message_out||'فشل بدء الاستخراج')+'</span>'; return; }
+                                            st.textContent='جارٍ الاستخراج بالذكاء الاصطناعي...';
+                                            // 2) Poll for the result (works whether the job ran inline or on a worker).
+                                            var tries=0, maxTries=80; // ~2 min at 1.5s
+                                            var iv=setInterval(function(){
+                                                tries++;
+                                                if(tries>maxTries){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">استغرق الاستخراج وقتاً طويلاً — حاول مرة أخرى أو أدخل البيانات يدوياً</span>'; return; }
+                                                fetch(statusBase+'/'+res.job_id,{headers:{'X-Requested-With':'XMLHttpRequest'}})
+                                                .then(function(r){return r.json();}).then(function(s){
+                                                    if(!s.status){ return; }
+                                                    if(s.state==='done'){ clearInterval(iv); btn.disabled=false; applyExtraction(s.data||{}, st); }
+                                                    else if(s.state==='failed'){ clearInterval(iv); btn.disabled=false; st.innerHTML='<span class="text-danger">'+(s.error||'فشل الاستخراج')+'</span>'; }
+                                                }).catch(function(){ /* transient — keep polling */ });
+                                            }, 1500);
                                         }).catch(function(){ btn.disabled=false; st.innerHTML='<span class="text-danger">خطأ في الاتصال</span>'; });
                                     });
                                 })();

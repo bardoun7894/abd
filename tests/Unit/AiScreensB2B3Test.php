@@ -35,27 +35,35 @@ $dropzones = [
     'resources/views/dashboard/expense/expense_workall.blade.php' => [
         'zoneId' => 'ai_receipt_dropzone',
         'inputId' => 'ai_receipt',
-        'guards' => ["id=\"ai_extract_btn\"", "id=\"ai_receipt_filename\"", "route('dashboard.expense.ai_extract')"],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=expense) instead of the blocking dashboard.expense.ai_extract call.
+        'guards' => ["id=\"ai_extract_btn\"", "id=\"ai_receipt_filename\"", "route('dashboard.ai_extract.start', ['module' => 'expense'])"],
     ],
     'resources/views/dashboard/shop/upd_file.blade.php' => [
         'zoneId' => 'ai_shop_document_dropzone',
         'inputId' => 'ai_shop_document',
-        'guards' => ["id=\"ai_shop_extract_btn\"", "id=\"ai_shop_document_filename\"", "route('dashboard.shop.ai_extract')"],
+        'guards' => ["id=\"ai_shop_extract_btn\"", "id=\"ai_shop_document_filename\"", "route('dashboard.shop.ai_extract_async')"],
     ],
     'resources/views/dashboard/workers/index.blade.php' => [
         'zoneId' => 'ai_worker_document_dropzone',
         'inputId' => 'ai_worker_document',
-        'guards' => ["id=\"ai_worker_extract_btn\"", "id=\"ai_worker_document_filename\"", "route('dashboard.workers.ai_extract')"],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=worker) instead of the blocking dashboard.workers.ai_extract call.
+        'guards' => ["id=\"ai_worker_extract_btn\"", "id=\"ai_worker_document_filename\"", "route('dashboard.ai_extract.start', ['module' => 'worker'])"],
     ],
     'resources/views/vehicles/add.blade.php' => [
         'zoneId' => 'ai_vehicle_document_dropzone',
         'inputId' => 'ai_vehicle_document',
-        'guards' => ["id=\"ai_vehicle_extract_btn\"", "id=\"ai_vehicle_document_filename\"", 'route("vehicles.ai_extract")'],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=vehicle) instead of the blocking vehicles.ai_extract call.
+        'guards' => ["id=\"ai_vehicle_extract_btn\"", "id=\"ai_vehicle_document_filename\"", "route('dashboard.ai_extract.start', ['module' => 'vehicle'])"],
     ],
     'resources/views/dashboard/manager/index.blade.php' => [
         'zoneId' => 'ai_manager_document_dropzone',
         'inputId' => 'ai_manager_document',
-        'guards' => ["id=\"ai_manager_extract_btn\"", "id=\"ai_manager_document_filename\"", "route('dashboard.manager.ai_extract')"],
+        // P2 async migration: transport now starts the generic job via ai_extract.start
+        // (module=manager) instead of the blocking dashboard.manager.ai_extract call.
+        'guards' => ["id=\"ai_manager_extract_btn\"", "id=\"ai_manager_document_filename\"", "route('dashboard.ai_extract.start', ['module' => 'manager'])"],
     ],
 ];
 
