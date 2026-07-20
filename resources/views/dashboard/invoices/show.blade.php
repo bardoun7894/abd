@@ -245,7 +245,7 @@
                 var warn = v.needs_review ? ' style="background:#fff4d6"' : '';
                 function cell(f) { return '<td contenteditable="true" data-id="' + v.id + '" data-field="' + f + '" class="edit" title="' + esc(v.validation_notes) + '">' + esc(v[f]) + '</td>'; }
                 var flag = v.status == 'failed' ? '✗' : (v.needs_review ? '⚠' : '✓');
-                if (v.purchase_id) { flag += ' <span class="badge badge-light-success" title="رقم المشترى ' + esc(v.purchase_id) + '">مُرحّلة</span>'; }
+                if (v.purchase_id) { flag += ' <a href="{{ route('dashboard.purchase.views') }}" target="_blank" class="badge badge-light-success text-decoration-none" title="رقم المشترى ' + esc(v.purchase_id) + ' — اضغط للعرض في المشتريات">مُرحّلة · عرض في المشتريات ↗</a>'; }
                 else if (v.duplicate_in_purchase) { flag += ' <span class="badge badge-light-danger" title="رقم الفاتورة موجود مسبقاً في المشتريات — سيتم تخطيها">مكرّرة</span>'; }
                 html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
