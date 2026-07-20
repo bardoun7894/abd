@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
@@ -17,6 +19,14 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         Registered::class => [
             SendEmailVerificationNotification::class,
+        ],
+        // Spec 008 bundle 3 (activity-log) — login/logout are the two events
+        // the LogActivity middleware deliberately skips (it only nets writes).
+        Login::class => [
+            'App\Listeners\RecordAuthActivity@handleLogin',
+        ],
+        Logout::class => [
+            'App\Listeners\RecordAuthActivity@handleLogout',
         ],
     ];
 

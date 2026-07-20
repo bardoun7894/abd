@@ -9,16 +9,26 @@ use App\Services\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Perm;
 
 /**
  * Spec 005 — admin screen to view/edit API keys & integration settings
- * (Gemini / SMS / ZATCA), plus arbitrary custom keys. Super-admin only
- * (emp_job == 1) since these are secrets. Secrets are never rendered back to
- * the page; a masked placeholder shows whether a value is set, and a blank
- * submit leaves the stored secret unchanged.
+ * (Gemini / SMS / ZATCA), plus arbitrary custom keys. Secrets are never
+ * rendered back to the page; a masked placeholder shows whether a value is
+ * set, and a blank submit leaves the stored secret unchanged.
+ *
+ * Spec 008 bundle 2 (ai-permissions) — full admin (emp_job==1) still sees/edits
+ * every group. A delegated user holding function 213 (or master 210) may also
+ * reach this page, but ONLY for the Gemini group: index() filters the registry
+ * to that group before rendering, and update() enforces a server-side
+ * gemini_*-only allowlist for non-admins — the UI filter alone is not
+ * sufficient, since a crafted POST could otherwise still overwrite SMS/ZATCA
+ * secrets.
  */
 class SettingsController extends Controller
 {
+    private const GEMINI_GROUP = 'الذكاء الاصطناعي (Gemini)';
+
     /** Grouped registry of known settings. */
     public static function registry(): array
     {
@@ -46,11 +56,22 @@ class SettingsController extends Controller
         ];
     }
 
+    /** Full admin, or a delegated user holding the AI-settings function (213/master 210). */
     private function guard(): void
     {
-        if ((int) (Auth::user()->emp_job ?? 0) !== 1) {
-            abort(403, 'هذه الصفحة مخصّصة لمدير النظام فقط');
+        if ((int) (Auth::user()->emp_job ?? 0) === 1) {
+            return;
         }
+        if (Perm::ai_access(Perm::AI_SETTINGS)) {
+            return;
+        }
+        abort(403, 'هذه الصفحة مخصّصة لمدير النظام أو من لديه صلاحية إعدادات الذكاء الاصطناعي');
+    }
+
+    /** True for a non-admin delegate — scopes them to the Gemini group only, everywhere. */
+    private function isGeminiOnlyDelegate(): bool
+    {
+        return (int) (Auth::user()->emp_job ?? 0) !== 1;
     }
 
     public function index()
@@ -58,19 +79,30 @@ class SettingsController extends Controller
         $this->guard();
 
         $registry = self::registry();
+        if ($this->isGeminiOnlyDelegate()) {
+            // Load-bearing: a 213-only user must never see SMS/ZATCA secret fields,
+            // not even masked placeholders — filter before the view ever renders.
+            $registry = array_intersect_key($registry, [self::GEMINI_GROUP => true]);
+        }
         $values = Settings::all();
 
-        // Custom (non-registry) keys the admin added earlier.
+        // Custom (non-registry) keys the admin added earlier. Computed from the FULL
+        // (unfiltered) registry so SMS/ZATCA keys are never misclassified as "custom"
+        // and leaked to a Gemini-only delegate through the back door.
         $known = [];
-        foreach ($registry as $items) {
+        foreach (self::registry() as $items) {
             foreach ($items as $it) {
                 $known[$it['key']] = true;
             }
         }
         $custom = [];
-        foreach ($values as $k => $v) {
-            if (! isset($known[$k])) {
-                $custom[$k] = $v;
+        if (! $this->isGeminiOnlyDelegate()) {
+            // Custom keys are arbitrary admin-added values of unknown sensitivity —
+            // never shown to a Gemini-only delegate at all.
+            foreach ($values as $k => $v) {
+                if (! isset($known[$k])) {
+                    $custom[$k] = $v;
+                }
             }
         }
 
@@ -84,9 +116,26 @@ class SettingsController extends Controller
     {
         $this->guard();
 
+        // Spec 008 bundle 2 (ai-permissions) — load-bearing server-side allowlist.
+        // UI filtering in index() alone is NOT enough: a Gemini-only delegate could
+        // still POST a crafted body with sms_api_key/zatca_* fields directly. Reject
+        // any registry key outside the Gemini group for a non-admin, regardless of
+        // what the form actually rendered.
+        $delegate = $this->isGeminiOnlyDelegate();
+        $geminiKeys = [];
+        foreach (self::registry()[self::GEMINI_GROUP] ?? [] as $it) {
+            $geminiKeys[$it['key']] = true;
+        }
+
         $changed = [];
-        foreach (self::registry() as $items) {
+        foreach (self::registry() as $group => $items) {
+            if ($delegate && $group !== self::GEMINI_GROUP) {
+                continue; // non-gemini group entirely off-limits to a delegate
+            }
             foreach ($items as $it) {
+                if ($delegate && ! isset($geminiKeys[$it['key']])) {
+                    continue; // defense in depth, matches the group skip above
+                }
                 $field = 'setting_'.$it['key'];
                 if (! $request->has($field)) {
                     continue;
@@ -104,7 +153,9 @@ class SettingsController extends Controller
         // Custom key/value rows (repeatable): custom_key[] + custom_value[].
         // Values render as empty password inputs — blank means "keep the stored
         // value" (same contract as registry secrets above), never wipe to ''.
-        $ckeys = (array) $request->input('custom_key', []);
+        // A Gemini-only delegate cannot touch custom keys at all — their sensitivity
+        // is unknown and index() never shows them to a delegate in the first place.
+        $ckeys = $delegate ? [] : (array) $request->input('custom_key', []);
         $cvals = (array) $request->input('custom_value', []);
         foreach ($ckeys as $i => $ck) {
             $ck = trim((string) $ck);

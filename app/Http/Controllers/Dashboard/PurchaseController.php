@@ -363,6 +363,13 @@ class PurchaseController extends Controller
      */
     public function aiExtract(Request $request)
     {
+        // Spec 008 bundle 2 (ai-permissions) — gated separately from the rest of
+        // the purchases module (which stays under ishaveaccess:9): only this AI
+        // action needs function 212 (or the master 210).
+        if (! Perm::ai_access(Perm::AI_PURCHASE_INVOICE)) {
+            return response()->json(['status' => false, 'message_out' => 'ليست لديك صلاحية لاستخدام قراءة الفواتير بالذكاء الاصطناعي'], 403);
+        }
+
         $request->validate([
             'invoice' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:20480',
         ]);

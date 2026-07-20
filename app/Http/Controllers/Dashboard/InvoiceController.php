@@ -29,15 +29,37 @@ class InvoiceController extends Controller
 {
     use ApimtitTrait; // provides get_manager() (admin -> all, others -> assigned)
 
+    /**
+     * Spec 008 bundle 2 (ai-permissions) — full-page GET screens redirect to
+     * show_not_allow; every other action here returns a JSON response and must
+     * reject with a JSON 403 instead — a redirect would return HTML and
+     * silently break the fetch()-based widgets. Replaces the old
+     * ishaveaccess:100 group gate, which leaked: any function under controller
+     * 100 (e.g. lease-only access) used to pass here too.
+     */
+    private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file'];
+
     public function __construct()
     {
-        // Same permission pattern as Shop/Workers/Moraslat dashboards.
-        // Admins (emp_job == 1) bypass; other users need a function under per_controller id 100.
-        $this->middleware('ishaveaccess:100');
-    }
+        $this->middleware(function ($request, $next) {
+            if (! Perm::ai_access(Perm::AI_PURCHASE_INVOICE)) {
+                return redirect()->route('show_not_allow');
+            }
 
-    // NOTE: the parent dashboard route group already applies `auth`. Permission
-    // wiring (ishaveaccess) is now active above.
+            return $next($request);
+        })->only(self::WEB_METHODS);
+
+        $this->middleware(function ($request, $next) {
+            if (! Perm::ai_access(Perm::AI_PURCHASE_INVOICE)) {
+                return response()->json([
+                    'status' => false,
+                    'message_out' => 'ليست لديك صلاحية لاستخدام قراءة فواتير المشتريات بالذكاء الاصطناعي',
+                ], 403);
+            }
+
+            return $next($request);
+        })->except(self::WEB_METHODS);
+    }
 
     public function index(Request $request)
     {

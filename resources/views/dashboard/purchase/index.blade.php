@@ -51,7 +51,13 @@
                         <div class="mb-0">
                             <div class="row gx-5 mb-5">
 
-                                @include('dashboard.purchase._ai_widget')
+                                {{-- Spec 008 bundle 2 (ai-permissions): hide the AI-extraction widget from a
+                                     user lacking function 212 (or master 210). The real enforcement is the
+                                     server-side guard on PurchaseController::aiExtract — this only hides
+                                     the button so a denied user isn't offered an action that will 403. --}}
+                                @if (\App\Helpers\Perm::ai_access(\App\Helpers\Perm::AI_PURCHASE_INVOICE))
+                                    @include('dashboard.purchase._ai_widget')
+                                @endif
 
                                 <div class="col-12 col-lg-2 col-md-12 col-sm-12 mb-5">
                                     <label for="purchase_no" class="form-label required fs-6 fw-bold text-dark mb-3">رقم

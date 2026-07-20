@@ -20,6 +20,8 @@ use App\Http\Controllers\Dashboard\VacationController;
 use App\Http\Controllers\Dashboard\ReportController;
 use App\Http\Controllers\Dashboard\InvoiceController;
 use App\Http\Controllers\Dashboard\LeaseController;
+use App\Http\Controllers\Dashboard\CashboxController;
+use App\Http\Controllers\Dashboard\ActivityLogController;
 
 
 //use App\Http\Controllers\Dashboard\PhotoController;
@@ -42,6 +44,10 @@ Route::group([
         Route::post('/settings/subscription/renew', [\App\Http\Controllers\Dashboard\SettingsController::class, 'renewSubscription'])->name('settings.subscription.renew');
         // Phase 4 — AI usage & cost dashboard (super-admin only)
         Route::get('/settings/ai-usage', [\App\Http\Controllers\Dashboard\SettingsController::class, 'aiUsage'])->name('settings.ai_usage');
+
+        // Spec 008 bundle 3 (activity-log) — admin-only (strict emp_job==1) read
+        // screen over the system-wide activity_log table. GET only.
+        Route::get('/activity-log', [ActivityLogController::class, 'index'])->name('activity_log.index');
 
         // P2 — generic async document extraction (upload → queue → poll). One endpoint
         // for worker/expense/manager/vehicle/shop so no AI form blocks the web request.
@@ -219,6 +225,11 @@ Route::group([
         Route::post('/shop/del_rentpay', [shopController::class, 'del_rentpay'])->name('shop.del_rentpay');
         Route::post('/shop/change_rentpay', [shopController::class, 'change_rentpay'])->name('shop.change_rentpay');
         Route::post('/shop/toggle_rentpay', [shopController::class, 'toggle_rentpay'])->name('shop.toggle_rentpay');
+        // Spec 008 bundle 1 (cashbox) — replaces the direct toggle above: unpaid->paid
+        // creates a سند قبض via CashboxService; paid->unpaid requires a mandatory
+        // reason and posts a compensating reversal ledger entry.
+        Route::post('/shop/rentpay/receipt', [shopController::class, 'rentpayReceipt'])->name('shop.rentpay.receipt');
+        Route::post('/shop/rentpay/void', [shopController::class, 'rentpayVoid'])->name('shop.rentpay.void');
         // Phase 3 — async AI document extraction (upload → queue → poll)
         Route::post('/shop/ai-extract-async', [shopController::class, 'aiExtractAsync'])->name('shop.ai_extract_async');
         Route::get('/shop/ai-extract-status/{job}', [shopController::class, 'aiExtractStatus'])->whereNumber('job')->name('shop.ai_extract_status');
@@ -506,6 +517,14 @@ Route::group([
         Route::post('/moraslat/ai-draft', [MoraslatController::class, 'aiDraft'])->name('moraslat.ai_draft');
 
         Route::get('/documents/{module}/{filename}', [\App\Http\Controllers\DocumentController::class, 'serve'])->name('documents.serve')->where('filename', '.*');
+
+        // Spec 008 bundle 1 (cashbox) — unified cash ledger + سند قبض vouchers.
+        // Perm 220 view / 221 void (2026_07_20_120200_seed_cashbox_permissions.php).
+        Route::get('/cashbox', [CashboxController::class, 'index'])->name('cashbox.index');
+        Route::post('/cashbox/ajax_search', [CashboxController::class, 'ajax_search'])->name('cashbox.ajax_search');
+        Route::post('/cashbox/receipt/store', [CashboxController::class, 'storeReceipt'])->name('cashbox.receipt.store');
+        Route::post('/cashbox/receipt/void', [CashboxController::class, 'voidReceipt'])->name('cashbox.receipt.void');
+        Route::get('/cashbox/receipt/{id}/print', [CashboxController::class, 'print'])->whereNumber('id')->name('cashbox.receipt.print');
 
     });
 
