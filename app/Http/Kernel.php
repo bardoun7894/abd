@@ -38,6 +38,10 @@ class Kernel extends HttpKernel
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             LaravelMinifyHtml::class,
+            // Spec 008 bundle 3 (activity-log) — system-wide write-capture net.
+            // Terminable: appended LAST so it wraps every web route (dashboard
+            // included); terminate() fires after the response is sent.
+            \App\Http\Middleware\LogActivity::class,
 
         ],
 

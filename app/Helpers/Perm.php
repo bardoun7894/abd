@@ -9,8 +9,28 @@ use Illuminate\Support\Str;
 
 class Perm {
 
+    // Spec 008 bundle 2 (ai-permissions) — per_function ids seeded by
+    // 2026_07_20_000010_seed_ai_feature_permissions.php, all under controller 100.
+    const AI_MASTER = 210;
+    const AI_LEASE = 211;
+    const AI_PURCHASE_INVOICE = 212;
+    const AI_SETTINGS = 213;
+
     public static function helperfunction1(){
         return "helper function 1 response";
+    }
+
+    /**
+     * Spec 008 bundle 2 — single source of truth for gating an AI feature: admin
+     * bypass, OR the master "all-AI" function (210), OR the specific feature's
+     * function id. Used identically in blade views and controllers so a route
+     * guard and its matching UI element never disagree.
+     */
+    public static function ai_access($featureId){
+        if((int)(Auth()->user()->emp_job ?? 0) === 1){
+            return true;
+        }
+        return self::get_function_access(self::AI_MASTER) || self::get_function_access($featureId);
     }
 
     public static function get_controll_access($parent_id=0){

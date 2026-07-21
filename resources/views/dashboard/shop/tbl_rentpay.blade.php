@@ -77,25 +77,35 @@
         });
           });
 
-        function toggle_rentpay(id) {
-            $.ajax({
-                url: "{{ route('dashboard.shop.toggle_rentpay') }}",
-                type: "POST",
-                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
-                data: { id: id },
-                success: function (res) {
-                    if (res && res.status) {
+        // Spec 008 bundle 1 (cashbox): clicking the badge no longer fires a silent
+        // toggle. unpaid->paid opens the receipt-capture modal (posts to
+        // dashboard.shop.rentpay.receipt); paid->unpaid opens the mandatory-reason
+        // void modal (posts to dashboard.shop.rentpay.void). Both reload the table
+        // on success instead of assuming the flip happened.
+        function toggle_rentpay(id, status, defaultAmount) {
+            if (status === 'paid') {
+                openCashboxVoidModal({
+                    url: "{{ route('dashboard.shop.rentpay.void') }}",
+                    params: { id: id },
+                    onSuccess: function () {
                         $('#rentpay_tbl').DataTable().ajax.reload(null, false);
-                    } else {
-                        alert((res && res.message_out) || 'تعذّر التحديث');
                     }
-                },
-                error: function (xhr) {
-                    alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر التحديث');
-                }
-            });
+                });
+            } else {
+                openCashboxReceiptModal({
+                    url: "{{ route('dashboard.shop.rentpay.receipt') }}",
+                    params: { id: id },
+                    defaultAmount: defaultAmount,
+                    onSuccess: function () {
+                        $('#rentpay_tbl').DataTable().ajax.reload(null, false);
+                    }
+                });
+            }
         }
       </script>
+
+      @include('dashboard.cashbox.receipt_modal')
+      @include('dashboard.cashbox.void_modal')
 
 
 

@@ -14,6 +14,8 @@ use Perm;
 use PDF;
 use App\Http\Traits\ApimtitTrait;
 use App\Models\Shop_rent;
+use App\Models\CashReceipt;
+use App\Services\CashboxService;
 use Jenssegers\Agent\Agent;
 
 use function PHPUnit\Framework\isNull;
@@ -578,12 +580,14 @@ class ShopController extends Controller
                 $row[] = $x->rentpay_note;
                 $row[] = Carbon::parse($x->created_at)->format('d-m-Y');
 
-                // Paid/unpaid badge — click to toggle (Perm 33 required).
+                // Paid/unpaid badge — click opens the receipt-capture modal (unpaid->paid)
+                // or the mandatory-reason void modal (paid->unpaid). Spec 008 bundle 1
+                // (cashbox): the click no longer flips the status directly (Perm 33 required).
                 $isPaid = ($x->rentpay_status ?? 'unpaid') === 'paid';
                 $paidTxt = $isPaid ? 'مدفوع' : 'غير مدفوع';
                 $paidCls = $isPaid ? 'btn-success' : 'btn-light-danger';
                 if (Perm::get_function_access(33)) {
-                    $row[] = '<button type="button" class="btn btn-sm ' . $paidCls . ' toggle_rentpay" onclick="toggle_rentpay(' . "'" . $x->rentpay_id . "'" . ')" title="اضغط لتغيير الحالة">' . $paidTxt . '</button>';
+                    $row[] = '<button type="button" class="btn btn-sm ' . $paidCls . ' toggle_rentpay" onclick="toggle_rentpay(' . "'" . $x->rentpay_id . "'" . ',' . "'" . ($isPaid ? 'paid' : 'unpaid') . "'" . ',' . "'" . $x->rentpay_price . "'" . ')" title="اضغط لتغيير الحالة">' . $paidTxt . '</button>';
                 } else {
                     $badge = $isPaid ? 'badge-light-success' : 'badge-light-danger';
                     $row[] = '<span class="badge ' . $badge . '">' . $paidTxt . '</span>';
@@ -729,10 +733,33 @@ class ShopController extends Controller
     }
 
     /**
-     * Client feedback (2026-07): an employee clicks a rent payment to flip it between
-     * مدفوع (paid) and غير مدفوع (unpaid). Sets/clears paid_date accordingly.
+     * ANTI-BYPASS (Spec 008 bundle 1 — cashbox): this endpoint used to flip
+     * rentpay_status directly and silently. It is now permanently gutted — a
+     * direct status flip with no سند قبض / void-reason trail would defeat the
+     * whole tamper-proofing goal of the cashbox. unpaid->paid MUST go through
+     * rentpayReceipt() below (creates a receipt + an 'in' ledger entry);
+     * paid->unpaid MUST go through rentpayVoid() below (mandatory reason +
+     * an 'out' reversal entry). Kept live (not removed/unrouted) so any old
+     * client still pointed at it gets a clear 422 instead of a silent update.
      */
     public function toggle_rentpay(Request $request)
+    {
+        if (! Perm::get_function_access(33)) {
+            return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية'], 403);
+        }
+
+        return response()->json([
+            'status' => false,
+            'message_out' => 'لم يعد بالإمكان تغيير حالة الدفعة مباشرة — استخدم سند القبض أو إلغاءه',
+        ], 422);
+    }
+
+    /**
+     * Spec 008 bundle 1 (cashbox) — unpaid->paid. Creates a سند قبض (cash_receipt)
+     * + an 'in' cashbox_ledger entry via CashboxService, then flips rentpay_status.
+     * The receipt and the status flip are committed atomically.
+     */
+    public function rentpayReceipt(Request $request)
     {
         if (! Perm::get_function_access(33)) {
             return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية'], 403);
@@ -743,21 +770,103 @@ class ShopController extends Controller
         if (! $row) {
             return response()->json(['status' => false, 'message_out' => 'الدفعة غير موجودة'], 404);
         }
+        if (($row->rentpay_status ?? 'unpaid') === 'paid') {
+            return response()->json(['status' => false, 'message_out' => 'الدفعة مسجلة كمدفوعة بالفعل'], 422);
+        }
 
-        $current = $row->rentpay_status ?? 'unpaid';
-        $new = $current === 'paid' ? 'unpaid' : 'paid';
-
-        DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->update([
-            'rentpay_status' => $new,
-            'paid_date' => $new === 'paid' ? Carbon::now()->toDateString() : null,
-            'updated_at' => Carbon::now(),
-            'update_user' => Auth::user()->id,
+        $request->validate([
+            'amount' => 'required|numeric|gt:0',
+            'receipt_date' => 'required|date',
         ]);
+
+        try {
+            $receipt = DB::transaction(function () use ($rentpay_id, $request) {
+                $receipt = (new CashboxService())->recordReceipt([
+                    'source_type' => 'shop_rentpay',
+                    'source_id' => $rentpay_id,
+                    'amount' => $request->input('amount'),
+                    'receipt_date' => $request->input('receipt_date'),
+                    'payer_name' => $request->input('payer_name'),
+                    'received_by' => Auth::user()->id,
+                    'note' => $request->input('note'),
+                    'create_user' => Auth::user()->id,
+                ]);
+
+                DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->update([
+                    'rentpay_status' => 'paid',
+                    'paid_date' => Carbon::now()->toDateString(),
+                    'updated_at' => Carbon::now(),
+                    'update_user' => Auth::user()->id,
+                ]);
+
+                return $receipt;
+            });
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
+        }
 
         return response()->json([
             'status' => true,
-            'rentpay_status' => $new,
-            'message_out' => $new === 'paid' ? 'تم التحديد كمدفوع' : 'تم التحديد كغير مدفوع',
+            'rentpay_status' => 'paid',
+            'receipt_no' => $receipt->receipt_no,
+            'message_out' => 'تم تسجيل سند القبض والتحديد كمدفوع',
+        ]);
+    }
+
+    /**
+     * Spec 008 bundle 1 (cashbox) — paid->unpaid. Mandatory reason; voids the
+     * receipt (never deletes it) and appends an 'out' reversal ledger entry via
+     * CashboxService, then flips rentpay_status back. Committed atomically.
+     */
+    public function rentpayVoid(Request $request)
+    {
+        if (! Perm::get_function_access(33)) {
+            return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية'], 403);
+        }
+
+        $rentpay_id = $request->id;
+        $row = DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->first();
+        if (! $row) {
+            return response()->json(['status' => false, 'message_out' => 'الدفعة غير موجودة'], 404);
+        }
+        if (($row->rentpay_status ?? 'unpaid') !== 'paid') {
+            return response()->json(['status' => false, 'message_out' => 'الدفعة غير مسجلة كمدفوعة'], 422);
+        }
+
+        $reason = trim((string) $request->input('reason', ''));
+        if ($reason === '') {
+            return response()->json(['status' => false, 'message_out' => 'سبب الإلغاء مطلوب'], 422);
+        }
+
+        $receipt = CashReceipt::where('source_type', 'shop_rentpay')
+            ->where('source_id', $rentpay_id)
+            ->where('is_void', 0)
+            ->orderByDesc('receipt_id')
+            ->first();
+
+        if (! $receipt) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر إيجاد سند القبض المرتبط بهذه الدفعة'], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($receipt, $reason, $rentpay_id) {
+                (new CashboxService())->voidReceipt($receipt->receipt_id, $reason, Auth::user()->id);
+
+                DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->update([
+                    'rentpay_status' => 'unpaid',
+                    'paid_date' => null,
+                    'updated_at' => Carbon::now(),
+                    'update_user' => Auth::user()->id,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'status' => true,
+            'rentpay_status' => 'unpaid',
+            'message_out' => 'تم إلغاء السند والتحديد كغير مدفوع',
         ]);
     }
 

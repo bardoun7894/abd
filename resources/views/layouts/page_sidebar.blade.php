@@ -904,7 +904,11 @@
             <?php } ?>
 
             <!-- الذكاء الاصطناعي: استخراج الفواتير وعقود الإيجار (Spec 002/003) -->
-            <?php if(Perm::get_controll_access(100)){ ?>
+            <!-- Spec 008 bundle 2 (ai-permissions): per-feature gating (211 lease /
+                 212 purchase-invoice / master 210) replaces the old group gate
+                 (get_controll_access(100)), which let ANY function under controller
+                 100 open both sub-menus regardless of which one was actually granted. -->
+            <?php if(Perm::ai_access(Perm::AI_LEASE) || Perm::ai_access(Perm::AI_PURCHASE_INVOICE)){ ?>
             <div data-kt-menu-trigger="click" class="menu-item menu-accordion @if(request()->routeIs('dashboard.invoices.*') || request()->routeIs('dashboard.leases.*')) hover show @endif">
                 <span class="menu-link">
                     <span class="menu-icon"><i class="fa fa-robot fs-3 text-primary"></i></span>
@@ -912,6 +916,7 @@
                     <span class="menu-arrow"></span>
                 </span>
                 <div class="menu-sub menu-sub-accordion menu-active-bg">
+                    <?php if(Perm::ai_access(Perm::AI_PURCHASE_INVOICE)){ ?>
                     <div class="menu-item">
                         <a class="menu-link @if(request()->routeIs('dashboard.invoices.index')) active @endif" href="{{ route('dashboard.invoices.index') }}">
                             <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
@@ -930,6 +935,8 @@
                             <span class="menu-title text-dark">تقارير الفواتير</span>
                         </a>
                     </div>
+                    <?php } ?>
+                    <?php if(Perm::ai_access(Perm::AI_LEASE)){ ?>
                     <div class="menu-item">
                         <a class="menu-link @if(request()->routeIs('dashboard.leases.index')) active @endif" href="{{ route('dashboard.leases.index') }}">
                             <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
@@ -948,12 +955,15 @@
                             <span class="menu-title text-dark">تحليلات الإيجارات</span>
                         </a>
                     </div>
+                    <?php } ?>
                 </div>
             </div>
             <?php } ?>
 
-            {{-- Spec 005 — API-key settings, super-admin only (emp_job == 1) --}}
-            @if ((int) (Auth()->user()->emp_job ?? 0) === 1)
+            {{-- Spec 005 — API-key settings. Full admin (emp_job==1), or a delegate
+                 holding the AI-settings function (213 / master 210, Spec 008 bundle 2)
+                 who only sees the Gemini group once inside (SettingsController). --}}
+            @if ((int) (Auth()->user()->emp_job ?? 0) === 1 || \App\Helpers\Perm::get_function_access(\App\Helpers\Perm::AI_SETTINGS))
                 <div class="menu-item">
                     <a class="menu-link @if (Route::currentRouteName() == 'dashboard.settings.index') active @endif"
                        href="{{ route('dashboard.settings.index') }}">
@@ -961,6 +971,40 @@
                             <i class="fas fa-key" style="font-size:20px"></i>
                         </span>
                         <span class="menu-title text-dark">إعدادات مفاتيح الـ API</span>
+                    </a>
+                </div>
+            @endif
+
+            {{-- Spec 008 bundle 1 (cashbox) — standalone sibling item, own fresh
+                 permission gate (220 view). Deliberately not nested inside the AI
+                 block above (bundle 2 rewrote that gate) or the admin-only block
+                 below (bundle 3's activity-log). --}}
+            @if (\App\Helpers\Perm::get_function_access(220))
+                <div class="menu-item">
+                    <a class="menu-link @if (Route::currentRouteName() == 'dashboard.cashbox.index') active @endif"
+                       href="{{ route('dashboard.cashbox.index') }}">
+                        <span class="menu-icon">
+                            <i class="fa fa-cash-register" style="font-size:20px"></i>
+                        </span>
+                        <span class="menu-title text-dark">الصندوق</span>
+                    </a>
+                </div>
+            @endif
+
+            {{-- Spec 008 bundle 3 (activity-log) — admin-only, strict emp_job==1.
+                 Own FRESH gate placed after the settings block, deliberately not
+                 nested inside it: bundle 2 (ai-permissions) relaxed the settings
+                 guard to also admit function 213 (AI-settings delegate), and that
+                 delegate must NOT see this link (the server still enforces 403,
+                 but nesting here would contradict the admin-only intent). --}}
+            @if ((int) (Auth()->user()->emp_job ?? 0) === 1)
+                <div class="menu-item">
+                    <a class="menu-link @if (Route::currentRouteName() == 'dashboard.activity_log.index') active @endif"
+                       href="{{ route('dashboard.activity_log.index') }}">
+                        <span class="menu-icon">
+                            <i class="fa fa-history" style="font-size:20px"></i>
+                        </span>
+                        <span class="menu-title text-dark">سجل نشاط الموظفين</span>
                     </a>
                 </div>
             @endif

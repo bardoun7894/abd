@@ -37,3 +37,7 @@ ai-knowledge-base/
 # Metronic theme bundle — lives on the server, pulled via:
 #   rsync -az MyContabo:/var/www/abd/public/assets/ public/assets/
 /public/assets/
+
+# agent/tooling artifacts (never commit)
+/.claude/
+/--cache-result/
