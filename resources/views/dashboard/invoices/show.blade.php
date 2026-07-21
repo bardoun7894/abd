@@ -69,6 +69,11 @@
                     🔍 إعادة الفحص بدقة أعلى
                 </button>
                 <span id="rescanResult" class="fs-7 ms-2"></span>
+                <button type="button" id="reprocessMissingBtn" class="btn btn-sm btn-light-warning"
+                    title="يعيد قراءة الصفحات التي عادت فارغة أو فشلت فقط — لا يمسّ الفواتير المُرحّلة أو المُصحّحة يدوياً">
+                    ♻️ إعادة قراءة الناقصة/الفاشلة
+                </button>
+                <span id="reprocessMissingResult" class="fs-7 ms-2"></span>
             </div>
         </div>
     </div>
@@ -183,6 +188,8 @@
     <div id="invLb" style="position:fixed;inset:0;z-index:1090;display:none;place-items:center;background:rgba(0,0,0,.85);padding:30px" onclick="this.style.display='none'">
         <img id="invLbImg" src="" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 30px 80px -20px #000">
     </div>
+
+    @include('dashboard.invoices._edit_modal')
 @endsection
 @section('scripts')
     <script>
@@ -247,13 +254,16 @@
                 var flag = v.status == 'failed' ? '✗' : (v.needs_review ? '⚠' : '✓');
                 if (v.purchase_id) { flag += ' <a href="{{ route('dashboard.purchase.views') }}" target="_blank" class="badge badge-light-success text-decoration-none" title="رقم المشترى ' + esc(v.purchase_id) + ' — اضغط للعرض في المشتريات">مُرحّلة · عرض في المشتريات ↗</a>'; }
                 else if (v.duplicate_in_purchase) { flag += ' <span class="badge badge-light-danger" title="رقم الفاتورة موجود مسبقاً في المشتريات — سيتم تخطيها">مكرّرة</span>'; }
+                else if (v.block_reason) { flag += ' <span class="badge badge-light-warning" title="لن تُرحّل تلقائياً: ' + esc(v.block_reason) + '">لن تُرحّل: ' + esc(v.block_reason) + '</span>'; }
                 html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')
                     + '<td>' + qualityBadge(v.image_quality) + '</td>'
                     + '<td>' + flag + '</td><td>' + attachment(v) + '</td>'
                     + '<td>' + zatcaQr(v) + '</td>'
-                    + '<td class="d-print-none text-center"><button type="button" class="btn btn-sm btn-icon btn-light-danger js-del-inv" data-id="' + v.id + '" data-posted="' + (v.purchase_id ? 1 : 0) + '" title="حذف الفاتورة"><i class="bi bi-trash"></i></button></td>'
+                    + '<td class="d-print-none text-center text-nowrap">'
+                    + '<button type="button" class="btn btn-sm btn-light-primary js-edit-inv mb-1" data-id="' + v.id + '" title="تعديل / إدخال يدوي"><i class="bi bi-pencil-square me-1"></i>تعديل</button> '
+                    + '<button type="button" class="btn btn-sm btn-icon btn-light-danger js-del-inv" data-id="' + v.id + '" data-posted="' + (v.purchase_id ? 1 : 0) + '" title="حذف الفاتورة"><i class="bi bi-trash"></i></button></td>'
                     + '</tr>';
             });
             $('#rows').html(html || '<tr><td colspan="13" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
@@ -357,6 +367,85 @@
                     $('#rescanResult').html('<span class="text-danger">' + esc(m) + '</span>');
                 })
                 .always(function () { $btn.prop('disabled', false); });
+        });
+
+        // Spec 009 bundle C — re-read ONLY missing/failed pages (never posted or
+        // user-corrected ones), then resume polling so progress/results refresh live.
+        $('#reprocessMissingBtn').on('click', function () {
+            var $btn = $(this).prop('disabled', true);
+            $('#reprocessMissingResult').removeClass('text-danger text-success').html('<span class="text-muted">جارٍ الجدولة…</span>');
+            $.post("{{ route('dashboard.invoices.reprocess-missing', $batch->id) }}", {})
+                .done(function (r) {
+                    $('#reprocessMissingResult').html('<span class="text-success">' + esc(r.message_out || 'تمت الجدولة') + '</span>');
+                    if (timer) { clearInterval(timer); }
+                    poll();
+                    timer = setInterval(poll, 3000);
+                })
+                .fail(function (xhr) {
+                    var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر جدولة إعادة القراءة';
+                    $('#reprocessMissingResult').html('<span class="text-danger">' + esc(m) + '</span>');
+                })
+                .always(function () { $btn.prop('disabled', false); });
+        });
+
+        // Bundle A — visible manual edit. Opens the shared modal, populated from the
+        // row's own .edit[data-field] cells; on save it POSTs only the changed fields
+        // to /{id}/correct (which clears needs_review), then re-polls to refresh.
+        var invEditFields = ['supplier_name', 'supplier_tax_number', 'invoice_number', 'invoice_date', 'amount_before_vat', 'vat_amount', 'total_incl_vat'];
+        function invEditRead(id) {
+            var vals = {};
+            $('.edit[data-id="' + id + '"][data-field]').each(function () {
+                var f = $(this).data('field'), v = $(this).text().trim();
+                if (f === 'invoice_date' && v) { v = v.slice(0, 10); }
+                vals[f] = v;
+            });
+            return vals;
+        }
+        $(document).on('click', '.js-edit-inv', function () {
+            var id = String($(this).data('id'));
+            var vals = invEditRead(id);
+            var $form = $('#invEditForm');
+            $form.find('[name="__id"]').val(id);
+            invEditFields.forEach(function (f) { $form.find('[name="' + f + '"]').val(vals[f] != null ? vals[f] : ''); });
+            $form.data('orig', vals);
+            $('#invEditResult').text('').removeClass('text-success text-danger');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('invEditModal')).show();
+        });
+        // Post changed fields SEQUENTIALLY, not in parallel: correct() writes to the
+        // isolated SQLite invoices connection and recomputes the batch total on each
+        // call — concurrent writes risk SQLITE_BUSY on multi-worker prod. Chaining
+        // mirrors the one-field-at-a-time contenteditable blur behaviour.
+        function invEditPostSeq(id, changed, onDone, onFail) {
+            var i = 0;
+            (function next() {
+                if (i >= changed.length) { onDone(); return; }
+                var c = changed[i++];
+                $.post(correctBase + '/' + id + '/correct', { field: c.field, value: c.value }).done(next).fail(onFail);
+            })();
+        }
+        $(document).on('click', '#invEditSave', function () {
+            var $form = $('#invEditForm'), id = $form.find('[name="__id"]').val(), orig = $form.data('orig') || {};
+            var $btn = $(this).prop('disabled', true);
+            var changed = [];
+            invEditFields.forEach(function (f) {
+                var nv = $form.find('[name="' + f + '"]').val().trim();
+                if (nv !== (orig[f] != null ? String(orig[f]) : '')) { changed.push({ field: f, value: nv }); }
+            });
+            var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('invEditModal'));
+            if (!changed.length) { modal.hide(); $btn.prop('disabled', false); return; }
+            $('#invEditResult').text('جارٍ الحفظ…').removeClass('text-success text-danger');
+            invEditPostSeq(id, changed,
+                function () {
+                    $('#invEditResult').text('تم الحفظ').addClass('text-success');
+                    modal.hide();
+                    $btn.prop('disabled', false);
+                    poll();
+                },
+                function (xhr) {
+                    var m = (xhr && xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحفظ';
+                    $('#invEditResult').text(m).addClass('text-danger');
+                    $btn.prop('disabled', false);
+                });
         });
 
         // Image lightbox (rows render dynamically → delegated handler)

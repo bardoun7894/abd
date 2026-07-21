@@ -55,6 +55,10 @@ return [
         'timeout' => env('GEMINI_TIMEOUT', 120),
         // Per-page HTTP timeout and deadline buffer for AI calls inside pipelines.
         'page_timeout' => env('GEMINI_PAGE_TIMEOUT', 120),
+        // Whole-batch job deadline (seconds). Feeds ProcessInvoiceBatch::$timeout and
+        // the pipeline soft-deadline in tandem. Raised from the old hardcoded 1800 so
+        // large (50-80 invoice) PDFs finish their tail pages instead of being force-failed.
+        'batch_timeout' => env('GEMINI_BATCH_TIMEOUT', 3600),
         'retries' => env('GEMINI_RETRIES', 4),
         // Interactive (synchronous, in-request) AI extract — shop/purchase/worker/... form
         // prefill. Short fast-fail budget so a slow/overloaded model does not hold a

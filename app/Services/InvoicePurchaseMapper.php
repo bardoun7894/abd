@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Invoice;
 use App\Models\InvoiceBatch;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -148,22 +149,17 @@ class InvoicePurchaseMapper
      * (المرفقات / purchase_attach). Never throws — a failed attach must not undo
      * the purchase that was already created. Records the outcome in $summary.
      */
-    private function attachToPurchase(int $purchaseId, ?string $fileUrl, int $userId, array &$summary): void
+    private function attachToPurchase(int $purchaseId, ?string $fileUrl, int $userId, bool $tableExists, ?array $map, array &$summary): void
     {
-        if (! $fileUrl) {
+        if (! $fileUrl || ! $tableExists) {
+            return;
+        }
+        if (! $map) {
+            $summary['attach_skipped']++;
+
             return;
         }
         try {
-            if (! Schema::hasTable('purchase_attach')) {
-                return;
-            }
-            $map = self::detectAttachColumns(Schema::getColumnListing('purchase_attach'));
-            if (! $map) {
-                $summary['attach_skipped']++;
-
-                return;
-            }
-
             $row = [$map['fk'] => $purchaseId, $map['file'] => $fileUrl];
             if ($map['create_user']) {
                 $row['create_user'] = $userId;
@@ -194,6 +190,43 @@ class InvoicePurchaseMapper
     }
 
     /**
+     * Human-readable Arabic reason this invoice (raw attributes) cannot be pushed,
+     * or null when it IS eligible. Mirrors isEligible() exactly and is pure over the
+     * raw attribute array. Multiple blockers are composed (·-joined) in the same
+     * order isEligible() checks them, so the user sees every reason at once.
+     */
+    public static function ineligibilityReason(array $a): ?string
+    {
+        if (self::isEligible($a)) {
+            return null;
+        }
+
+        // Already mapped is the "posted" state, not a blocker to surface.
+        if (filled($a['purchase_id'] ?? null)) {
+            return null;
+        }
+
+        $reasons = [];
+        if (($a['status'] ?? null) !== 'done') {
+            $reasons[] = 'لم يكتمل الاستخراج';
+        }
+        if ((int) ($a['needs_review'] ?? 0) === 1) {
+            $reasons[] = 'بحاجة مراجعة';
+        }
+        if (! filled($a['invoice_number'] ?? null)) {
+            $reasons[] = 'رقم الفاتورة مفقود';
+        }
+        if (! filled($a['invoice_date'] ?? null)) {
+            $reasons[] = 'التاريخ مفقود';
+        }
+        if (! filled($a['total_incl_vat'] ?? null)) {
+            $reasons[] = 'الإجمالي مفقود';
+        }
+
+        return $reasons ? implode(' · ', $reasons) : null;
+    }
+
+    /**
      * Push every eligible invoice of $batch into `purchase`, assigning the given
      * shop XOR manager. Returns a per-outcome summary.
      *
@@ -220,13 +253,32 @@ class InvoicePurchaseMapper
             'fuzzy_duplicates' => [],
             'already_mapped' => 0,
             'ineligible' => 0,
+            'ineligible_details' => [],
             'errors' => [],
             'attached' => 0,
             'attach_skipped' => 0,
             'attach_errors' => [],
+            'link_errors' => [], // purchase committed, sqlite link write failed -> needs manual reconcile
         ];
 
-        foreach ($batch->invoices()->orderBy('page_number')->get() as $inv) {
+        // C3 — introspect purchase_attach schema ONCE per push (was per-invoice in attachToPurchase()).
+        $attachTableExists = false;
+        $attachMap = null;
+        try {
+            $attachTableExists = Schema::hasTable('purchase_attach');
+            if ($attachTableExists) {
+                $attachMap = self::detectAttachColumns(Schema::getColumnListing('purchase_attach'));
+            }
+        } catch (\Throwable $e) {
+            $attachTableExists = false;
+            $attachMap = null;
+        }
+
+        // C2 — memory-bounded chunking for large batches; synchronous summary contract unchanged.
+        // Row count of the matched set is invariant (we set purchase_id but never remove rows),
+        // so plain offset chunk() is offset-stable here.
+        $batch->invoices()->orderBy('page_number')->chunk(100, function ($invoices) use ($shopId, $managerId, $userId, $dupOverride, $attachTableExists, $attachMap, &$summary) {
+        foreach ($invoices as $inv) {
             $a = $inv->getAttributes(); // raw, uncast values — matches buildPurchaseRow's contract
 
             if (filled($a['purchase_id'] ?? null)) {
@@ -236,6 +288,11 @@ class InvoicePurchaseMapper
             }
             if (! self::isEligible($a)) {
                 $summary['ineligible']++;
+                $summary['ineligible_details'][] = [
+                    'id' => (int) $inv->id,
+                    'invoice_number' => $a['invoice_number'] ?? null,
+                    'reason' => self::ineligibilityReason($a),
+                ];
 
                 continue;
             }
@@ -284,20 +341,47 @@ class InvoicePurchaseMapper
                 $row['supplier_id'] = $this->resolveSupplierId($a, $userId);   // Spec 002 FR-105
                 $row['created_at'] = now();
 
-                // Keep the purchase insert, line items, and invoice mapping atomic so a
-                // failure in copyLineItems() cannot leave an orphan purchase row that
-                // permanently blocks this invoice as a "duplicate" purchase_no.
+                // Keep the purchase insert + its line items atomic on the MAIN (mysql)
+                // connection: a failure in copyLineItems() must not leave an orphan
+                // purchase row that blocks this invoice as a "duplicate" purchase_no.
+                // The cross-connection sqlite link write is DELIBERATELY kept OUT of
+                // this transaction (see below) — an sqlite autocommit inside a mysql tx
+                // survives a mysql rollback and strands the invoice as "posted" against
+                // a purchase that never committed (phantom-posted divergence).
                 $purchaseId = DB::transaction(function () use ($row, $inv) {
                     $purchaseId = DB::table('purchase')->insertGetId($row);
 
                     // Copy extracted line items -> purchase_items (Spec 002 FR-102).
                     $this->copyLineItems($inv, $purchaseId);
 
-                    // Record the link on the isolated side so re-pushing is idempotent.
-                    $inv->forceFill(['purchase_id' => $purchaseId, 'mapped_at' => now()])->save();
-
                     return $purchaseId;
                 });
+
+                // Record the link on the isolated (invoices/sqlite) side ONLY AFTER the
+                // mysql transaction has committed. Failure modes are now both safe:
+                //   - mysql rolls back  -> exception above, link never written, invoice
+                //     stays eligible and re-postable (no divergence).
+                //   - mysql commits, link write fails -> purchase exists but invoice is
+                //     unlinked; a later re-push is caught by the purchase_no UNIQUE guard
+                //     (classified as a duplicate), so it can NEVER double-create.
+                // Log + record a reconcile item so the operator can fix the link by hand.
+                try {
+                    $inv->forceFill(['purchase_id' => $purchaseId, 'mapped_at' => now()])->save();
+                } catch (\Throwable $linkEx) {
+                    Log::error('invoice push: purchase committed but sqlite link write failed', [
+                        'invoice_id' => (int) $inv->id,
+                        'purchase_id' => $purchaseId,
+                        'invoice_number' => $no,
+                        'batch_id' => $inv->batch_id ?? ($a['batch_id'] ?? null),
+                        'error' => $linkEx->getMessage(),
+                    ]);
+                    $summary['link_errors'][] = [
+                        'invoice_id' => (int) $inv->id,
+                        'invoice_number' => $no,
+                        'purchase_id' => $purchaseId,
+                        'message' => 'رُحّلت الفاتورة إلى المشترى #'.$purchaseId.' لكن تعذّر ربطها (يلزم ربط يدوي): '.$linkEx->getMessage(),
+                    ];
+                }
 
                 // Spec 001 FR-006 — audit the approval (invoice -> purchase).
                 // Kept outside the transaction: a logging failure must not roll back the
@@ -308,7 +392,7 @@ class InvoicePurchaseMapper
                 ]);
 
                 // Also add the invoice image to the purchase's attachments (المرفقات).
-                $this->attachToPurchase($purchaseId, $a['image_path'] ?? null, $userId, $summary);
+                $this->attachToPurchase($purchaseId, $a['image_path'] ?? null, $userId, $attachTableExists, $attachMap, $summary);
 
                 $summary['pushed']++;
                 $summary['pushed_ids'][] = $purchaseId;
@@ -326,6 +410,22 @@ class InvoicePurchaseMapper
                 $summary['errors'][] = ['invoice_number' => $no, 'message' => $e->getMessage()];
             }
         }
+        });
+
+        Log::info('invoice push summary', [
+            'batch_id' => $batch->id,
+            'user_id' => $userId,
+            'shop_id' => $shopId,
+            'manager_id' => $managerId,
+            'pushed' => $summary['pushed'],
+            'pushed_ids' => $summary['pushed_ids'],
+            'already_mapped' => $summary['already_mapped'],
+            'ineligible' => $summary['ineligible'],
+            'ineligible_details' => $summary['ineligible_details'],
+            'duplicates' => count($summary['duplicates']),
+            'fuzzy_duplicates' => count($summary['fuzzy_duplicates']),
+            'errors' => count($summary['errors']),
+        ]);
 
         return $summary;
     }

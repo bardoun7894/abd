@@ -114,3 +114,36 @@ it('does NOT misclassify an unrelated DB error as a duplicate', function () {
 
     expect(\App\Services\InvoicePurchaseMapper::isDuplicateKeyViolation($qe))->toBeFalse();
 });
+
+it('returns null ineligibility reason for a clean eligible invoice', function () {
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice()))->toBeNull();
+});
+
+it('returns null reason for an already-mapped invoice (posted, not blocked)', function () {
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice(['purchase_id' => 99])))->toBeNull();
+});
+
+it('flags a needs-review invoice with the review reason', function () {
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice(['needs_review' => true])))
+        ->toBe('بحاجة مراجعة');
+});
+
+it('flags an unfinished extraction', function () {
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice(['status' => 'processing'])))
+        ->toBe('لم يكتمل الاستخراج');
+});
+
+it('flags each missing required field individually', function () {
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice(['invoice_number' => null])))
+        ->toBe('رقم الفاتورة مفقود');
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice(['invoice_date' => null])))
+        ->toBe('التاريخ مفقود');
+    expect(InvoicePurchaseMapper::ineligibilityReason(mappableInvoice(['total_incl_vat' => null])))
+        ->toBe('الإجمالي مفقود');
+});
+
+it('composes multiple blockers in isEligible-check order', function () {
+    expect(InvoicePurchaseMapper::ineligibilityReason(
+        mappableInvoice(['needs_review' => true, 'invoice_number' => null])
+    ))->toBe('بحاجة مراجعة · رقم الفاتورة مفقود');
+});

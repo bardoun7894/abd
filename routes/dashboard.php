@@ -491,6 +491,7 @@ Route::group([
         Route::post('/invoices/{id}/approve', [InvoiceController::class, 'approve'])->whereNumber('id')->name('invoices.approve');
         Route::post('/invoices/{id}/reject', [InvoiceController::class, 'reject'])->whereNumber('id')->name('invoices.reject');
         Route::post('/invoices/{id}/reprocess', [InvoiceController::class, 'reprocess'])->whereNumber('id')->name('invoices.reprocess');
+        Route::post('/invoices/{id}/reprocess-missing', [InvoiceController::class, 'reprocessMissing'])->whereNumber('id')->name('invoices.reprocess-missing');
         Route::post('/invoices/{id}/draft', [InvoiceController::class, 'draft'])->whereNumber('id')->name('invoices.draft');
         Route::post('/invoices/{id}/manual-entry', [InvoiceController::class, 'manualEntry'])->whereNumber('id')->name('invoices.manual-entry');
         Route::get('/invoices/{id}/file/{name}', [InvoiceController::class, 'file'])->whereNumber('id')->name('invoices.file');

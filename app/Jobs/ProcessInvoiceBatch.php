@@ -33,7 +33,13 @@ class ProcessInvoiceBatch implements ShouldQueue
         public int $batchId,
         public ?string $model = null,
         public string $mode = 'whole',
-    ) {}
+        public bool $onlyMissing = false,
+    ) {
+        // Configurable, raised deadline (was hardcoded 1800). Serialized with the job;
+        // $deadline in handle() is derived from $this->timeout so both the pipeline soft
+        // budget and the worker hard-kill move together.
+        $this->timeout = (int) config('services.gemini.batch_timeout', 1800);
+    }
 
     public function handle(InvoicePipeline $pipeline): void
     {
@@ -63,7 +69,7 @@ class ProcessInvoiceBatch implements ShouldQueue
             $deadline = microtime(true) + $this->timeout;
             $pipeline->run($batch, $abs, $this->model, function ($done, $total) use ($batch) {
                 $batch->forceFill(['processed_pages' => $done, 'total_pages' => $total])->save();
-            }, $this->mode, $deadline);
+            }, $this->mode, $deadline, $this->onlyMissing);
             Log::info('Invoice batch processing completed', ['batch_id' => $this->batchId]);
         } catch (\Throwable $e) {
             Log::error('Invoice batch processing failed', [

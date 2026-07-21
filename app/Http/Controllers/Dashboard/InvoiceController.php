@@ -16,6 +16,7 @@ use App\Services\InvoicePurchaseMapper;
 use App\Services\ZatcaQrGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Perm;
@@ -205,6 +206,9 @@ class InvoiceController extends Controller
         }
         if ($summary['ineligible']) {
             $msg .= ' — '.$summary['ineligible'].' غير مؤهلة (تحتاج مراجعة أو ناقصة)';
+        }
+        if (count($summary['link_errors'] ?? [])) {
+            $msg .= ' — '.count($summary['link_errors']).' بحاجة ربط يدوي (رُحّلت لكن تعذّر الربط)';
         }
         if (count($summary['errors'])) {
             $msg .= ' — '.count($summary['errors']).' أخطاء';
@@ -412,6 +416,53 @@ class InvoiceController extends Controller
         return response()->json(['status' => true, 'message_out' => 'تمت جدولة إعادة الفحص بدقة أعلى']);
     }
 
+    /**
+     * Spec 009 bundle C — re-read ONLY the missing/failed pages of a batch (large
+     * PDFs whose tail came back empty on the deadline, or pages flagged for review).
+     * Dispatches ProcessInvoiceBatch with onlyMissing=true so the pipeline skips
+     * already-finalized (done + not needs_review + has number) or already-posted
+     * pages — never clobbering correct() fixes or a posted invoice->purchase link,
+     * and saving tokens vs. a full rescan().
+     */
+    public function reprocessMissing($id)
+    {
+        $batch = $this->findOwned($id);
+
+        if ($batch->status === 'processing') {
+            return response()->json(['status' => false, 'message_out' => 'الدفعة قيد المعالجة بالفعل، يرجى الانتظار'], 409);
+        }
+
+        $missing = $batch->invoices()
+            ->whereNull('purchase_id')
+            ->where(function ($q) {
+                $q->where('status', 'failed')
+                    ->orWhere('needs_review', true)
+                    ->orWhereNull('invoice_number')
+                    ->orWhere('invoice_number', '');
+            })
+            ->count();
+
+        if ($missing === 0) {
+            return response()->json(['status' => false, 'message_out' => 'لا توجد صفحات ناقصة أو فاشلة لإعادة قراءتها'], 422);
+        }
+
+        $batch->forceFill(['status' => 'processing', 'error_message' => null])->save();
+
+        ProcessInvoiceBatch::dispatch(
+            $batch->id,
+            $batch->model_used,
+            config('services.gemini.default_mode', 'split'),
+            true // onlyMissing
+        );
+
+        AuditLogger::log('invoice', null, AuditLogger::REPROCESS, [
+            'batch_id' => $batch->id,
+            'note' => 'reprocess missing/failed pages only ('.$missing.' page(s))',
+        ]);
+
+        return response()->json(['status' => true, 'message_out' => 'تمت جدولة إعادة قراءة '.$missing.' صفحة ناقصة/فاشلة']);
+    }
+
     /** Save the current field values without finalizing the invoice. */
     public function draft($id)
     {
@@ -613,6 +664,9 @@ class InvoiceController extends Controller
                 // batch (would be skipped as a duplicate on push). Not flagged for the
                 // invoice that is itself already mapped (that shows the "posted" badge).
                 'duplicate_in_purchase' => ! $i->purchase_id && isset($existingNos[trim((string) $i->invoice_number)]),
+                // Why this invoice will NOT auto-post (isEligible gate mirror), or null
+                // when it is postable. Raw attrs — same contract as push().
+                'block_reason' => InvoicePurchaseMapper::ineligibilityReason($i->getAttributes()),
                 'zatca_qr' => $zatcaQr, // base64 TLV payload (Phase-1)
                 'zatca_qr_image' => $zatcaQrImage, // data:image/png;base64,... rendered via TCPDF 2D barcode
             ];
@@ -712,17 +766,19 @@ class InvoiceController extends Controller
      */
     private function zatcaQrImageDataUri(string $base64Tlv): ?string
     {
-        try {
-            $barcode = new \TCPDF2DBarcode($base64Tlv, 'QRCODE,M');
-            $png = $barcode->getBarcodePngData(4, 4);
-            if ($png === false || $png === null) {
+        return Cache::rememberForever('zatca_qr_'.md5($base64Tlv), function () use ($base64Tlv) {
+            try {
+                $barcode = new \TCPDF2DBarcode($base64Tlv, 'QRCODE,M');
+                $png = $barcode->getBarcodePngData(4, 4);
+                if ($png === false || $png === null) {
+                    return null;
+                }
+
+                return 'data:image/png;base64,'.base64_encode($png);
+            } catch (\Throwable $e) {
                 return null;
             }
-
-            return 'data:image/png;base64,'.base64_encode($png);
-        } catch (\Throwable $e) {
-            return null;
-        }
+        });
     }
 
     private function findOwned($id): InvoiceBatch

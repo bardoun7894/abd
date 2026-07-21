@@ -6,6 +6,11 @@
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
             <a href="{{ route('dashboard.invoices.show', $batch->id) }}" class="btn btn-sm btn-light-primary">→ عرض نتائج الدفعة</a>
+            <button type="button" id="reprocessMissingBtn" class="btn btn-sm btn-light-warning" data-batch="{{ $batch->id }}"
+                title="يعيد قراءة الصفحات الناقصة/الفاشلة فقط — لا يمسّ المُرحّلة أو المُصحّحة يدوياً">
+                ♻️ إعادة قراءة الناقصة/الفاشلة
+            </button>
+            <span id="reprocessMissingResult" class="fs-7 ms-2"></span>
         </div>
         <div class="fs-6 text-muted">دفعة #{{ $batch->id }} — {{ $batch->original_filename }} — {{ $invoices->count() }} فاتورة</div>
     </div>
@@ -126,6 +131,7 @@
                 </div>
             </div>
             <div class="card-footer d-flex gap-2 flex-wrap">
+                <button class="btn btn-sm btn-light-primary js-edit-inv" data-id="{{ $invoice->id }}" title="تعديل / إدخال يدوي"><i class="bi bi-pencil-square me-1"></i>تعديل / إدخال يدوي</button>
                 <button class="btn btn-sm btn-success act-approve" data-id="{{ $invoice->id }}">✓ اعتماد</button>
                 <button class="btn btn-sm btn-danger act-reject" data-id="{{ $invoice->id }}">✗ رفض</button>
                 <button class="btn btn-sm btn-light-warning act-reprocess" data-id="{{ $invoice->id }}">↻ إعادة معالجة الدفعة</button>
@@ -138,6 +144,8 @@
     <div id="invLb" style="position:fixed;inset:0;z-index:1090;display:none;place-items:center;background:rgba(0,0,0,.85);padding:30px" onclick="this.style.display='none'">
         <img id="invLbImg" src="" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 30px 80px -20px #000">
     </div>
+
+    @include('dashboard.invoices._edit_modal')
 @endsection
 @section('scripts')
     <script>
@@ -172,9 +180,76 @@
         $(document).on('click', '.act-reprocess', function () { runAction('reprocess', $(this).data('id'), $(this)); });
         $(document).on('click', '.act-draft', function () { runAction('draft', $(this).data('id'), $(this)); });
 
+        $('#reprocessMissingBtn').on('click', function () {
+            var $btn = $(this).prop('disabled', true);
+            $('#reprocessMissingResult').removeClass('text-success text-danger').text('جارٍ الجدولة…');
+            $.post(correctBase + '/' + $btn.data('batch') + '/reprocess-missing', {})
+                .done(function (r) { $('#reprocessMissingResult').addClass('text-success').text(r.message_out || 'تمت الجدولة'); })
+                .fail(function (xhr) { $('#reprocessMissingResult').addClass('text-danger').text((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الجدولة'); })
+                .always(function () { $btn.prop('disabled', false); });
+        });
+
         $(document).on('click', '.inv-thumb', function () {
             document.getElementById('invLbImg').src = this.dataset.full;
             document.getElementById('invLb').style.display = 'grid';
+        });
+
+        // Bundle A — visible manual edit. Opens the shared modal, populated from the
+        // card's own .edit[data-field] spans; on save it POSTs only the changed fields
+        // to /{id}/correct (which clears needs_review), then reloads to refresh badges.
+        var invEditFields = ['supplier_name', 'supplier_tax_number', 'invoice_number', 'invoice_date', 'amount_before_vat', 'vat_amount', 'total_incl_vat'];
+        function invEditRead(id) {
+            var vals = {};
+            $('.edit[data-id="' + id + '"][data-field]').each(function () {
+                var f = $(this).data('field'), v = $(this).text().trim();
+                if (f === 'invoice_date' && v) { v = v.slice(0, 10); }
+                vals[f] = v;
+            });
+            return vals;
+        }
+        $(document).on('click', '.js-edit-inv', function () {
+            var id = String($(this).data('id'));
+            var vals = invEditRead(id);
+            var $form = $('#invEditForm');
+            $form.find('[name="__id"]').val(id);
+            invEditFields.forEach(function (f) { $form.find('[name="' + f + '"]').val(vals[f] != null ? vals[f] : ''); });
+            $form.data('orig', vals);
+            $('#invEditResult').text('').removeClass('text-success text-danger');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('invEditModal')).show();
+        });
+        // Post changed fields SEQUENTIALLY, not in parallel: correct() writes to the
+        // isolated SQLite invoices connection and recomputes the batch total on each
+        // call — concurrent writes risk SQLITE_BUSY on multi-worker prod. Chaining
+        // mirrors the one-field-at-a-time contenteditable blur behaviour.
+        function invEditPostSeq(id, changed, onDone, onFail) {
+            var i = 0;
+            (function next() {
+                if (i >= changed.length) { onDone(); return; }
+                var c = changed[i++];
+                $.post(correctBase + '/' + id + '/correct', { field: c.field, value: c.value }).done(next).fail(onFail);
+            })();
+        }
+        $(document).on('click', '#invEditSave', function () {
+            var $form = $('#invEditForm'), id = $form.find('[name="__id"]').val(), orig = $form.data('orig') || {};
+            var $btn = $(this).prop('disabled', true);
+            var changed = [];
+            invEditFields.forEach(function (f) {
+                var nv = $form.find('[name="' + f + '"]').val().trim();
+                if (nv !== (orig[f] != null ? String(orig[f]) : '')) { changed.push({ field: f, value: nv }); }
+            });
+            var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('invEditModal'));
+            if (!changed.length) { modal.hide(); $btn.prop('disabled', false); return; }
+            $('#invEditResult').text('جارٍ الحفظ…').removeClass('text-success text-danger');
+            invEditPostSeq(id, changed,
+                function () {
+                    $('#invEditResult').text('تم الحفظ').addClass('text-success');
+                    window.location.reload();
+                },
+                function (xhr) {
+                    var m = (xhr && xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحفظ';
+                    $('#invEditResult').text(m).addClass('text-danger');
+                    $btn.prop('disabled', false);
+                });
         });
     </script>
 @endsection

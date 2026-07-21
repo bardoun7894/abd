@@ -26,7 +26,7 @@ class InvoicePipeline
      * Run the pipeline for a batch. $onProgress($done,$total) is called as pages finish
      * so the UI/CLI can show progress. Returns the number of invoices stored.
      */
-    public function run(InvoiceBatch $batch, string $pdfPath, ?string $model = null, ?callable $onProgress = null, string $mode = 'whole', ?float $deadline = null): int
+    public function run(InvoiceBatch $batch, string $pdfPath, ?string $model = null, ?callable $onProgress = null, string $mode = 'whole', ?float $deadline = null, bool $onlyMissing = false): int
     {
         $model = $model ?: config('services.gemini.default_model');
 
@@ -45,7 +45,7 @@ class InvoicePipeline
         if ($mode === 'whole') {
             $made = $this->wholeDocument($batch, $pdfPath, $savedRel, $model, $deadline);
         } else {
-            $made = $this->perPage($batch, $pdfPath, $pagesDir, $model, $onProgress, $mode === 'grouped', $deadline);
+            $made = $this->perPage($batch, $pdfPath, $pagesDir, $model, $onProgress, $mode === 'grouped', $deadline, $onlyMissing);
         }
 
         // Flag repeated invoice numbers (within this batch and against earlier ones) for review.
@@ -72,7 +72,7 @@ class InvoicePipeline
         return $made;
     }
 
-    private function perPage(InvoiceBatch $batch, string $pdfPath, string $pagesDir, string $model, ?callable $onProgress, bool $group, ?float $deadline = null): int
+    private function perPage(InvoiceBatch $batch, string $pdfPath, string $pagesDir, string $model, ?callable $onProgress, bool $group, ?float $deadline = null, bool $onlyMissing = false): int
     {
         // Spec 002 FR-101 — a directly-uploaded image (JPG/PNG/WEBP) is already a
         // single "page": copy it into the batch dir and use it as-is, no rasterize/split.
@@ -114,10 +114,21 @@ class InvoicePipeline
         foreach ($pages as $i => $pagePath) {
             $pageNo = $i + 1;
             $rel = str_replace(public_path().'/', '', $pagePath);
+            if ($onlyMissing && $this->pageAlreadyGood($batch, $pageNo)) {
+                if ($onProgress) {
+                    $onProgress($pageNo, $total);
+                }
+
+                continue;
+            }
             if ($this->deadlineExceeded($deadline)) {
                 for ($j = $i; $j < $total; $j++) {
+                    $remPageNo = $j + 1;
+                    if ($onlyMissing && $this->pageAlreadyGood($batch, $remPageNo)) {
+                        continue;
+                    }
                     $remainingRel = str_replace(public_path().'/', '', $pages[$j]);
-                    $rows[] = ['page_number' => $j + 1, 'invoice_number' => null, '_image' => $remainingRel, '_error' => 'Job deadline exceeded before AI call'];
+                    $rows[] = ['page_number' => $remPageNo, 'invoice_number' => null, '_image' => $remainingRel, '_error' => 'Job deadline exceeded before AI call'];
                 }
                 break;
             }
@@ -166,6 +177,26 @@ class InvoicePipeline
         }
 
         return $made;
+    }
+
+    /**
+     * True when page $pageNo already holds a finalized invoice a 're-read missing
+     * only' pass must NOT overwrite: already posted to purchases, or successfully
+     * extracted / user-corrected (done, not flagged, has an invoice number).
+     */
+    private function pageAlreadyGood(InvoiceBatch $batch, int $pageNo): bool
+    {
+        $inv = $batch->invoices()->where('page_number', $pageNo)->first();
+        if (! $inv) {
+            return false;
+        }
+        if (filled($inv->purchase_id)) {
+            return true;
+        }
+
+        return $inv->status === 'done'
+            && ! (bool) $inv->needs_review
+            && filled($inv->invoice_number);
     }
 
     /** @var \Illuminate\Support\Collection<int, \App\Models\Invoice>|null */
