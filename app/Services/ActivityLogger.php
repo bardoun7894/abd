@@ -27,7 +27,7 @@ class ActivityLogger
     public static function log(string $action, ?string $entityType = null, ?int $entityId = null, ?string $summary = null, array $opts = []): void
     {
         try {
-            DB::table('activity_log')->insert([
+            DB::table('employee_activity_log')->insert([
                 'user_id' => $opts['user'] ?? null,
                 'action' => $action,
                 'entity_type' => $entityType,

@@ -21,11 +21,15 @@ class CreateActivityLogTable extends Migration
 {
     public function up()
     {
-        if (Schema::hasTable('activity_log')) {
+        // Table named employee_activity_log (NOT activity_log): the Spatie
+        // Activitylog package already owns an `activity_log` table on some
+        // deploys (log_name/causer_id/subject_type schema). Sharing the name
+        // made hasTable() early-return and left our columns uncreated → 500.
+        if (Schema::hasTable('employee_activity_log')) {
             return;
         }
 
-        Schema::create('activity_log', function (Blueprint $table) {
+        Schema::create('employee_activity_log', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable()->index();
             $table->string('action', 30)->index(); // create|update|delete|login|logout|write
@@ -41,6 +45,6 @@ class CreateActivityLogTable extends Migration
 
     public function down()
     {
-        Schema::dropIfExists('activity_log');
+        Schema::dropIfExists('employee_activity_log');
     }
 }

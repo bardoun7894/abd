@@ -38,7 +38,7 @@ beforeEach(function () {
     DB::purge('sqlite');
     DB::setDefaultConnection('sqlite');
 
-    Schema::create('activity_log', function ($table) {
+    Schema::create('employee_activity_log', function ($table) {
         $table->id();
         $table->unsignedBigInteger('user_id')->nullable();
         $table->string('action', 30);
@@ -84,8 +84,8 @@ it('logs a genuine write: POST dashboard.workers.del_workers creates one row wit
     $mw->handle($request, fn ($r) => response('ok'));
     $mw->terminate($request, response('ok'));
 
-    expect(DB::table('activity_log')->count())->toBe(1);
-    $row = DB::table('activity_log')->first();
+    expect(DB::table('employee_activity_log')->count())->toBe(1);
+    $row = DB::table('employee_activity_log')->first();
     expect($row->action)->toBe('delete');
     expect($row->entity_type)->toBe('workers');
     expect((int) $row->user_id)->toBe(7);
@@ -112,7 +112,7 @@ it('skips reads: GET requests and read-POSTs (ajax_search_*, tbl, print, export,
         $mw->terminate($request, response('ok'));
     }
 
-    expect(DB::table('activity_log')->count())->toBe(0);
+    expect(DB::table('employee_activity_log')->count())->toBe(0);
 });
 
 it('records login/logout via auth events, and the middleware does not double-capture the login/logout routes', function () {
@@ -121,8 +121,8 @@ it('records login/logout via auth events, and the middleware does not double-cap
     (new RecordAuthActivity())->handleLogin(new Login('web', $user, false));
     (new RecordAuthActivity())->handleLogout(new Logout('web', $user));
 
-    expect(DB::table('activity_log')->where('action', 'login')->count())->toBe(1);
-    expect(DB::table('activity_log')->where('action', 'logout')->count())->toBe(1);
+    expect(DB::table('employee_activity_log')->where('action', 'login')->count())->toBe(1);
+    expect(DB::table('employee_activity_log')->where('action', 'logout')->count())->toBe(1);
 
     // Middleware must skip the login/logout routes even if it saw them (auth
     // listener owns those) — no additional rows from a middleware pass.
@@ -136,7 +136,7 @@ it('records login/logout via auth events, and the middleware does not double-cap
         $mw->terminate($request, response('ok'));
     }
 
-    expect(DB::table('activity_log')->count())->toBe(2); // still just the 2 auth-event rows
+    expect(DB::table('employee_activity_log')->count())->toBe(2); // still just the 2 auth-event rows
 });
 
 it('snapshots the actor in handle(): terminate() uses the value captured then, not a fresh Auth read', function () {
@@ -157,12 +157,12 @@ it('snapshots the actor in handle(): terminate() uses the value captured then, n
     // fail the assertion below.
     $mw->terminate($request, response('ok'));
 
-    $row = DB::table('activity_log')->first();
+    $row = DB::table('employee_activity_log')->first();
     expect((int) $row->user_id)->toBe(99);
 });
 
 it('never throws from ActivityLogger even when the underlying insert fails', function () {
-    Schema::drop('activity_log'); // force the insert to fail
+    Schema::drop('employee_activity_log'); // force the insert to fail
 
     expect(fn () => ActivityLogger::log(ActivityLogger::CREATE, 'workers', 1, 'test'))
         ->not->toThrow(Throwable::class);
@@ -177,7 +177,7 @@ it('returns 403 for a non-admin (emp_job != 1) and 200 for an admin (emp_job == 
     Auth::swap(null);
     Auth::shouldReceive('user')->andReturn((object) ['id' => 42, 'emp_job' => 1, 'dark' => 0, 'name' => 'مدير النظام', 'email' => 'admin@example.com', 'role_id' => null]);
 
-    DB::table('activity_log')->insert([
+    DB::table('employee_activity_log')->insert([
         'user_id' => 7, 'action' => 'delete', 'entity_type' => 'workers',
         'entity_id' => 55, 'summary' => 'delete workers via dashboard.workers.del_workers',
         'route' => 'dashboard.workers.del_workers', 'method' => 'POST', 'ip' => '127.0.0.1',
@@ -200,7 +200,7 @@ it('returns 403 for a non-admin (emp_job != 1) and 200 for an admin (emp_job == 
 it('filters by user_id, action, entity_type and date range, and paginates', function () {
     Auth::shouldReceive('user')->andReturn((object) ['id' => 42, 'emp_job' => 1, 'dark' => 0, 'name' => 'مدير النظام', 'email' => 'admin@example.com', 'role_id' => null]);
 
-    DB::table('activity_log')->insert([
+    DB::table('employee_activity_log')->insert([
         ['user_id' => 7, 'action' => 'delete', 'entity_type' => 'workers', 'entity_id' => 1, 'summary' => 'a', 'created_at' => '2026-07-01 10:00:00'],
         ['user_id' => 42, 'action' => 'create', 'entity_type' => 'shop', 'entity_id' => 2, 'summary' => 'b', 'created_at' => '2026-07-10 10:00:00'],
         ['user_id' => 7, 'action' => 'update', 'entity_type' => 'workers', 'entity_id' => 1, 'summary' => 'c', 'created_at' => '2026-07-15 10:00:00'],
@@ -228,15 +228,15 @@ it('filters by user_id, action, entity_type and date range, and paginates', func
 });
 
 it('runs the create_activity_log migration cleanly and idempotently (re-run no-ops via hasTable)', function () {
-    Schema::drop('activity_log');
+    Schema::drop('employee_activity_log');
 
     require_once base_path('database/migrations/2026_07_20_000020_create_activity_log_table.php');
 
     (new CreateActivityLogTable())->up();
     (new CreateActivityLogTable())->up(); // second run must no-op, not throw
 
-    expect(Schema::hasTable('activity_log'))->toBeTrue();
+    expect(Schema::hasTable('employee_activity_log'))->toBeTrue();
 
     (new CreateActivityLogTable())->down();
-    expect(Schema::hasTable('activity_log'))->toBeFalse();
+    expect(Schema::hasTable('employee_activity_log'))->toBeFalse();
 });

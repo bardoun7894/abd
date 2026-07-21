@@ -41,37 +41,37 @@ class ActivityLogController extends Controller
 
         $page_title = 'سجل نشاط الموظفين';
 
-        $query = DB::table('activity_log')
-            ->leftJoin('users', 'activity_log.user_id', '=', 'users.id')
-            ->select('activity_log.*', 'users.name as user_name');
+        $query = DB::table('employee_activity_log')
+            ->leftJoin('users', 'employee_activity_log.user_id', '=', 'users.id')
+            ->select('employee_activity_log.*', 'users.name as user_name');
 
         if ($request->filled('user_id')) {
-            $query->where('activity_log.user_id', $request->query('user_id'));
+            $query->where('employee_activity_log.user_id', $request->query('user_id'));
         }
         if ($request->filled('action')) {
-            $query->where('activity_log.action', $request->query('action'));
+            $query->where('employee_activity_log.action', $request->query('action'));
         }
         if ($request->filled('entity_type')) {
-            $query->where('activity_log.entity_type', $request->query('entity_type'));
+            $query->where('employee_activity_log.entity_type', $request->query('entity_type'));
         }
         if ($request->filled('date_from')) {
-            $query->whereDate('activity_log.created_at', '>=', $request->query('date_from'));
+            $query->whereDate('employee_activity_log.created_at', '>=', $request->query('date_from'));
         }
         if ($request->filled('date_to')) {
-            $query->whereDate('activity_log.created_at', '<=', $request->query('date_to'));
+            $query->whereDate('employee_activity_log.created_at', '<=', $request->query('date_to'));
         }
         if ($request->filled('q')) {
             $q = $request->query('q');
-            $query->where('activity_log.summary', 'like', "%{$q}%");
+            $query->where('employee_activity_log.summary', 'like', "%{$q}%");
         }
 
-        $rows = $query->orderByDesc('activity_log.created_at')
+        $rows = $query->orderByDesc('employee_activity_log.created_at')
             ->paginate(50)
             ->withQueryString();
 
         $users = DB::table('users')->orderBy('name')->get(['id', 'name']);
-        $actions = DB::table('activity_log')->distinct()->orderBy('action')->pluck('action');
-        $entities = DB::table('activity_log')->whereNotNull('entity_type')->distinct()->orderBy('entity_type')->pluck('entity_type');
+        $actions = DB::table('employee_activity_log')->distinct()->orderBy('action')->pluck('action');
+        $entities = DB::table('employee_activity_log')->whereNotNull('entity_type')->distinct()->orderBy('entity_type')->pluck('entity_type');
 
         $filters = $request->only(['user_id', 'action', 'entity_type', 'date_from', 'date_to', 'q']);
         $actionLabels = self::ACTION_LABELS;
