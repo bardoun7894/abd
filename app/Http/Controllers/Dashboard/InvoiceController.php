@@ -203,7 +203,72 @@ class InvoiceController extends Controller
         }
         $sheet->freezePane('A3');
 
-        $filename = 'سجل-عمليات-الاستخراج-'.date('Ymd-His').'.xlsx';
+        // Second sheet — الفواتير المستخرجة: every extracted invoice row belonging to
+        // the exported batches (not just the file list), answering "وين الفواتير".
+        $exportedIds = $batches->pluck('id')->all();
+        $invoices = ! empty($exportedIds)
+            ? Invoice::whereIn('batch_id', $exportedIds)->orderBy('batch_id')->orderBy('page_number')->get()
+            : collect();
+
+        $inv = $ss->createSheet();
+        $inv->setRightToLeft(true);
+        $inv->setTitle('الفواتير المستخرجة');
+
+        $inv->mergeCells('A1:M1');
+        $inv->setCellValue('A1', 'شركة صباح النور — الفواتير المستخرجة');
+        $inv->getRowDimension(1)->setRowHeight(30);
+        $inv->getStyle('A1')->getFont()->setBold(true)->setSize(15)->getColor()->setARGB('FFFFFFFF');
+        $inv->getStyle('A1')->getFill()->setFillType($FILL)->getStartColor()->setARGB($EMERALD_DEEP);
+        $inv->getStyle('A1')->getAlignment()->setHorizontal($CENTER)->setVertical($VCENTER);
+
+        $col = 'A';
+        foreach (['#', 'رقم الفاتورة', 'التاريخ', 'المورد', 'الرقم الضريبي', 'قبل الضريبة', 'الضريبة', 'الإجمالي', 'الحالة', 'بحاجة مراجعة', 'مُرحّلة (#مشترى)', 'دفعة', 'صفحة'] as $h) {
+            $inv->setCellValue($col.'2', $h);
+            $col++;
+        }
+        $inv->getRowDimension(2)->setRowHeight(22);
+        $inv->getStyle('A2:M2')->getFont()->setBold(true)->setSize(11)->getColor()->setARGB('FFFFFFFF');
+        $inv->getStyle('A2:M2')->getFill()->setFillType($FILL)->getStartColor()->setARGB($EMERALD);
+        $inv->getStyle('A2:M2')->getAlignment()->setHorizontal($CENTER)->setVertical($VCENTER);
+
+        $r = 3;
+        $n = 1;
+        foreach ($invoices as $v) {
+            $inv->setCellValue('A'.$r, $n);
+            $inv->setCellValue('B'.$r, (string) $v->invoice_number);
+            $inv->setCellValue('C'.$r, (string) $v->invoice_date);
+            $inv->setCellValue('D'.$r, (string) $v->supplier_name);
+            $inv->setCellValue('E'.$r, (string) $v->supplier_tax_number);
+            $inv->setCellValue('F'.$r, (float) $v->amount_before_vat);
+            $inv->setCellValue('G'.$r, (float) $v->vat_amount);
+            $inv->setCellValue('H'.$r, (float) $v->total_incl_vat);
+            $inv->setCellValue('I'.$r, (string) $v->status);
+            $inv->setCellValue('J'.$r, $v->needs_review ? 'نعم' : 'لا');
+            $inv->setCellValue('K'.$r, $v->purchase_id);
+            $inv->setCellValue('L'.$r, $v->batch_id);
+            $inv->setCellValue('M'.$r, $v->page_number);
+            if ($r % 2 === 0) {
+                $inv->getStyle('A'.$r.':M'.$r)->getFill()->setFillType($FILL)->getStartColor()->setARGB($ZEBRA);
+            }
+            $r++;
+            $n++;
+        }
+        $invLast = max(2, $r - 1);
+        if ($r > 3) {
+            $inv->getStyle('A3:M'.$invLast)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setARGB($BORDER);
+            $inv->getStyle('F3:H'.$invLast)->getNumberFormat()->setFormatCode('#,##0.00');
+        }
+        $inv->getStyle('A2:M'.$invLast)->getBorders()->getOutline()
+            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM)->getColor()->setARGB($EMERALD);
+        foreach (range('A', 'M') as $c) {
+            $inv->getColumnDimension($c)->setAutoSize(true);
+        }
+        $inv->freezePane('A3');
+
+        $ss->setActiveSheetIndex(0);
+
+        $filename = 'سجل-الاستخراج-والفواتير-'.date('Ymd-His').'.xlsx';
 
         return response()->streamDownload(function () use ($ss) {
             (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($ss))->save('php://output');
