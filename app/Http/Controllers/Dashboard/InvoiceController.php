@@ -105,14 +105,37 @@ class InvoiceController extends Controller
         $sheet->setRightToLeft(true);
         $sheet->setTitle('سجل عمليات الاستخراج');
 
+        // Brand palette (صباح النور emerald) for a professional, colored export.
+        $EMERALD = '1B8A5A';
+        $EMERALD_DEEP = '116149';
+        $ZEBRA = 'EAF6F0';
+        $BORDER = 'CBD5D1';
+        $FILL = \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID;
+        $CENTER = \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER;
+        $VCENTER = \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER;
+
+        // Row 1 — merged brand title.
+        $sheet->mergeCells('A1:F1');
+        $sheet->setCellValue('A1', 'شركة صباح النور — سجل عمليات الاستخراج');
+        $sheet->getRowDimension(1)->setRowHeight(30);
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(15)->getColor()->setARGB('FFFFFFFF');
+        $sheet->getStyle('A1')->getFill()->setFillType($FILL)->getStartColor()->setARGB($EMERALD_DEEP);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal($CENTER)->setVertical($VCENTER);
+
+        // Row 2 — column headers.
         $col = 'A';
         foreach (['#', 'الملف', 'عدد الفواتير', 'الإجمالي العام', 'الحالة', 'التاريخ'] as $h) {
-            $sheet->setCellValue($col.'1', $h);
+            $sheet->setCellValue($col.'2', $h);
             $col++;
         }
-        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
+        $sheet->getRowDimension(2)->setRowHeight(22);
+        $sheet->getStyle('A2:F2')->getFont()->setBold(true)->setSize(11)->getColor()->setARGB('FFFFFFFF');
+        $sheet->getStyle('A2:F2')->getFill()->setFillType($FILL)->getStartColor()->setARGB($EMERALD);
+        $sheet->getStyle('A2:F2')->getAlignment()->setHorizontal($CENTER)->setVertical($VCENTER);
 
-        $row = 2;
+        $row = 3;
+        $sumCount = 0;
+        $sumTotal = 0.0;
         foreach ($batches as $b) {
             $sheet->setCellValue('A'.$row, $b->id);
             $sheet->setCellValue('B'.$row, (string) $b->original_filename);
@@ -120,11 +143,37 @@ class InvoiceController extends Controller
             $sheet->setCellValue('D'.$row, (float) $b->grand_total);
             $sheet->setCellValue('E'.$row, (string) $b->status);
             $sheet->setCellValue('F'.$row, optional($b->created_at)->format('Y-m-d H:i'));
+            if ($row % 2 === 0) {
+                $sheet->getStyle('A'.$row.':F'.$row)->getFill()->setFillType($FILL)->getStartColor()->setARGB($ZEBRA);
+            }
+            $sumCount += (int) $b->processed_pages;
+            $sumTotal += (float) $b->grand_total;
             $row++;
         }
+        $lastRow = max(2, $row - 1);
+
+        // Borders + amount formatting on the data block.
+        if ($row > 3) {
+            $sheet->getStyle('A3:F'.$lastRow)->getBorders()->getAllBorders()
+                ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN)->getColor()->setARGB($BORDER);
+            $sheet->getStyle('D3:D'.$lastRow)->getNumberFormat()->setFormatCode('#,##0.00');
+        }
+
+        // Totals row.
+        $tr = $row;
+        $sheet->setCellValue('B'.$tr, 'الإجمالي');
+        $sheet->setCellValue('C'.$tr, $sumCount);
+        $sheet->setCellValue('D'.$tr, $sumTotal);
+        $sheet->getStyle('A'.$tr.':F'.$tr)->getFont()->setBold(true);
+        $sheet->getStyle('A'.$tr.':F'.$tr)->getFill()->setFillType($FILL)->getStartColor()->setARGB('D7EEE3');
+        $sheet->getStyle('D'.$tr)->getNumberFormat()->setFormatCode('#,##0.00');
+
+        $sheet->getStyle('A2:F'.$tr)->getBorders()->getOutline()
+            ->setBorderStyle(\PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM)->getColor()->setARGB($EMERALD);
         foreach (range('A', 'F') as $c) {
             $sheet->getColumnDimension($c)->setAutoSize(true);
         }
+        $sheet->freezePane('A3');
 
         $filename = 'سجل-عمليات-الاستخراج-'.date('Ymd-His').'.xlsx';
 
