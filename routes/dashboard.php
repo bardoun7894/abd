@@ -475,6 +475,10 @@ Route::group([
         // AI invoice extraction (isolated `invoices` DB)
         Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
         Route::get('/invoices/upload', [InvoiceController::class, 'create'])->name('invoices.create');
+        // Export the extraction-operations log (invoice batches) to Excel — respects
+        // the same q/status filters as index(). Non-numeric path, so it never collides
+        // with the whereNumber-constrained /invoices/{id} routes below.
+        Route::get('/invoices/export', [InvoiceController::class, 'exportBatches'])->name('invoices.export');
         Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/invoices/{id}', [InvoiceController::class, 'show'])->whereNumber('id')->name('invoices.show');
         Route::get('/invoices/{id}/status', [InvoiceController::class, 'status'])->whereNumber('id')->name('invoices.status');

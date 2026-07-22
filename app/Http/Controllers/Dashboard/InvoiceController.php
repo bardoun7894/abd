@@ -38,7 +38,7 @@ class InvoiceController extends Controller
      * ishaveaccess:100 group gate, which leaked: any function under controller
      * 100 (e.g. lease-only access) used to pass here too.
      */
-    private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file'];
+    private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file', 'exportBatches'];
 
     public function __construct()
     {
@@ -81,6 +81,58 @@ class InvoiceController extends Controller
             ->withQueryString();
 
         return view('dashboard.invoices.index', compact('page_title', 'batches', 'filters'));
+    }
+
+    /**
+     * Export the extraction-operations log (سجل عمليات الاستخراج) to Excel. Mirrors
+     * index()'s query EXACTLY — same q/status filters and the same non-admin
+     * user_id scoping — so a user only ever exports batches they can already see.
+     */
+    public function exportBatches(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+        $status = (string) $request->query('status', '');
+
+        $batches = InvoiceBatch::query()
+            ->when(Auth::user()->emp_job != 1, fn ($qb) => $qb->where('user_id', Auth::id()))
+            ->when($q !== '', fn ($qb) => $qb->where('original_filename', 'like', '%'.$q.'%'))
+            ->when($status !== '', fn ($qb) => $qb->where('status', $status))
+            ->orderByDesc('id')
+            ->get();
+
+        $ss = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $ss->getActiveSheet();
+        $sheet->setRightToLeft(true);
+        $sheet->setTitle('سجل عمليات الاستخراج');
+
+        $col = 'A';
+        foreach (['#', 'الملف', 'عدد الفواتير', 'الإجمالي العام', 'الحالة', 'التاريخ'] as $h) {
+            $sheet->setCellValue($col.'1', $h);
+            $col++;
+        }
+        $sheet->getStyle('A1:F1')->getFont()->setBold(true);
+
+        $row = 2;
+        foreach ($batches as $b) {
+            $sheet->setCellValue('A'.$row, $b->id);
+            $sheet->setCellValue('B'.$row, (string) $b->original_filename);
+            $sheet->setCellValue('C'.$row, (int) $b->processed_pages);
+            $sheet->setCellValue('D'.$row, (float) $b->grand_total);
+            $sheet->setCellValue('E'.$row, (string) $b->status);
+            $sheet->setCellValue('F'.$row, optional($b->created_at)->format('Y-m-d H:i'));
+            $row++;
+        }
+        foreach (range('A', 'F') as $c) {
+            $sheet->getColumnDimension($c)->setAutoSize(true);
+        }
+
+        $filename = 'سجل-عمليات-الاستخراج-'.date('Ymd-His').'.xlsx';
+
+        return response()->streamDownload(function () use ($ss) {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($ss))->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     public function create()

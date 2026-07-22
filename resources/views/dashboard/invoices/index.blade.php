@@ -40,7 +40,11 @@
             <div class="card-title">
                 <h3 class="fw-bold mb-0">سجل عمليات الاستخراج</h3>
             </div>
-            <div class="card-toolbar">
+            <div class="card-toolbar gap-2">
+                <a href="{{ route('dashboard.invoices.export', request()->only('q', 'status')) }}"
+                   class="btn btn-sm btn-light-success fw-bold">
+                    <i class="bi bi-file-earmark-excel me-1"></i>تصدير Excel
+                </a>
                 <span class="text-muted fs-7 sn-num">{{ $batches->total() }} دفعة</span>
             </div>
         </div>
