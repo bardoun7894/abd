@@ -32,10 +32,39 @@ use Illuminate\Support\Facades\Auth;
  */
 class LogActivity
 {
-    /** Route-name/URI tokens that mark a request as a READ — never logged. */
+    /** Route-name/URI tokens that mark a request as a READ/poll — never logged. */
     private const READ_TOKENS = [
         'ajax_search', 'tbl', 'search', 'status', 'print', 'export', 'views',
         'show', 'index', 'datatable', 'dtbl', 'list',
+        // Notification/count polls fire on a timer on every page — pure noise.
+        'notify', 'count', 'poll', 'ping', 'heartbeat', 'unseen', 'unread',
+    ];
+
+    /** Action → Arabic verb for the human-readable summary. */
+    private const ACTION_AR = [
+        'create' => 'إنشاء', 'update' => 'تعديل', 'delete' => 'حذف', 'write' => 'إجراء على',
+    ];
+
+    /** Entity token (first route segment) → Arabic noun. */
+    private const ENTITY_AR = [
+        'invoices' => 'الفواتير', 'purchase' => 'المشتريات', 'shop' => 'المحلات',
+        'workers' => 'الموظفين', 'worker' => 'الموظفين', 'expense' => 'المصاريف',
+        'financial' => 'المالية', 'accountings' => 'الحسابات', 'vacation' => 'الإجازات',
+        'moraslat' => 'المراسلات', 'cashbox' => 'الصندوق', 'lease' => 'الإيجارات',
+        'task' => 'المهام', 'vehicle' => 'المركبات', 'service' => 'الخدمات',
+        'settings' => 'الإعدادات', 'constant' => 'الثوابت', 'permission' => 'الصلاحيات',
+    ];
+
+    /** Specific routes that deserve a precise Arabic phrase over the generic one. */
+    private const ROUTE_LABELS = [
+        'dashboard.invoices.bulk-push' => 'ترحيل جماعي للفواتير إلى المشتريات',
+        'dashboard.invoices.push' => 'ترحيل فواتير دفعة إلى المشتريات',
+        'dashboard.invoices.correct' => 'تعديل بيانات فاتورة',
+        'dashboard.invoices.manual-entry' => 'إدخال بيانات فاتورة يدوياً',
+        'dashboard.invoices.destroy' => 'حذف دفعة فواتير',
+        'dashboard.invoices.store' => 'رفع دفعة فواتير للاستخراج',
+        'dashboard.shop.rentpay.receipt' => 'تسجيل سند قبض إيجار',
+        'dashboard.shop.rentpay.void' => 'إلغاء سند قبض إيجار',
     ];
 
     /** Route-name tokens that map to a delete action. */
@@ -103,7 +132,7 @@ class LogActivity
             $action,
             $entityType,
             $snap['entity_id'],
-            "$action $entityType via $routeName",
+            $this->arabicSummary($action, $entityType, $routeName, $snap['entity_id']),
             [
                 'user' => $snap['user_id'],
                 'route' => $routeName,
@@ -134,6 +163,25 @@ class LogActivity
         // Fail-open: an unmatched non-GET route is rare and cheap insurance
         // against an audit gap — known high-frequency reads are denylisted above.
         return ActivityLogger::WRITE;
+    }
+
+    /**
+     * Build a human-readable ARABIC summary instead of the raw "write X via route".
+     * Specific routes get a precise phrase; everything else gets "{verb} {الكيان}".
+     */
+    private function arabicSummary(string $action, string $entityType, string $routeName, ?int $entityId): string
+    {
+        if (isset(self::ROUTE_LABELS[$routeName])) {
+            $label = self::ROUTE_LABELS[$routeName];
+
+            return $entityId ? $label.' #'.$entityId : $label;
+        }
+
+        $verb = self::ACTION_AR[$action] ?? 'إجراء على';
+        $noun = self::ENTITY_AR[$entityType] ?? $entityType;
+        $summary = $verb.' '.$noun;
+
+        return $entityId ? $summary.' #'.$entityId : $summary;
     }
 
     private function resolveEntityType(string $routeName, $request): string

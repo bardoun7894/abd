@@ -83,6 +83,13 @@ class InvoiceController extends Controller
             ->when($filters['date_from'] !== '', fn ($q) => $q->whereDate('created_at', '>=', $filters['date_from']))
             ->when($filters['date_to'] !== '', fn ($q) => $q->whereDate('created_at', '<=', $filters['date_to']))
             ->when($filters['min_count'] !== '' && is_numeric($filters['min_count']), fn ($q) => $q->where('processed_pages', '>=', (int) $filters['min_count']))
+            // Posting state per batch (both counts on the same `invoices` connection):
+            // total invoice rows + how many are already posted (purchase_id set), so
+            // the list can mark a batch مُرحّلة and the user avoids re-posting it.
+            ->withCount([
+                'invoices',
+                'invoices as posted_count' => fn ($q) => $q->whereNotNull('purchase_id'),
+            ])
             ->orderByDesc('id')
             ->paginate(25)
             ->withQueryString();
@@ -523,6 +530,16 @@ class InvoiceController extends Controller
             'fuzzy_duplicates' => $combined['fuzzy_duplicates'],
             'errors' => $combined['errors'],
             'not_found' => $combined['not_found'],
+        ]);
+
+        // Explicit audit trail — records WHO ran the bulk ترحيل and WHAT it did, in
+        // Arabic, in the invoice audit log (the LogActivity middleware separately logs
+        // the request itself to employee_activity_log). change_user = Auth::id().
+        $target = $shopId ? 'المحل #'.$shopId : ($managerId ? 'قائد المجموعة #'.$managerId : '');
+        AuditLogger::log('invoice', null, AuditLogger::APPROVE, [
+            'note' => 'ترحيل جماعي: '.$combined['pushed'].' فاتورة مُرحّلة من '.$combined['batches'].' دفعة إلى '.$target
+                .($combined['already_mapped'] ? '، '.$combined['already_mapped'].' مُرحّلة مسبقاً' : '')
+                .($combined['ineligible'] ? '، '.$combined['ineligible'].' غير مؤهلة' : ''),
         ]);
 
         $msg = 'تم ترحيل '.$combined['pushed'].' فاتورة من '.$combined['batches'].' دفعة';

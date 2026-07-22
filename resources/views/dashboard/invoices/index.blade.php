@@ -88,6 +88,7 @@
                             <th class="text-center">عدد الفواتير</th>
                             <th class="text-end">الإجمالي العام</th>
                             <th class="text-center">الحالة</th>
+                            <th class="text-center">الترحيل</th>
                             <th>التاريخ</th>
                             <th class="text-end pe-4"></th>
                         </tr>
@@ -117,6 +118,23 @@
                                         <span class="badge badge-light-{{ AuditLabels::statusColor($b->status) }}">{{ AuditLabels::statusLabel($b->status) }}</span>
                                     @endif
                                 </td>
+                                <td class="text-center">
+                                    @php
+                                        $posted = (int) ($b->posted_count ?? 0);
+                                        $totalInv = (int) ($b->invoices_count ?? 0);
+                                    @endphp
+                                    @if ($totalInv > 0 && $posted >= $totalInv)
+                                        <span class="badge badge-light-success" title="كل الفواتير مُرحّلة إلى المشتريات">
+                                            <i class="bi bi-check2-circle me-1"></i>مُرحّلة
+                                        </span>
+                                    @elseif ($posted > 0)
+                                        <span class="badge badge-light-warning" title="{{ $posted }} من {{ $totalInv }} مُرحّلة">
+                                            جزئياً {{ $posted }}/{{ $totalInv }}
+                                        </span>
+                                    @else
+                                        <span class="badge badge-light-secondary">غير مُرحّلة</span>
+                                    @endif
+                                </td>
                                 <td class="text-muted fs-7 sn-num">{{ $b->created_at?->format('Y-m-d H:i') }}</td>
                                 <td class="text-end pe-4">
                                     <a href="{{ route('dashboard.invoices.show', $b->id) }}" class="btn btn-sm btn-light-primary fw-bold">
@@ -130,7 +148,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8">
+                                <td colspan="9">
                                     <div class="d-flex flex-column align-items-center text-center py-12">
                                         <span class="mb-4" style="width:72px;height:72px;border-radius:var(--sn-r-lg);font-size:30px;display:inline-flex;align-items:center;justify-content:center;background:var(--sn-emerald-tint);color:var(--sn-emerald-deep)">
                                             <i class="bi bi-inboxes"></i>
@@ -299,6 +317,9 @@
                     if (r.status) {
                         $('.js-batch-chk').prop('checked', false);
                         syncBulkBar();
+                        // Refresh so the "الترحيل" badges reflect the newly-posted batches
+                        // (backend already skips already-posted invoices — no duplicates).
+                        setTimeout(function () { location.reload(); }, 2500);
                     }
                 })
                 .fail(function (xhr) {
