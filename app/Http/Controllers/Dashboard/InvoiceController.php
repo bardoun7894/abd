@@ -210,7 +210,10 @@ class InvoiceController extends Controller
             ? Invoice::whereIn('batch_id', $exportedIds)->orderBy('batch_id')->orderBy('page_number')->get()
             : collect();
 
-        $inv = $ss->createSheet();
+        // Insert at index 0 so the file OPENS on the invoices — the file-log sheet
+        // moves to the second tab. Users kept landing on the summary and asking
+        // "وين الفواتير"; the invoices are the point, so they go first.
+        $inv = $ss->createSheet(0);
         $inv->setRightToLeft(true);
         $inv->setTitle('الفواتير المستخرجة');
 
