@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Perm;
 
@@ -69,6 +70,9 @@ class InvoiceController extends Controller
         $filters = [
             'q' => trim((string) $request->query('q', '')),
             'status' => (string) $request->query('status', ''),
+            'date_from' => (string) $request->query('date_from', ''),
+            'date_to' => (string) $request->query('date_to', ''),
+            'min_count' => (string) $request->query('min_count', ''),
         ];
 
         $batches = InvoiceBatch::query()
@@ -76,27 +80,51 @@ class InvoiceController extends Controller
             ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
             ->when($filters['q'] !== '', fn ($q) => $q->where('original_filename', 'like', '%'.$filters['q'].'%'))
             ->when($filters['status'] !== '', fn ($q) => $q->where('status', $filters['status']))
+            ->when($filters['date_from'] !== '', fn ($q) => $q->whereDate('created_at', '>=', $filters['date_from']))
+            ->when($filters['date_to'] !== '', fn ($q) => $q->whereDate('created_at', '<=', $filters['date_to']))
+            ->when($filters['min_count'] !== '' && is_numeric($filters['min_count']), fn ($q) => $q->where('processed_pages', '>=', (int) $filters['min_count']))
             ->orderByDesc('id')
             ->paginate(25)
             ->withQueryString();
 
-        return view('dashboard.invoices.index', compact('page_title', 'batches', 'filters'));
+        // For the bulk "ترحيل المحدد" modal (spec 012 bundle B): shop XOR manager
+        // picker, reusing the same sources as show(). Scoped by get_manager().
+        $shops = Shop::get();
+        $managers = $this->get_manager();
+
+        return view('dashboard.invoices.index', compact('page_title', 'batches', 'filters', 'shops', 'managers'));
     }
 
     /**
      * Export the extraction-operations log (سجل عمليات الاستخراج) to Excel. Mirrors
-     * index()'s query EXACTLY — same q/status filters and the same non-admin
-     * user_id scoping — so a user only ever exports batches they can already see.
+     * index()'s query EXACTLY — same q/status/date_from/date_to/min_count filters
+     * and the same non-admin user_id scoping — so a user only ever exports batches
+     * they can already see.
      */
     public function exportBatches(Request $request)
     {
         $q = trim((string) $request->query('q', ''));
         $status = (string) $request->query('status', '');
+        $dateFrom = (string) $request->query('date_from', '');
+        $dateTo = (string) $request->query('date_to', '');
+        $minCount = (string) $request->query('min_count', '');
+
+        // Spec 012 bundle C — "تصدير المحدد": when the UI passes an explicit list of
+        // batch ids, export ONLY those (still ownership-scoped below); otherwise fall
+        // back to the all-with-filters behaviour. Ints only; empty/invalid ids dropped.
+        $batchIds = array_values(array_filter(
+            array_map('intval', (array) $request->query('batch_ids', [])),
+            fn ($v) => $v > 0
+        ));
 
         $batches = InvoiceBatch::query()
             ->when(Auth::user()->emp_job != 1, fn ($qb) => $qb->where('user_id', Auth::id()))
+            ->when(! empty($batchIds), fn ($qb) => $qb->whereIn('id', $batchIds))
             ->when($q !== '', fn ($qb) => $qb->where('original_filename', 'like', '%'.$q.'%'))
             ->when($status !== '', fn ($qb) => $qb->where('status', $status))
+            ->when($dateFrom !== '', fn ($qb) => $qb->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo !== '', fn ($qb) => $qb->whereDate('created_at', '<=', $dateTo))
+            ->when($minCount !== '' && is_numeric($minCount), fn ($qb) => $qb->where('processed_pages', '>=', (int) $minCount))
             ->orderByDesc('id')
             ->get();
 
@@ -316,6 +344,143 @@ class InvoiceController extends Controller
         }
 
         return response()->json(['status' => true, 'message_out' => $msg, 'summary' => $summary]);
+    }
+
+    /**
+     * Spec 012 bundle C — bulk "ترحيل المحدد": push several whole batches to the same
+     * shop XOR manager in one request. Each batch is fetched under the SAME non-admin
+     * ownership scope as index()/findOwned (a non-admin can only ever act on their own
+     * batches — ids they don't own are silently reported as غير متاح, never leaked or
+     * touched), then run through InvoicePurchaseMapper::push() individually so one bad
+     * batch never aborts the rest. Returns a combined summary + per-batch breakdown.
+     * JSON action (NOT a WEB_METHOD) — ai_access-guarded exactly like pushToPurchase.
+     */
+    public function bulkPush(Request $request)
+    {
+        if (! Perm::get_function_access(55)) {
+            return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية لإضافة المشتريات'], 403);
+        }
+
+        $validated = $request->validate([
+            'batch_ids' => 'required|array|min:1',
+            'batch_ids.*' => 'integer',
+            'shop_id' => 'nullable|integer',
+            'manager_id' => 'nullable|integer',
+        ]);
+
+        $shopId = $request->filled('shop_id') ? (int) $request->shop_id : null;
+        $managerId = $request->filled('manager_id') ? (int) $request->manager_id : null;
+
+        if (! $shopId && ! $managerId) {
+            return response()->json(['status' => false, 'message_out' => 'الرجاء اختيار قائد مجموعة أو محل'], 422);
+        }
+        if ($shopId && $managerId) {
+            return response()->json(['status' => false, 'message_out' => 'اختر قائد مجموعة أو محل وليس كليهما'], 422);
+        }
+
+        $ids = array_values(array_unique(array_map('intval', $validated['batch_ids'])));
+
+        // Ownership-scoped fetch — mirrors index()'s non-admin user_id scoping and
+        // findOwned()'s authorize gate. Any requested id not in this set is either
+        // non-existent or not owned by the caller; it is reported as unavailable and
+        // never pushed.
+        $owned = InvoiceBatch::query()
+            ->whereIn('id', $ids)
+            ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
+            ->get()
+            ->keyBy('id');
+
+        $mapper = app(InvoicePurchaseMapper::class);
+
+        $combined = [
+            'batches' => 0,          // batches actually processed
+            'pushed' => 0,
+            'already_mapped' => 0,
+            'ineligible' => 0,
+            'duplicates' => 0,
+            'fuzzy_duplicates' => 0,
+            'errors' => 0,
+            'attached' => 0,
+            'link_errors' => 0,
+            'not_found' => [],       // requested ids the caller can't act on
+            'per_batch' => [],
+        ];
+
+        foreach ($ids as $bid) {
+            if (! $owned->has($bid)) {
+                $combined['not_found'][] = $bid;
+
+                continue;
+            }
+
+            try {
+                $summary = $mapper->push($owned->get($bid), $shopId, $managerId, Auth::id());
+            } catch (\Throwable $e) {
+                $combined['errors']++;
+                $combined['per_batch'][] = ['batch_id' => $bid, 'error' => $e->getMessage()];
+
+                continue;
+            }
+
+            $combined['batches']++;
+            $combined['pushed'] += $summary['pushed'];
+            $combined['already_mapped'] += $summary['already_mapped'];
+            $combined['ineligible'] += $summary['ineligible'];
+            $combined['duplicates'] += count($summary['duplicates']);
+            $combined['fuzzy_duplicates'] += count($summary['fuzzy_duplicates'] ?? []);
+            $combined['errors'] += count($summary['errors']);
+            $combined['attached'] += $summary['attached'] ?? 0;
+            $combined['link_errors'] += count($summary['link_errors'] ?? []);
+            $combined['per_batch'][] = [
+                'batch_id' => $bid,
+                'pushed' => $summary['pushed'],
+                'already_mapped' => $summary['already_mapped'],
+                'ineligible' => $summary['ineligible'],
+                'duplicates' => count($summary['duplicates']),
+                'fuzzy_duplicates' => count($summary['fuzzy_duplicates'] ?? []),
+                'errors' => count($summary['errors']),
+            ];
+        }
+
+        Log::info('invoice bulk push summary', [
+            'user_id' => Auth::id(),
+            'shop_id' => $shopId,
+            'manager_id' => $managerId,
+            'requested' => $ids,
+            'processed' => $combined['batches'],
+            'pushed' => $combined['pushed'],
+            'already_mapped' => $combined['already_mapped'],
+            'ineligible' => $combined['ineligible'],
+            'duplicates' => $combined['duplicates'],
+            'fuzzy_duplicates' => $combined['fuzzy_duplicates'],
+            'errors' => $combined['errors'],
+            'not_found' => $combined['not_found'],
+        ]);
+
+        $msg = 'تم ترحيل '.$combined['pushed'].' فاتورة من '.$combined['batches'].' دفعة';
+        if ($combined['duplicates']) {
+            $msg .= ' — تخطّي '.$combined['duplicates'].' مكررة';
+        }
+        if ($combined['fuzzy_duplicates']) {
+            $msg .= ' — '.$combined['fuzzy_duplicates'].' مشتبه بتكرارها (تحتاج مراجعة)';
+        }
+        if ($combined['already_mapped']) {
+            $msg .= ' — '.$combined['already_mapped'].' مُرحّلة مسبقاً';
+        }
+        if ($combined['ineligible']) {
+            $msg .= ' — '.$combined['ineligible'].' غير مؤهلة';
+        }
+        if ($combined['link_errors']) {
+            $msg .= ' — '.$combined['link_errors'].' بحاجة ربط يدوي';
+        }
+        if ($combined['errors']) {
+            $msg .= ' — '.$combined['errors'].' أخطاء';
+        }
+        if ($combined['not_found']) {
+            $msg .= ' — '.count($combined['not_found']).' دفعة غير متاحة';
+        }
+
+        return response()->json(['status' => true, 'message_out' => $msg, 'summary' => $combined]);
     }
 
     /**

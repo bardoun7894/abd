@@ -479,6 +479,10 @@ Route::group([
         // the same q/status filters as index(). Non-numeric path, so it never collides
         // with the whereNumber-constrained /invoices/{id} routes below.
         Route::get('/invoices/export', [InvoiceController::class, 'exportBatches'])->name('invoices.export');
+        // Spec 012 bundle C — bulk ترحيل of several selected batches to one shop XOR
+        // manager. Non-numeric path, so it never collides with the whereNumber
+        // /invoices/{id} routes below. JSON action (ai_access-guarded, not a WEB_METHOD).
+        Route::post('/invoices/bulk-push', [InvoiceController::class, 'bulkPush'])->name('invoices.bulk-push');
         Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/invoices/{id}', [InvoiceController::class, 'show'])->whereNumber('id')->name('invoices.show');
         Route::get('/invoices/{id}/status', [InvoiceController::class, 'status'])->whereNumber('id')->name('invoices.status');
