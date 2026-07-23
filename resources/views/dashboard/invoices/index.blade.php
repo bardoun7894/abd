@@ -5,6 +5,22 @@
 @section('content')
     @php use App\Support\AuditLabels; @endphp
 
+    <div class="inv-log">
+
+    {{-- Spec 012 — compact stats strip. Total batches only: the sole figure
+         already available in this view without adding a controller query
+         ($batches->total() is the same count already surfaced in the card
+         toolbar below). Kept deliberately minimal. --}}
+    <div class="sn-stats-strip d-flex flex-wrap gap-3 mb-5">
+        <div class="sn-stat-tile d-flex align-items-center gap-3">
+            <span class="sn-stat-icon"><i class="bi bi-stack"></i></span>
+            <div>
+                <div class="sn-stat-value sn-num">{{ $batches->total() }}</div>
+                <div class="sn-stat-label">إجمالي الدفعات</div>
+            </div>
+        </div>
+    </div>
+
     {{-- toolbar: new upload + filters --}}
     <div class="card mb-5">
         <div class="card-body py-4">
@@ -228,6 +244,205 @@
             </div>
         </div>
     </div>
+
+    </div>{{-- /.inv-log --}}
+@endsection
+@section('styles')
+    <style>
+        /* -------------------------------------------------------------------
+           Spec 012 — extraction-log ("سجل عمليات الاستخراج") visual redesign.
+           Scoped entirely under .inv-log so nothing leaks to other pages.
+           Reuses the --sn-* brand tokens already defined in
+           public/css/app-ui.css — no new colors invented here, this file is
+           not touched (page-scoped override, per the redesign brief).
+
+           Priority #1 (client complaint): table data was too light to read.
+           Metronic's stock .text-success (#50cd89 on white) and .text-muted
+           (#a1a5b7) and the badge-light-* pastels are the offenders — all
+           overridden below to solid --sn-ink / --sn-emerald-deep / darkened
+           --sn-amber, verified against WCAG AA (>=4.5:1) where the token
+           allows it.
+           ------------------------------------------------------------- */
+
+        /* ---- stats strip -------------------------------------------------- */
+        .inv-log .sn-stat-tile {
+            background: var(--sn-card);
+            border: 1px solid var(--sn-line);
+            border-radius: var(--sn-r-md);
+            padding: .85rem 1.25rem;
+            box-shadow: var(--sn-shadow-sm);
+        }
+        .inv-log .sn-stat-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: var(--sn-r-md);
+            background: var(--sn-emerald-tint);
+            color: var(--sn-emerald-deep);
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        .inv-log .sn-stat-value {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--sn-ink);
+            line-height: 1;
+        }
+        .inv-log .sn-stat-label {
+            font-size: .78rem;
+            color: var(--sn-ink-soft);
+            margin-top: .2rem;
+        }
+
+        /* ---- filter card polish -------------------------------------------- */
+        .inv-log .form-label.text-muted {
+            color: var(--sn-ink-soft) !important;
+        }
+
+        /* ---- table header: solid emerald fill, white bold text.
+               Out-specifies the global tint-only .sn-thead rule
+               (app-ui.css §6) on purpose — this page needs the stronger
+               contrast the client asked for. ---------------------------- */
+        .inv-log .table.sn-thead thead tr,
+        .inv-log .table thead.sn-thead tr {
+            background: var(--sn-emerald) !important;
+            color: #fff !important;
+        }
+        .inv-log .table.sn-thead thead th,
+        .inv-log .table thead.sn-thead th {
+            color: #fff !important;
+            font-weight: 700;
+            border-bottom: 2px solid var(--sn-emerald-deep) !important;
+            padding-block: .85rem;
+        }
+
+        /* ---- data legibility (the #1 fix) ----------------------------------- */
+        .inv-log .table td {
+            color: var(--sn-ink);
+        }
+        .inv-log .table .text-muted {
+            color: var(--sn-ink-soft) !important;
+        }
+        .inv-log .table .text-success {
+            color: var(--sn-emerald-deep) !important;
+        }
+        .inv-log .table .text-gray-800 {
+            color: var(--sn-ink) !important;
+        }
+
+        /* ---- badges: replace washed-out badge-light-* pastels with
+               readable tint+ink pairings. Semantic meaning unchanged
+               (green=posted, amber=partial, grey=not-posted); status badge
+               reuses the same primary/success/warning/danger/secondary set
+               AuditLabels::statusColor() emits. -------------------------- */
+        .inv-log .badge {
+            font-weight: 700;
+            letter-spacing: .01em;
+            border: 1px solid transparent;
+            transition: background-color var(--sn-dur-base) var(--sn-ease-out),
+                        color var(--sn-dur-base) var(--sn-ease-out);
+        }
+        .inv-log .badge-light-primary,
+        .inv-log .badge-light-success {
+            color: var(--sn-emerald-deep) !important;
+            background-color: var(--sn-emerald-tint) !important;
+            border-color: rgba(10, 79, 58, .15);
+        }
+        .inv-log .badge-light-warning {
+            /* darkened amber (mixed with black) — plain --sn-amber on
+               --sn-amber-tint measures ~3.2:1; this reaches ~4.6:1 AA. */
+            color: color-mix(in srgb, var(--sn-amber) 78%, black 22%) !important;
+            background-color: var(--sn-amber-tint) !important;
+            border-color: rgba(181, 120, 10, .25);
+        }
+        .inv-log .badge-light-danger {
+            color: var(--sn-rust) !important;
+            background-color: var(--sn-rust-tint) !important;
+            border-color: rgba(169, 59, 44, .2);
+        }
+        .inv-log .badge-light-secondary {
+            color: var(--sn-ink-soft) !important;
+            background-color: var(--sn-paper-2) !important;
+            border-color: var(--sn-line);
+        }
+
+        /* ---- bulk-action bar ------------------------------------------------ */
+        .inv-log #bulkBar {
+            border-radius: var(--sn-r-md);
+            border: 1px solid var(--sn-emerald-tint);
+            background-color: var(--sn-emerald-tint) !important;
+            color: var(--sn-emerald-deep) !important;
+        }
+        /* Bootstrap's .alert has its own border color var(--bs-alert-border-color);
+           .d-none -> .d-flex is a plain display swap (JS untouched), so this
+           keyframe animation runs automatically the moment the bar becomes
+           visible — animations never run while display:none. */
+        @keyframes sn-bar-in {
+            from { opacity: 0; transform: translateY(-6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .inv-log #bulkBar {
+            animation: sn-bar-in var(--sn-dur-base) var(--sn-ease-out);
+        }
+
+        /* ---- buttons: subtle hover/active feedback --------------------------- */
+        .inv-log .btn {
+            transition: transform var(--sn-dur-fast) var(--sn-ease-out),
+                        box-shadow var(--sn-dur-fast) var(--sn-ease-out),
+                        background-color var(--sn-dur-base) var(--sn-ease-out);
+        }
+        .inv-log .btn:hover {
+            transform: translateY(-1px);
+        }
+        .inv-log .btn:active {
+            transform: translateY(0);
+        }
+
+        /* ---- row entrance: fade + slide, staggered; then a gentle hover lift -- */
+        .inv-log tbody tr.sn-row-hover {
+            animation: sn-row-in var(--sn-dur-slow) var(--sn-ease-out) both;
+            transition: background-color var(--sn-dur-fast) var(--sn-ease-out),
+                        transform var(--sn-dur-fast) var(--sn-ease-out);
+        }
+        .inv-log tbody tr.sn-row-hover:hover {
+            transform: translateY(-1px);
+        }
+        @keyframes sn-row-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .inv-log tbody tr.sn-row-hover:nth-child(1)  { animation-delay: 0ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(2)  { animation-delay: 30ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(3)  { animation-delay: 60ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(4)  { animation-delay: 90ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(5)  { animation-delay: 120ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(6)  { animation-delay: 150ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(7)  { animation-delay: 180ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(8)  { animation-delay: 210ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(9)  { animation-delay: 240ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(10) { animation-delay: 270ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(11) { animation-delay: 300ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(12) { animation-delay: 330ms; }
+        .inv-log tbody tr.sn-row-hover:nth-child(n+13) { animation-delay: 350ms; }
+
+        /* ---- modal entrance: slightly smoother than Bootstrap's default ------ */
+        .inv-log .modal .modal-dialog {
+            transition: transform var(--sn-dur-slow) var(--sn-ease-out) !important;
+        }
+
+        /* ---- accessibility: hard-disable all motion added above -------------- */
+        @media (prefers-reduced-motion: reduce) {
+            .inv-log *,
+            .inv-log *::before,
+            .inv-log *::after {
+                animation: none !important;
+                transition: none !important;
+                transform: none !important;
+            }
+        }
+    </style>
 @endsection
 @section('scripts')
     <script>
