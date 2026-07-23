@@ -129,7 +129,7 @@ class ReportController extends Controller
             $purchase_respon = $x->purchase_respon;
             $shop = Shop::find($x->shop_id);
             $manager_name= $x->manager_name ?? $shop->manager->manager_name;
-            $shop_name= isset($shop) ? ( ($shop->shop_name ." - ". $shop->municip->municip_no) ?? "") : "";
+            $shop_name= isset($shop) ? ( $shop->shop_name ." - ". ($shop->municip->municip_no ?? "") ) : "";
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
             $note = $x->note;
             $objPHPExcel->getActiveSheet()->SetCellValue('A' . $rowCount, $i);

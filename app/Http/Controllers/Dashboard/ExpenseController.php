@@ -416,7 +416,7 @@ class ExpenseController extends Controller
                         //     $municip_no_char='';
                         // }
                         if (isset($shop->shop_mobile)) {
-                            $ssn_char = '<br>' . '<span class="ms-2 badge badge-light-danger fw-bold"> ' . $shop->municip->municip_no . '</span>';
+                            $ssn_char = '<br>' . '<span class="ms-2 badge badge-light-danger fw-bold"> ' . ($shop->municip->municip_no ?? '') . '</span>';
                         } else {
                             $ssn_char = '';
                         }
