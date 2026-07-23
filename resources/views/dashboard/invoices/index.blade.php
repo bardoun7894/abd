@@ -146,15 +146,26 @@
                                         $totalInv = (int) ($b->invoices_count ?? 0);
                                     @endphp
                                     @if ($totalInv > 0 && $posted >= $totalInv)
+                                        {{-- Fully posted — plain green, no fix-center link (nothing to fix). --}}
                                         <span class="badge badge-light-success" title="كل الفواتير مُرحّلة إلى المشتريات">
                                             <i class="bi bi-check2-circle me-1"></i>مُرحّلة
                                         </span>
                                     @elseif ($posted > 0)
-                                        <span class="badge badge-light-warning" title="{{ $posted }} من {{ $totalInv }} مُرحّلة">
+                                        {{-- Spec 013 — partial: link to the fix center scoped to this batch. --}}
+                                        <a href="{{ route('dashboard.invoices.needs-fix', ['batch_id' => $b->id]) }}"
+                                           class="badge badge-light-warning text-decoration-none"
+                                           title="{{ $posted }} من {{ $totalInv }} مُرحّلة — اضغط لتصحيح الباقي">
                                             جزئياً {{ $posted }}/{{ $totalInv }}
-                                        </span>
+                                            <i class="bi bi-wrench-adjustable ms-1"></i>
+                                        </a>
                                     @else
-                                        <span class="badge badge-light-secondary">غير مُرحّلة</span>
+                                        {{-- Spec 013 — none posted: link to the fix center scoped to this batch. --}}
+                                        <a href="{{ route('dashboard.invoices.needs-fix', ['batch_id' => $b->id]) }}"
+                                           class="badge badge-light-secondary text-decoration-none"
+                                           title="اضغط لتصحيح الفواتير وترحيلها">
+                                            غير مُرحّلة
+                                            <i class="bi bi-wrench-adjustable ms-1"></i>
+                                        </a>
                                     @endif
                                 </td>
                                 <td class="text-muted fs-7 sn-num">{{ $b->created_at?->format('Y-m-d H:i') }}</td>

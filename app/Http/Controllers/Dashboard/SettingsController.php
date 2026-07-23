@@ -247,20 +247,34 @@ class SettingsController extends Controller
             'total_calls' => 0, 'hits' => 0, 'misses' => 0, 'hit_rate' => 0.0,
             'input_tokens' => 0, 'output_tokens' => 0, 'cost_usd' => 0.0, 'cost_sar' => 0.0,
             'cache_rows' => 0,
+            'failure_calls' => 0, 'total_attempts' => 0, 'failure_rate' => 0.0,
+            'rate_limited_calls' => 0, 'rate_limit_rate' => 0.0,
         ];
         $byModule = collect();
         $byDay = collect();
+        $byUser = collect();
         $stats = $empty;
 
         try {
             $base = DB::table('ai_usage_log')->where('created_at', '>=', $since);
 
-            $total = (clone $base)->count();
-            $hits = (clone $base)->where('cache_hit', true)->count();
-            $inTok = (int) (clone $base)->sum('input_tokens');
-            $outTok = (int) (clone $base)->sum('output_tokens');
-            $cost = (float) (clone $base)->where('cache_hit', false)->sum('est_cost_usd');
+            // Spec 013 bundle B4 — GeminiClient now inserts a 'failure' row (zero
+            // tokens/cost) when retries are exhausted (logAiFailure). Keep the
+            // pre-existing calls/hits/tokens/cost stats scoped to 'success' rows so
+            // their meaning doesn't drift (a failure was never billed, was never a
+            // cache hit), and report failures/429s as their own explicit numbers.
+            $success = (clone $base)->where('outcome', 'success');
+
+            $total = (clone $success)->count();
+            $hits = (clone $success)->where('cache_hit', true)->count();
+            $inTok = (int) (clone $success)->sum('input_tokens');
+            $outTok = (int) (clone $success)->sum('output_tokens');
+            $cost = (float) (clone $success)->where('cache_hit', false)->sum('est_cost_usd');
             $sar = (float) config('services.gemini.usd_to_sar', 3.75);
+
+            $failures = (int) (clone $base)->where('outcome', 'failure')->count();
+            $rateLimited = (int) (clone $base)->where('outcome', 'failure')->where('status_code', '429')->count();
+            $totalAttempts = $total + $failures;
 
             $stats = [
                 'total_calls' => $total,
@@ -272,29 +286,54 @@ class SettingsController extends Controller
                 'cost_usd' => round($cost, 4),
                 'cost_sar' => round($cost * $sar, 3),
                 'cache_rows' => (int) DB::table('ai_extractions')->count(),
+                'failure_calls' => $failures,
+                'total_attempts' => $totalAttempts,
+                'failure_rate' => $totalAttempts > 0 ? round($failures / $totalAttempts * 100, 1) : 0.0,
+                'rate_limited_calls' => $rateLimited,
+                'rate_limit_rate' => $totalAttempts > 0 ? round($rateLimited / $totalAttempts * 100, 1) : 0.0,
             ];
 
             $byModule = DB::table('ai_usage_log')
                 ->where('created_at', '>=', $since)
                 ->select('module',
-                    DB::raw('COUNT(*) as calls'),
+                    DB::raw("SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) as calls"),
                     DB::raw('SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
                     DB::raw('SUM(input_tokens) as in_tok'),
                     DB::raw('SUM(output_tokens) as out_tok'),
-                    DB::raw('SUM(CASE WHEN cache_hit = 0 THEN est_cost_usd ELSE 0 END) as cost'))
+                    DB::raw('SUM(CASE WHEN cache_hit = 0 THEN est_cost_usd ELSE 0 END) as cost'),
+                    DB::raw("SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) as failures"))
                 ->groupBy('module')->orderByDesc('cost')->get();
 
             $byDay = DB::table('ai_usage_log')
                 ->where('created_at', '>=', $since)
                 ->select(DB::raw('DATE(created_at) as d'),
-                    DB::raw('COUNT(*) as calls'),
+                    DB::raw("SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) as calls"),
                     DB::raw('SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
-                    DB::raw('SUM(CASE WHEN cache_hit = 0 THEN est_cost_usd ELSE 0 END) as cost'))
+                    DB::raw('SUM(CASE WHEN cache_hit = 0 THEN est_cost_usd ELSE 0 END) as cost'),
+                    DB::raw("SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) as failures"))
                 ->groupBy(DB::raw('DATE(created_at)'))->orderByDesc('d')->limit(31)->get();
+
+            // Per-user spend/calls/failures. LEFT join so background/queue rows
+            // (user_id NULL, no Auth context) are kept and bucketed together, not
+            // dropped — otherwise the table under-reports the biggest consumer
+            // (the batch pipeline).
+            $byUser = DB::table('ai_usage_log as l')
+                ->leftJoin('users as u', 'u.id', '=', 'l.user_id')
+                ->where('l.created_at', '>=', $since)
+                ->select('l.user_id',
+                    DB::raw("COALESCE(NULLIF(u.name, ''), NULLIF(u.emp_name, ''), '') as uname"),
+                    DB::raw("SUM(CASE WHEN l.outcome = 'success' THEN 1 ELSE 0 END) as calls"),
+                    DB::raw('SUM(CASE WHEN l.cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
+                    DB::raw('SUM(l.input_tokens) as in_tok'),
+                    DB::raw('SUM(l.output_tokens) as out_tok'),
+                    DB::raw('SUM(CASE WHEN l.cache_hit = 0 THEN l.est_cost_usd ELSE 0 END) as cost'),
+                    DB::raw("SUM(CASE WHEN l.outcome = 'failure' THEN 1 ELSE 0 END) as failures"))
+                ->groupBy('l.user_id', 'u.name', 'u.emp_name')
+                ->orderByDesc('cost')->limit(50)->get();
         } catch (\Throwable $e) {
             // tables not migrated yet → empty state
         }
 
-        return view('dashboard.settings.ai_usage', compact('page_title', 'stats', 'byModule', 'byDay', 'days'));
+        return view('dashboard.settings.ai_usage', compact('page_title', 'stats', 'byModule', 'byDay', 'byUser', 'days'));
     }
 }

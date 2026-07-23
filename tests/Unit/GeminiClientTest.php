@@ -228,6 +228,24 @@ it('logs warning on connection timeout retry for generateText', function () {
     expect($warning['context']['attempt'])->toBe(1);
 });
 
+it('does not retry a permanent 4xx client error', function () {
+    // A 400 (bad schema / refusal) is a permanent client error: it must throw on
+    // the FIRST attempt, never entering the transient-retry branch that 429/5xx
+    // and ConnectionException share.
+    $attempts = 0;
+    Http::fake(function () use (&$attempts) {
+        $attempts++;
+
+        return Http::response(['error' => ['code' => 400, 'message' => 'invalid schema']], 400);
+    });
+
+    $client = new GeminiClient();
+
+    expect(fn () => $client->generateText('bad request'))
+        ->toThrow(RuntimeException::class, 'Gemini HTTP 400');
+    expect($attempts)->toBe(1);
+});
+
 it('retries on connection timeout during file extraction', function () {
     $tmp = tempnam(sys_get_temp_dir(), 'gem').'.pdf';
     file_put_contents($tmp, '%PDF-1.4 fake');

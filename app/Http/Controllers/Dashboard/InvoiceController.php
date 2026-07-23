@@ -39,7 +39,7 @@ class InvoiceController extends Controller
      * ishaveaccess:100 group gate, which leaked: any function under controller
      * 100 (e.g. lease-only access) used to pass here too.
      */
-    private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file', 'exportBatches'];
+    private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file', 'exportBatches', 'needsFix'];
 
     public function __construct()
     {
@@ -285,6 +285,71 @@ class InvoiceController extends Controller
         }, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    /**
+     * Spec 013 Part A — "مركز التصحيح" (fix center). One cross-batch list of every
+     * owned invoice that is un-posted AND blocked from auto-posting: purchase_id IS
+     * NULL AND (needs_review=1 OR invoice_number/invoice_date/total_incl_vat missing)
+     * — the exact set that bulk ترحيل skips (mirrors InvoicePurchaseMapper::isEligible's
+     * blockers, minus the status gate, per the plan). Non-admins are user_id scoped via
+     * whereHas('batch') exactly like error(). Optional ?batch_id= narrows to one batch
+     * (the clickable "جزئياً/غير مُرحّلة" badge on index links here with that filter).
+     *
+     * $affectedBatchIds is captured ONCE here (the distinct batches that HAD a blocked
+     * invoice on load) and handed to the view: the "ترحيل المُصحّحة" button posts that
+     * stable set to the existing bulkPush (batch_ids[]), which is idempotent — it skips
+     * already-posted and still-blocked invoices and posts only the newly-fixed ones. The
+     * view removes a corrected row from the DOM (never re-queries) so fixing the LAST
+     * blocked invoice in a batch doesn't drop that batch out of the push set.
+     */
+    public function needsFix(Request $request)
+    {
+        $page_title = 'مركز تصحيح الفواتير';
+
+        $batchId = $request->query('batch_id');
+        $batchId = is_numeric($batchId) ? (int) $batchId : null;
+
+        // Shared blocked-only + ownership constraint, applied identically to the
+        // paginated list and the affected-batch-id pluck so they can never diverge.
+        $scope = function ($q) use ($batchId) {
+            $q->whereNull('purchase_id')
+                ->where(function ($w) {
+                    $w->where('needs_review', true)
+                        ->orWhereNull('invoice_number')
+                        ->orWhere('invoice_number', '')
+                        ->orWhereNull('invoice_date')
+                        ->orWhereNull('total_incl_vat');
+                })
+                ->when($batchId, fn ($x) => $x->where('batch_id', $batchId))
+                ->when(Auth::user()->emp_job != 1, fn ($x) => $x->whereHas(
+                    'batch', fn ($b) => $b->where('user_id', Auth::id())
+                ));
+        };
+
+        $invoices = Invoice::query()
+            ->tap($scope)
+            ->with('batch')
+            ->orderByDesc('id')
+            ->paginate(25)
+            ->withQueryString();
+
+        // The batches that had ≥1 blocked invoice at load — the "ترحيل المُصحّحة" target.
+        $affectedBatchIds = Invoice::query()
+            ->tap($scope)
+            ->distinct()
+            ->pluck('batch_id')
+            ->map(fn ($v) => (int) $v)
+            ->values()
+            ->all();
+
+        // Same shop XOR manager picker as index()'s bulk-push modal.
+        $shops = Shop::get();
+        $managers = $this->get_manager();
+
+        return view('dashboard.invoices.needs_fix', compact(
+            'page_title', 'invoices', 'batchId', 'affectedBatchIds', 'shops', 'managers'
+        ));
     }
 
     public function create()

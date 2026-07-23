@@ -43,6 +43,20 @@
                 <div class="fs-9 fw-bold text-muted mt-1">التوكنز · مخزّن: {{ number_format($stats['cache_rows']) }}</div>
             </div></div>
         </div>
+        <div class="col-6 col-md-3">
+            <div class="card h-100"><div class="card-body text-center py-6">
+                <div class="fs-2hx fw-bolder {{ $stats['failure_calls'] > 0 ? 'text-danger' : 'text-dark' }}">{{ number_format($stats['failure_calls']) }}</div>
+                <div class="fs-8 fw-bold text-muted mt-1">طلبات فاشلة (بعد استنفاد إعادة المحاولة)</div>
+                <div class="fs-9 text-muted">{{ $stats['failure_rate'] }}% من إجمالي المحاولات ({{ number_format($stats['total_attempts']) }})</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card h-100"><div class="card-body text-center py-6">
+                <div class="fs-2hx fw-bolder {{ $stats['rate_limited_calls'] > 0 ? 'text-warning' : 'text-dark' }}">{{ $stats['rate_limit_rate'] }}%</div>
+                <div class="fs-8 fw-bold text-muted mt-1">نسبة تجاوز الحد (429) بعد استنفاد المحاولات</div>
+                <div class="fs-9 text-muted">{{ number_format($stats['rate_limited_calls']) }} طلب</div>
+            </div></div>
+        </div>
     </div>
 
     <div class="row g-5">
@@ -54,7 +68,8 @@
                         <table class="table table-row-bordered gy-3 align-middle">
                             <thead><tr class="fw-bold fs-8 text-muted text-uppercase">
                                 <th>الوحدة</th><th class="text-center">طلبات</th>
-                                <th class="text-center">من الذاكرة</th><th class="text-end">التكلفة $</th>
+                                <th class="text-center">من الذاكرة</th><th class="text-center">فشل</th>
+                                <th class="text-end">التكلفة $</th>
                             </tr></thead>
                             <tbody>
                                 @forelse ($byModule as $m)
@@ -62,10 +77,17 @@
                                         <td class="fw-bold text-gray-800">{{ $m->module ?: '—' }}</td>
                                         <td class="text-center">{{ number_format($m->calls) }}</td>
                                         <td class="text-center">{{ number_format($m->hits) }}</td>
+                                        <td class="text-center">
+                                            @if ((int) $m->failures > 0)
+                                                <span class="badge badge-light-danger">{{ number_format($m->failures) }}</span>
+                                            @else
+                                                0
+                                            @endif
+                                        </td>
                                         <td class="text-end">{{ number_format((float) $m->cost, 4) }}</td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="4" class="text-center text-muted py-6">لا توجد بيانات بعد.</td></tr>
+                                    <tr><td colspan="5" class="text-center text-muted py-6">لا توجد بيانات بعد.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -81,7 +103,8 @@
                         <table class="table table-row-bordered gy-3 align-middle">
                             <thead><tr class="fw-bold fs-8 text-muted text-uppercase">
                                 <th>اليوم</th><th class="text-center">طلبات</th>
-                                <th class="text-center">من الذاكرة</th><th class="text-end">التكلفة $</th>
+                                <th class="text-center">من الذاكرة</th><th class="text-center">فشل</th>
+                                <th class="text-end">التكلفة $</th>
                             </tr></thead>
                             <tbody>
                                 @forelse ($byDay as $r)
@@ -89,10 +112,62 @@
                                         <td class="fw-bold text-gray-800">{{ $r->d }}</td>
                                         <td class="text-center">{{ number_format($r->calls) }}</td>
                                         <td class="text-center">{{ number_format($r->hits) }}</td>
+                                        <td class="text-center">
+                                            @if ((int) $r->failures > 0)
+                                                <span class="badge badge-light-danger">{{ number_format($r->failures) }}</span>
+                                            @else
+                                                0
+                                            @endif
+                                        </td>
                                         <td class="text-end">{{ number_format((float) $r->cost, 4) }}</td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="4" class="text-center text-muted py-6">لا توجد بيانات بعد.</td></tr>
+                                    <tr><td colspan="5" class="text-center text-muted py-6">لا توجد بيانات بعد.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-5 mt-0">
+        <div class="col-12">
+            <div class="card h-100">
+                <div class="card-header"><h3 class="card-title fw-bold">حسب المستخدم</h3></div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-row-bordered gy-3 align-middle">
+                            <thead><tr class="fw-bold fs-8 text-muted text-uppercase">
+                                <th>المستخدم</th><th class="text-center">طلبات</th>
+                                <th class="text-center">من الذاكرة</th><th class="text-center">فشل</th>
+                                <th class="text-center">التوكنز</th>
+                                <th class="text-end">التكلفة $</th>
+                            </tr></thead>
+                            <tbody>
+                                @forelse ($byUser as $u)
+                                    <tr>
+                                        <td class="fw-bold text-gray-800">
+                                            {{ $u->uname ?: 'نظام / خلفية' }}
+                                            @unless ($u->user_id)
+                                                <span class="badge badge-light-secondary fs-9 ms-1">آلي</span>
+                                            @endunless
+                                        </td>
+                                        <td class="text-center">{{ number_format($u->calls) }}</td>
+                                        <td class="text-center">{{ number_format($u->hits) }}</td>
+                                        <td class="text-center">
+                                            @if ((int) $u->failures > 0)
+                                                <span class="badge badge-light-danger">{{ number_format($u->failures) }}</span>
+                                            @else
+                                                0
+                                            @endif
+                                        </td>
+                                        <td class="text-center">{{ number_format((int) $u->in_tok + (int) $u->out_tok) }}</td>
+                                        <td class="text-end">{{ number_format((float) $u->cost, 4) }}</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="6" class="text-center text-muted py-6">لا توجد بيانات بعد.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>

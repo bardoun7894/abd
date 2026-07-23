@@ -45,10 +45,13 @@ class InvoiceExtractionService
      * Extract one invoice from a single file (single-page PDF or image).
      * Returns the normalized fields plus 'raw_json' and validation result.
      */
-    public function extractInvoice(string $filePath, ?string $model = null, ?string $thinking = null): array
+    public function extractInvoice(string $filePath, ?string $model = null, ?string $thinking = null, ?int $timeout = null, ?int $maxAttempts = null): array
     {
         $gemini = new GeminiClient();
-        $raw = $gemini->extract($this->prompt(false), $filePath, $this->singleSchema(), $model, $thinking);
+        // Interactive callers (purchase AI prefill) pass a short timeout + few
+        // retries so a slow/overloaded model fails fast instead of freezing a
+        // PHP-FPM worker; background pipelines omit them and keep the full budget.
+        $raw = $gemini->extract($this->prompt(false), $filePath, $this->singleSchema(), $model, $thinking, $timeout, $maxAttempts);
         $this->lastUsage = $gemini->lastUsage;
 
         $data = is_array($raw) ? $raw : [];

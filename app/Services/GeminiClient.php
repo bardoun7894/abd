@@ -202,6 +202,7 @@ class GeminiClient
                         'max_attempts' => $maxAttempts,
                         'response' => substr($lastBody, 0, 1000),
                     ]);
+                    $this->logAiFailure($module, $model, 'connection');
                     throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
                 }
 
@@ -233,6 +234,7 @@ class GeminiClient
                     'max_attempts' => $maxAttempts,
                     'response' => substr($lastBody, 0, 1000),
                 ]);
+                $this->logAiFailure($module, $model, $status);
                 throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
             }
 
@@ -398,6 +400,7 @@ class GeminiClient
                     'max_attempts' => $maxAttempts,
                     'response' => substr($lastBody, 0, 1000),
                 ]);
+                $this->logAiFailure($module, $model, 'connection');
                 throw new RuntimeException('Gemini connection failed: '.$e->getMessage(), 0, $e);
             }
 
@@ -429,6 +432,7 @@ class GeminiClient
                 'max_attempts' => $maxAttempts,
                 'response' => substr($lastBody, 0, 1000),
             ]);
+            $this->logAiFailure($module, $model, $status);
             throw new RuntimeException('Gemini HTTP '.$status.': '.$resp->body(), $status);
         }
 
@@ -661,6 +665,35 @@ class GeminiClient
                 'output_tokens' => $out,
                 'est_cost_usd' => $cost,
                 'user_id' => Auth::check() ? Auth::id() : null,
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            // ignore — the ledger is best-effort
+        }
+    }
+
+    /**
+     * Spec 013 bundle B4 — records a call that ultimately failed (retries exhausted)
+     * so the AI usage dashboard can surface failure count / 429 rate per module/day,
+     * which a success-only ledger could never show. Zero tokens/cost (nothing was
+     * billed). Deliberately does NOT set 'outcome'/'status_code' via logAiUsage()
+     * (kept untouched) — a separate insert so environments/tests whose ai_usage_log
+     * predates these columns keep working: this call simply no-ops there (caught
+     * below), it never breaks the existing success-path ledger write.
+     */
+    private function logAiFailure(?string $module, ?string $model, int|string|null $status): void
+    {
+        try {
+            DB::table('ai_usage_log')->insert([
+                'module' => $module,
+                'model' => $model,
+                'cache_hit' => false,
+                'input_tokens' => 0,
+                'output_tokens' => 0,
+                'est_cost_usd' => 0,
+                'user_id' => Auth::check() ? Auth::id() : null,
+                'outcome' => 'failure',
+                'status_code' => $status !== null ? (string) $status : null,
                 'created_at' => now(),
             ]);
         } catch (\Throwable $e) {

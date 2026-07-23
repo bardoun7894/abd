@@ -378,7 +378,16 @@ class PurchaseController extends Controller
         $ds = app(\App\Services\DocumentStorage::class);
         $tmp = $ds->tempWorkingCopy($file);
         try {
-            $extracted = app(\App\Services\InvoiceExtractionService::class)->extractInvoice($tmp);
+            // Interactive web request: cap the Gemini budget with the shared
+            // interactive timeout/retries (like every other AI-prefill extractor)
+            // so a slow model can't hold a PHP-FPM worker for the full 120s×4.
+            $extracted = app(\App\Services\InvoiceExtractionService::class)->extractInvoice(
+                $tmp,
+                null,
+                null,
+                (int) config('services.gemini.interactive_timeout', 25),
+                (int) config('services.gemini.interactive_retries', 2),
+            );
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => 'تعذّر استخراج بيانات الفاتورة: '.$e->getMessage()], 422);
         } finally {

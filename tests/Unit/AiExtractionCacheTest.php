@@ -36,6 +36,8 @@ beforeEach(function () {
         $table->string('module', 60)->nullable();
         $table->string('model', 80)->nullable();
         $table->boolean('cache_hit')->default(false);
+        $table->string('outcome', 10)->default('success');
+        $table->string('status_code', 20)->nullable();
         $table->unsignedInteger('input_tokens')->default(0);
         $table->unsignedInteger('output_tokens')->default(0);
         $table->decimal('est_cost_usd', 12, 6)->default(0);

@@ -483,6 +483,10 @@ Route::group([
         // manager. Non-numeric path, so it never collides with the whereNumber
         // /invoices/{id} routes below. JSON action (ai_access-guarded, not a WEB_METHOD).
         Route::post('/invoices/bulk-push', [InvoiceController::class, 'bulkPush'])->name('invoices.bulk-push');
+        // Spec 013 Part A — "مركز التصحيح": cross-batch list of un-posted BLOCKED invoices
+        // (needs_review or missing رقم/تاريخ/إجمالي) + fix + re-post. Non-numeric static
+        // path, so it never collides with the whereNumber /invoices/{id} routes below.
+        Route::get('/invoices/needs-fix', [InvoiceController::class, 'needsFix'])->name('invoices.needs-fix');
         Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
         Route::get('/invoices/{id}', [InvoiceController::class, 'show'])->whereNumber('id')->name('invoices.show');
         Route::get('/invoices/{id}/status', [InvoiceController::class, 'status'])->whereNumber('id')->name('invoices.status');

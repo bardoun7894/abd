@@ -924,6 +924,12 @@
                         </a>
                     </div>
                     <div class="menu-item">
+                        <a class="menu-link @if(request()->routeIs('dashboard.invoices.needs-fix')) active @endif" href="{{ route('dashboard.invoices.needs-fix') }}">
+                            <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                            <span class="menu-title text-dark">مركز التصحيح</span>
+                        </a>
+                    </div>
+                    <div class="menu-item">
                         <a class="menu-link" href="{{ route('dashboard.invoices.create') }}">
                             <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
                             <span class="menu-title text-dark">رفع فاتورة</span>
