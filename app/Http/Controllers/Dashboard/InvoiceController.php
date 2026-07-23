@@ -767,6 +767,28 @@ class InvoiceController extends Controller
             }
             DB::table('purchase')->where('purchase_id', $purchaseId)->delete();
         });
+
+        // Spec 017 — void the cashbox سند created when this purchase was posted, so the
+        // running balance is corrected on reversal (no drift). Best-effort + outside the
+        // purchase transaction: a cashbox hiccup must not block the purchase reversal.
+        try {
+            $receipt = \App\Models\CashReceipt::where('source_type', 'purchase')
+                ->where('source_id', $purchaseId)
+                ->where('is_void', 0)
+                ->first();
+            if ($receipt) {
+                app(\App\Services\CashboxService::class)->voidReceipt(
+                    (int) $receipt->receipt_id,
+                    'عكس ترحيل المشترى #'.$purchaseId,
+                    Auth::check() ? Auth::id() : null
+                );
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('reversePurchase: cashbox سند void failed', [
+                'purchase_id' => $purchaseId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

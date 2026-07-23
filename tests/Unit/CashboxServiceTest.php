@@ -165,3 +165,15 @@ it('records an out receipt (purchase) that SUBTRACTS from the running balance', 
     expect((float) $last->balance_after)->toBe(700.0);       // 1000 - 300
     expect((float) (new CashboxService())->currentBalance())->toBe(700.0);
 });
+
+it('voiding an OUT receipt (purchase) adds the money back to the balance', function () {
+    makeCashboxReceipt(['amount' => 1000.0]);                                                    // +1000 -> 1000
+    $out = makeCashboxReceipt(['amount' => 300.0, 'source_type' => 'purchase', 'source_id' => 9, 'direction' => 'out']); // -300 -> 700
+    expect((float) (new CashboxService())->currentBalance())->toBe(700.0);
+
+    (new CashboxService())->voidReceipt($out->receipt_id, 'عكس ترحيل المشترى', 1);                // +300 back -> 1000
+    $last = CashboxLedger::orderByDesc('entry_id')->first();
+    expect($last->direction)->toBe('in');                                                        // compensating = opposite of 'out'
+    expect((float) $last->balance_after)->toBe(1000.0);
+    expect((float) (new CashboxService())->currentBalance())->toBe(1000.0);
+});

@@ -118,13 +118,19 @@ class CashboxService
             $receipt->void_date = $now;
             $receipt->save();
 
-            $balanceAfter = $this->lockLastBalance() - (float) $receipt->amount;
+            // The compensating entry is the OPPOSITE direction of the original: voiding
+            // an 'in' receipt (rent) appends 'out' (subtract); voiding an 'out' receipt
+            // (purchase) appends 'in' (add the money back). Keeps the balance correct
+            // for both money-in and money-out sources.
+            $origDir = ($receipt->direction ?? 'in') === 'out' ? 'out' : 'in';
+            $compDir = $origDir === 'out' ? 'in' : 'out';
+            $balanceAfter = $this->lockLastBalance() + ($compDir === 'out' ? -(float) $receipt->amount : (float) $receipt->amount);
 
             CashboxLedger::create([
                 'receipt_id' => $receipt->receipt_id,
                 'source_type' => $receipt->source_type,
                 'source_id' => $receipt->source_id,
-                'direction' => 'out',
+                'direction' => $compDir,
                 'amount' => $receipt->amount,
                 'balance_after' => $balanceAfter,
                 'reversal_of_entry_id' => $originalEntry->entry_id ?? null,
