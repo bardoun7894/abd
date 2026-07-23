@@ -72,6 +72,12 @@
                 <h3 class="fw-bold mb-0">سجل عمليات الاستخراج</h3>
             </div>
             <div class="card-toolbar gap-2">
+                @if (\Perm::get_function_access(55))
+                    <button type="button" id="bulkPushAllBtn" class="btn btn-sm btn-success fw-bold"
+                            title="ترحيل كل الفواتير المؤهلة من جميع الدفعات المعروضة — يتخطّى المُرحّلة مسبقاً بلا تكرار">
+                        <i class="bi bi-send-check me-1"></i>ترحيل الكل المؤهل
+                    </button>
+                @endif
                 <a href="{{ route('dashboard.invoices.export', request()->only('q', 'status', 'date_from', 'date_to', 'min_count')) }}"
                    class="btn btn-sm btn-light-success fw-bold">
                     <i class="bi bi-file-earmark-excel me-1"></i>تصدير Excel
@@ -213,7 +219,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted fs-7">سيتم ترحيل الفواتير المؤهلة من كل دفعة محددة (<span id="bulkPushCount">0</span>). اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.</p>
+                    <p id="bulkPushIntro" class="text-muted fs-7">سيتم ترحيل الفواتير المؤهلة من كل دفعة محددة (<span id="bulkPushCount">0</span>). اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.</p>
                     <div class="row g-3 align-items-end">
                         <div class="col-md-5">
                             <label class="form-label fs-7 fw-bold">المحل <span class="text-muted fw-normal">(مصاريف شراء محلات)</span></label>
@@ -509,23 +515,46 @@
         $('#bulkManagerId').on('change', function () { if ($(this).val()) $('#bulkShopId').val('').trigger('change.select2'); });
         $('#bulkShopId').on('change', function () { if ($(this).val()) $('#bulkManagerId').val('').trigger('change.select2'); });
 
+        // bulkAllMode=true → "ترحيل الكل المؤهل": post every listed batch matching the
+        // active filters (server re-queries), skipping already-posted invoices — so it
+        // also finishes partial batches with no duplicates.
+        var bulkAllMode = false;
+
+        function openBulkPushModal(allMode) {
+            bulkAllMode = allMode;
+            $('#bulkPushResult').text('');
+            if (allMode) {
+                $('#bulkPushModalLabel').text('ترحيل كل الفواتير المؤهلة');
+                $('#bulkPushIntro').html('سيتم ترحيل كل الفواتير المؤهلة من <strong>جميع الدفعات المعروضة</strong> — والمُرحّلة مسبقاً تُتخطّى تلقائياً بلا تكرار. اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.');
+                $('#bulkPushSubmitBtn').text('ترحيل الكل المؤهل');
+            } else {
+                $('#bulkPushModalLabel').text('ترحيل الدفعات المحددة إلى المشتريات');
+                $('#bulkPushIntro').html('سيتم ترحيل الفواتير المؤهلة من كل دفعة محددة (<span id="bulkPushCount">' + selectedBatchIds().length + '</span>). اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.');
+                $('#bulkPushSubmitBtn').text('ترحيل الدفعات المحددة');
+            }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkPushModal')).show();
+        }
+
         $('#bulkPushOpenBtn').on('click', function () {
             if (!selectedBatchIds().length) { return; }
-            $('#bulkPushResult').text('');
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkPushModal')).show();
+            openBulkPushModal(false);
         });
+        $('#bulkPushAllBtn').on('click', function () { openBulkPushModal(true); });
 
         $('#bulkPushSubmitBtn').on('click', function () {
             var ids = selectedBatchIds();
             var shopId = $('#bulkShopId').val(), managerId = $('#bulkManagerId').val();
-            if (!ids.length) { return; }
+            if (!bulkAllMode && !ids.length) { return; }
             if (!shopId && !managerId) {
                 $('#bulkPushResult').html('<span class="text-danger">الرجاء اختيار قائد مجموعة أو محل.</span>');
                 return;
             }
             var $btn = $(this).prop('disabled', true).text('جارٍ الترحيل…');
             $('#bulkPushResult').html('<span class="text-muted">جارٍ الترحيل…</span>');
-            $.post(bulkPushUrl, { batch_ids: ids, shop_id: shopId, manager_id: managerId })
+            var payload = { shop_id: shopId, manager_id: managerId };
+            if (bulkAllMode) { payload.all = 1; $.extend(payload, bulkFilterParams); }
+            else { payload.batch_ids = ids; }
+            $.post(bulkPushUrl, payload)
                 .done(function (r) {
                     var cls = r.status ? 'text-success' : 'text-danger';
                     $('#bulkPushResult').html('<span class="' + cls + '">' + $('<div>').text(r.message_out).html() + '</span>');

@@ -436,8 +436,14 @@ class InvoiceController extends Controller
             return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية لإضافة المشتريات'], 403);
         }
 
+        // "ترحيل الكل": when true, target EVERY owned batch matching the current list
+        // filters instead of an explicit checkbox selection. The mapper skips
+        // already-posted invoices, so this also completes partial batches with no
+        // duplicates. Otherwise the caller must pass an explicit batch_ids[].
+        $all = $request->boolean('all');
+
         $validated = $request->validate([
-            'batch_ids' => 'required|array|min:1',
+            'batch_ids' => ($all ? 'nullable' : 'required').'|array',
             'batch_ids.*' => 'integer',
             'shop_id' => 'nullable|integer',
             'manager_id' => 'nullable|integer',
@@ -453,17 +459,40 @@ class InvoiceController extends Controller
             return response()->json(['status' => false, 'message_out' => 'اختر قائد مجموعة أو محل وليس كليهما'], 422);
         }
 
-        $ids = array_values(array_unique(array_map('intval', $validated['batch_ids'])));
+        // Every query below is non-admin user_id scoped (mirrors index()/findOwned()).
+        if ($all) {
+            $fq = trim((string) $request->input('q', ''));
+            $fstatus = (string) $request->input('status', '');
+            $fFrom = (string) $request->input('date_from', '');
+            $fTo = (string) $request->input('date_to', '');
+            $fMin = (string) $request->input('min_count', '');
 
-        // Ownership-scoped fetch — mirrors index()'s non-admin user_id scoping and
-        // findOwned()'s authorize gate. Any requested id not in this set is either
-        // non-existent or not owned by the caller; it is reported as unavailable and
-        // never pushed.
-        $owned = InvoiceBatch::query()
-            ->whereIn('id', $ids)
-            ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
-            ->get()
-            ->keyBy('id');
+            $owned = InvoiceBatch::query()
+                ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
+                ->when($fq !== '', fn ($q) => $q->where('original_filename', 'like', '%'.$fq.'%'))
+                ->when($fstatus !== '', fn ($q) => $q->where('status', $fstatus))
+                ->when($fFrom !== '', fn ($q) => $q->whereDate('created_at', '>=', $fFrom))
+                ->when($fTo !== '', fn ($q) => $q->whereDate('created_at', '<=', $fTo))
+                ->when($fMin !== '' && is_numeric($fMin), fn ($q) => $q->where('processed_pages', '>=', (int) $fMin))
+                ->get()
+                ->keyBy('id');
+            $ids = $owned->keys()->all();
+
+            if (empty($ids)) {
+                return response()->json(['status' => false, 'message_out' => 'لا توجد دفعات مطابقة للترحيل'], 422);
+            }
+        } else {
+            $ids = array_values(array_unique(array_map('intval', $validated['batch_ids'] ?? [])));
+            if (empty($ids)) {
+                return response()->json(['status' => false, 'message_out' => 'لم يتم تحديد أي دفعة'], 422);
+            }
+            // Any requested id not in this owned set is reported as unavailable, never pushed.
+            $owned = InvoiceBatch::query()
+                ->whereIn('id', $ids)
+                ->when(Auth::user()->emp_job != 1, fn ($q) => $q->where('user_id', Auth::id()))
+                ->get()
+                ->keyBy('id');
+        }
 
         $mapper = app(InvoicePurchaseMapper::class);
 

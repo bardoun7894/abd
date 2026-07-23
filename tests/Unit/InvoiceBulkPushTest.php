@@ -235,9 +235,10 @@ it('exportBatches() honours batch_ids[] — exports only the selected batches', 
     $loaded = \PhpOffice\PhpSpreadsheet\IOFactory::load($tmp);
     @unlink($tmp);
 
-    // Column A = batch id, rows 1-2 are the brand title + header; the last row is
-    // the totals row (empty id). Collect the numeric ids only.
-    $ids = collect($loaded->getActiveSheet()->toArray())
+    // The export opens on the "الفواتير المستخرجة" sheet (invoices-first UX), so read
+    // the batch-log sheet BY NAME. Column A = batch id, rows 1-2 are the brand title +
+    // header; the last row is the totals row (empty id). Collect the numeric ids only.
+    $ids = collect($loaded->getSheetByName('سجل عمليات الاستخراج')->toArray())
         ->map(fn ($r) => $r[0] ?? null)
         ->filter(fn ($v) => is_numeric($v))
         ->map(fn ($v) => (int) $v)
@@ -267,7 +268,7 @@ it('exportBatches() with no batch_ids[] exports all (with-filters) batches', fun
     $loaded = \PhpOffice\PhpSpreadsheet\IOFactory::load($tmp);
     @unlink($tmp);
 
-    $ids = collect($loaded->getActiveSheet()->toArray())
+    $ids = collect($loaded->getSheetByName('سجل عمليات الاستخراج')->toArray())
         ->map(fn ($r) => $r[0] ?? null)
         ->filter(fn ($v) => is_numeric($v))
         ->map(fn ($v) => (int) $v)
@@ -276,4 +277,31 @@ it('exportBatches() with no batch_ids[] exports all (with-filters) batches', fun
 
     sort($ids);
     expect($ids)->toBe([$b1, $b2]);
+});
+
+// ---- bulkPush all=1 ("ترحيل الكل") -------------------------------------------
+
+it('bulkPush all=1 posts every owned batch and skips already-posted (no duplicates)', function () {
+    bulkActingAs(1, 1); // admin sees all
+
+    $b1 = seedBatch(1, [[], []]);                  // 2 eligible invoices
+    $b2 = seedBatch(1, [['purchase_id' => 777]]);  // 1 already posted -> skipped
+
+    $request = Request::create('/', 'POST', ['all' => 1, 'shop_id' => 5]);
+    $resp = json_decode((new InvoiceController())->bulkPush($request)->getContent(), true);
+
+    expect($resp['status'])->toBeTrue();
+    expect($resp['summary']['pushed'])->toBe(2);          // only b1's eligible pair
+    expect($resp['summary']['already_mapped'])->toBe(1);  // b2's posted one, untouched
+    expect(DB::table('purchase')->count())->toBe(2);      // no duplicate of the posted one
+    expect($b2)->toBeGreaterThan(0);
+});
+
+it('bulkPush all=1 with no matching batches returns 422', function () {
+    bulkActingAs(1, 1);
+    // min_count filter that matches nothing (batches have 1-2 pages).
+    $request = Request::create('/', 'POST', ['all' => 1, 'shop_id' => 5, 'min_count' => 999]);
+    seedBatch(1, [[]]);
+    $resp = (new InvoiceController())->bulkPush($request);
+    expect($resp->getStatusCode())->toBe(422);
 });
