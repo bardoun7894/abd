@@ -368,41 +368,57 @@ class LeaseController extends Controller
 
     /**
      * Spec 003 FR-205 — rentals analytics dashboard: collection rate, revenue,
-     * contract status mix, top/late tenants, and upcoming due. Aggregated from the
-     * main-DB lease_contracts + lease_payments.
+     * contract status mix, top/late tenants, and upcoming due.
+     *
+     * Data source: the LEGACY shop_rent (contracts) + shop_rentpay (payment schedule)
+     * tables — that is where rental records actually live (legacy rent screens and the
+     * cashbox receipt flow write there). The newer lease_contracts/lease_payments
+     * tables only fill when an AI extraction is approved, so aggregating them left
+     * this page permanently empty.
      */
     public function analytics()
     {
         $page_title = 'تحليلات الإيجارات';
 
-        $contracts = LeaseContract::query();
+        $contracts = DB::table('shop_rent');
         $total_contracts = (clone $contracts)->count();
-        $active = (clone $contracts)->where('status', 'active')->count();
-        $ended = (clone $contracts)->where(fn ($q) => $q->where('status', 'ended')->orWhereDate('end_date', '<', now()))->count();
-        $renewable = (clone $contracts)->whereDate('end_date', '>=', now())
-            ->whereDate('end_date', '<=', now()->addDays(30))->count();
-        $troubled = (clone $contracts)->where('status', 'troubled')->count();
+        $active = (clone $contracts)
+            ->where(fn ($q) => $q->whereNull('rent_edt')->orWhereDate('rent_edt', '>=', now()))->count();
+        $ended = (clone $contracts)->whereDate('rent_edt', '<', now())->count();
+        $renewable = (clone $contracts)->whereDate('rent_edt', '>=', now())
+            ->whereDate('rent_edt', '<=', now()->addDays(30))->count();
+        // "Troubled" = shops with at least one overdue unpaid payment.
+        $troubled = DB::table('shop_rentpay')
+            ->where('rentpay_status', '!=', 'paid')->whereDate('rentpay_dt', '<', now())
+            ->distinct()->count('shop_id');
 
-        $due_total = (float) LeasePayment::sum('amount');
-        $paid_total = (float) LeasePayment::whereIn('status', ['paid'])->sum(DB::raw('COALESCE(paid_amount, amount)'));
+        $due_total = (float) DB::table('shop_rentpay')->sum('rentpay_price');
+        $paid_total = (float) DB::table('shop_rentpay')->where('rentpay_status', 'paid')->sum('rentpay_price');
         $collection_rate = $due_total > 0 ? round($paid_total / $due_total * 100, 1) : 0.0;
 
-        $monthly_revenue = (float) LeasePayment::where('status', 'paid')
-            ->whereBetween('paid_date', [now()->startOfMonth(), now()->endOfMonth()])->sum(DB::raw('COALESCE(paid_amount, amount)'));
-        $annual_revenue = (float) LeasePayment::where('status', 'paid')
-            ->whereBetween('paid_date', [now()->startOfYear(), now()->endOfYear()])->sum(DB::raw('COALESCE(paid_amount, amount)'));
+        // paid_date is null on rows paid before the receipt flow existed — fall back to the due date.
+        $monthly_revenue = (float) DB::table('shop_rentpay')->where('rentpay_status', 'paid')
+            ->whereBetween(DB::raw('COALESCE(paid_date, rentpay_dt)'), [now()->startOfMonth(), now()->endOfMonth()])->sum('rentpay_price');
+        $annual_revenue = (float) DB::table('shop_rentpay')->where('rentpay_status', 'paid')
+            ->whereBetween(DB::raw('COALESCE(paid_date, rentpay_dt)'), [now()->startOfYear(), now()->endOfYear()])->sum('rentpay_price');
 
-        $overdue = LeasePayment::where('status', '!=', 'paid')->whereDate('due_date', '<', now())->count();
-        $upcoming = LeasePayment::where('status', '!=', 'paid')
-            ->whereBetween('due_date', [now(), now()->addDays(30)])->count();
+        $overdue = DB::table('shop_rentpay')->where('rentpay_status', '!=', 'paid')->whereDate('rentpay_dt', '<', now())->count();
+        $upcoming = DB::table('shop_rentpay')->where('rentpay_status', '!=', 'paid')
+            ->whereBetween('rentpay_dt', [now(), now()->addDays(30)])->count();
 
-        // Top tenants by total contract value; most-late tenants by overdue count.
-        $top_tenants = LeaseContract::select('tenant_name', DB::raw('SUM(rent_value) as total'))
-            ->whereNotNull('tenant_name')->groupBy('tenant_name')->orderByDesc('total')->limit(10)->get();
-        $late_tenants = LeasePayment::join('lease_contracts', 'lease_contracts.id', '=', 'lease_payments.contract_id')
-            ->where('lease_payments.status', '!=', 'paid')->whereDate('lease_payments.due_date', '<', now())
-            ->select('lease_contracts.tenant_name', DB::raw('COUNT(*) as late_count'))
-            ->groupBy('lease_contracts.tenant_name')->orderByDesc('late_count')->limit(10)->get();
+        // Top tenants by total scheduled value; most-late tenants by overdue count.
+        // shop_rent has no rent_value column — value comes from the payment schedule.
+        $top_tenants = DB::table('shop_rentpay')
+            ->join('shop_rent', 'shop_rent.shop_id', '=', 'shop_rentpay.shop_id')
+            ->whereNotNull('shop_rent.rent_name')
+            ->select('shop_rent.rent_name as tenant_name', DB::raw('SUM(shop_rentpay.rentpay_price) as total'))
+            ->groupBy('shop_rent.rent_name')->orderByDesc('total')->limit(10)->get();
+        $late_tenants = DB::table('shop_rentpay')
+            ->join('shop_rent', 'shop_rent.shop_id', '=', 'shop_rentpay.shop_id')
+            ->where('shop_rentpay.rentpay_status', '!=', 'paid')->whereDate('shop_rentpay.rentpay_dt', '<', now())
+            ->whereNotNull('shop_rent.rent_name')
+            ->select('shop_rent.rent_name as tenant_name', DB::raw('COUNT(*) as late_count'))
+            ->groupBy('shop_rent.rent_name')->orderByDesc('late_count')->limit(10)->get();
 
         $stats = compact(
             'total_contracts', 'active', 'ended', 'renewable', 'troubled',

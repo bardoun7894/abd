@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Spec 006 T6-3 — rentals analytics: "التوقعات المستقبلية للإيرادات" (future revenue
  * forecast) + "تحليل اتجاهات التحصيل باستخدام الذكاء الاصطناعي" (AI collection-trend
- * analysis), built on top of the existing `lease_payments` schedule.
+ * analysis), built on top of the legacy `shop_rentpay` payment schedule (aliased to
+ * due_date/amount/status below — that is the table real rent payments live in; the
+ * lease_payments table only fills on AI-extraction approval).
  *
  * SAFETY MODEL (same as ReportsNlService): every number is computed here in PHP via
  * DB::table aggregates over a fixed table/column set — the model NEVER sees raw rows
@@ -188,10 +190,10 @@ class LeaseForecastService
     {
         $from = $now->copy()->subMonths($months);
 
-        return DB::table('lease_payments')
-            ->select('due_date', 'amount', 'status', 'paid_amount')
-            ->whereDate('due_date', '>=', $from->format('Y-m-d'))
-            ->whereDate('due_date', '<', $now->format('Y-m-d'))
+        return DB::table('shop_rentpay')
+            ->select('rentpay_dt as due_date', 'rentpay_price as amount', 'rentpay_status as status')
+            ->whereDate('rentpay_dt', '>=', $from->format('Y-m-d'))
+            ->whereDate('rentpay_dt', '<', $now->format('Y-m-d'))
             ->get()
             ->map(fn ($r) => (array) $r)
             ->all();
@@ -202,10 +204,10 @@ class LeaseForecastService
     {
         $to = $now->copy()->addMonths($months);
 
-        return DB::table('lease_payments')
-            ->select('due_date', 'amount')
-            ->whereDate('due_date', '>=', $now->format('Y-m-d'))
-            ->whereDate('due_date', '<', $to->format('Y-m-d'))
+        return DB::table('shop_rentpay')
+            ->select('rentpay_dt as due_date', 'rentpay_price as amount')
+            ->whereDate('rentpay_dt', '>=', $now->format('Y-m-d'))
+            ->whereDate('rentpay_dt', '<', $to->format('Y-m-d'))
             ->get()
             ->map(fn ($r) => (array) $r)
             ->all();
