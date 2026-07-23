@@ -276,6 +276,21 @@ class InvoiceController extends Controller
         }
         $inv->freezePane('A3');
 
+        // Report-style page setup on every sheet (matches the app's مشتريات/مصاريف
+        // report exports the customer likes): landscape A4, fit to one page wide,
+        // print-ready zoom, tidy margins, screen gridlines off, clean font.
+        foreach ($ss->getAllSheets() as $ws) {
+            $ws->getPageSetup()
+                ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE)
+                ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
+                ->setFitToWidth(1)
+                ->setFitToHeight(0);
+            $ws->getPageMargins()->setTop(0.5)->setBottom(0.5)->setLeft(0.3)->setRight(0.3);
+            $ws->getSheetView()->setZoomScale(85);
+            $ws->setShowGridlines(false);
+        }
+        $ss->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
+
         $ss->setActiveSheetIndex(0);
 
         $filename = 'سجل-الاستخراج-والفواتير-'.date('Ymd-His').'.xlsx';
