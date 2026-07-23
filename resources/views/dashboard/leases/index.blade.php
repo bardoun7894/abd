@@ -3,6 +3,7 @@
 @section('sub', 'السجل')
 @section('title', "$page_title")
 @section('content')
+    <div class="ai-page">
     <div class="card">
         <div class="card-header border-0 pt-6">
             <div class="card-title">
@@ -68,4 +69,8 @@
             </div>
         </div>
     </div>
+    </div>{{-- /.ai-page --}}
+@endsection
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
 @endsection

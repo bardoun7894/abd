@@ -5,7 +5,7 @@
 @section('content')
     @php use App\Services\InvoicePurchaseMapper; @endphp
 
-    <div class="inv-fix">
+    <div class="inv-fix ai-page">
 
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div class="fs-6 text-muted">
@@ -169,6 +169,9 @@
     </div>
 
     </div>{{-- /.inv-fix --}}
+@endsection
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
 @endsection
 @section('scripts')
     <script>

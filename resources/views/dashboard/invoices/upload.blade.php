@@ -28,7 +28,8 @@
         .inv-ov .lbl small{display:block;opacity:.8;font-weight:400;font-size:13px;margin-top:5px}
     </style>
 
-    @include('dashboard.partials.ai_subscription_banner')
+    <div class="ai-page">
+        @include('dashboard.partials.ai_subscription_banner')
 
     <div id="err" class="alert alert-danger d-none"></div>
     <form id="up_form" enctype="multipart/form-data" method="POST" action="{{ route('dashboard.invoices.store') }}">
@@ -60,6 +61,10 @@
             <div class="lbl">جارٍ قراءة الفاتورة…<small>الذكاء الاصطناعي يستخرج البيانات، انتظر قليلاً</small></div>
         </div>
     </div>
+    </div>
+@endsection
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
 @endsection
 @section('scripts')
     <script>

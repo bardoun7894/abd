@@ -11,6 +11,7 @@
         .sn-chart-ico{width:36px;height:36px;min-width:36px;border-radius:var(--sn-r-md);background:var(--sn-emerald-tint);
             display:grid;place-items:center;font-size:16px;color:var(--sn-emerald-deep)}
     </style>
+<div class="ai-page">
 <div class="row g-5 g-xl-8">
     {{-- KPI tiles --}}
     <div class="col-12">
@@ -169,6 +170,10 @@
         </div>
     </div>
 </div>
+</div>{{-- /.ai-page --}}
+@endsection
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
 @endsection
 @section('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

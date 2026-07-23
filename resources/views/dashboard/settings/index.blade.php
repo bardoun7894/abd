@@ -4,7 +4,7 @@
 @section('title', 'إعدادات مفاتيح الـ API')
 
 @section('content')
-<div class="d-flex flex-column flex-column-fluid">
+<div class="ai-page d-flex flex-column flex-column-fluid">
     <div class="post d-flex flex-column-fluid">
         <div class="container-xxl">
 
@@ -199,6 +199,24 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
+    <style>
+        /* ---- settings-page polish: emerald focus rings + card headers ---- */
+        .ai-page .form-control:focus,
+        .ai-page .form-select:focus {
+            border-color: var(--sn-emerald);
+            box-shadow: 0 0 0 0.25rem var(--sn-emerald-tint);
+        }
+        .ai-page .card-header {
+            border-bottom: 1px solid var(--sn-emerald-tint);
+        }
+        .ai-page .card-title i.text-primary {
+            color: var(--sn-emerald) !important;
+        }
+    </style>
 @endsection
 
 @section('scripts')

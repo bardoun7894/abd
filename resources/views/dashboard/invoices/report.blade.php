@@ -12,6 +12,7 @@
             display:grid;place-items:center;font-size:16px;color:var(--sn-emerald-deep)}
     </style>
 
+    <div class="ai-page">
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
             <div class="card card-flush sn-stat h-100"><div class="card-body text-center py-4">
@@ -129,6 +130,22 @@
             </table>
         </div>
     </div>
+    </div>
+@endsection
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
+    <style>
+        .ai-page .sn-stat {
+            background: var(--sn-card);
+            border: 1px solid var(--sn-line);
+            border-radius: var(--sn-r-md);
+            box-shadow: var(--sn-shadow-sm);
+        }
+        .ai-page .sn-stat-ico {
+            background: var(--sn-emerald-tint);
+            color: var(--sn-emerald-deep);
+        }
+    </style>
 @endsection
 @section('scripts')
     <script>

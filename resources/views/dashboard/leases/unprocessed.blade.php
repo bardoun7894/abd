@@ -3,6 +3,7 @@
 @section('sub', 'عقود غير معالَجة')
 @section('title', "$page_title")
 @section('content')
+    <div class="ai-page">
     <div class="card">
         <div class="card-header border-0 pt-6 d-flex justify-content-between align-items-center">
             <h3 class="card-title fw-bolder text-info">عقود تحتاج مراجعة</h3>
@@ -64,6 +65,10 @@
             </div>
         </div>
     </div>
+    </div>{{-- /.ai-page --}}
+@endsection
+@section('styles')
+    @include('dashboard.partials.ai-page-styles')
 @endsection
 @section('scripts')
     <script>
