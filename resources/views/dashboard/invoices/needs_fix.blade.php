@@ -65,7 +65,15 @@
                                 <td class="fw-bold text-gray-800 js-inv-number">{{ $inv->invoice_number ?: '—' }}</td>
                                 <td class="text-muted sn-num js-inv-date">{{ $date ?: '—' }}</td>
                                 <td class="text-end fw-bold sn-num js-inv-total">{{ $inv->total_incl_vat !== null ? number_format((float) $inv->total_incl_vat, 2) : '—' }}</td>
-                                <td><span class="badge badge-light-warning">{{ $reason ?: 'بحاجة مراجعة' }}</span></td>
+                                <td>
+                                    <span class="badge badge-light-warning">{{ $reason ?: 'بحاجة مراجعة' }}</span>
+                                    {{-- Spec 014 — the DETAILED validation reason (رقم ضريبي غير صحيح، الإجمالي لا يطابق، حقل مفقود، ...). --}}
+                                    @if ($inv->validation_notes)
+                                        <div class="fs-8 text-danger mt-1 fw-semibold" style="white-space:normal;max-width:260px;line-height:1.5">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>{{ $inv->validation_notes }}
+                                        </div>
+                                    @endif
+                                </td>
                                 <td class="text-end pe-4">
                                     <button type="button" class="btn btn-sm btn-light-primary fw-bold js-edit-inv"
                                             data-id="{{ $inv->id }}"

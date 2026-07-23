@@ -255,6 +255,10 @@
                 if (v.purchase_id) { flag += ' <a href="{{ route('dashboard.purchase.views') }}" target="_blank" class="badge badge-light-success text-decoration-none" title="رقم المشترى ' + esc(v.purchase_id) + ' — اضغط للعرض في المشتريات">مُرحّلة · عرض في المشتريات ↗</a>'; }
                 else if (v.duplicate_in_purchase) { flag += ' <span class="badge badge-light-danger" title="رقم الفاتورة موجود مسبقاً في المشتريات — سيتم تخطيها">مكرّرة</span>'; }
                 else if (v.block_reason) { flag += ' <span class="badge badge-light-warning" title="لن تُرحّل تلقائياً: ' + esc(v.block_reason) + '">لن تُرحّل: ' + esc(v.block_reason) + '</span>'; }
+                // Spec 014 — show the DETAILED review reason inline (was hover-only): the
+                // exact validation notes (رقم ضريبي غير صحيح، الإجمالي لا يطابق، حقل مفقود، ...)
+                // so "بحاجة مراجعة" is never unexplained.
+                if (v.needs_review && v.validation_notes) { flag += '<div class="fs-8 text-danger mt-1 fw-semibold" style="white-space:normal;max-width:240px;line-height:1.5"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(v.validation_notes) + '</div>'; }
                 html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')
