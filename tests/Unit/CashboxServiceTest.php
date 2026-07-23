@@ -153,3 +153,15 @@ it('rejects a non-positive receipt amount', function () {
     expect(fn () => makeCashboxReceipt(['amount' => 0]))->toThrow(InvalidArgumentException::class);
     expect(fn () => makeCashboxReceipt(['amount' => -10]))->toThrow(InvalidArgumentException::class);
 });
+
+it('records an out receipt (purchase) that SUBTRACTS from the running balance', function () {
+    makeCashboxReceipt(['amount' => 1000.0]);                                   // +1000 (in)
+    $out = makeCashboxReceipt(['amount' => 300.0, 'source_type' => 'purchase', 'source_id' => 9, 'direction' => 'out']);
+
+    expect($out->direction)->toBe('out');
+    $last = CashboxLedger::orderByDesc('entry_id')->first();
+    expect($last->direction)->toBe('out');
+    expect((float) $last->amount)->toBe(300.0);
+    expect((float) $last->balance_after)->toBe(700.0);       // 1000 - 300
+    expect((float) (new CashboxService())->currentBalance())->toBe(700.0);
+});

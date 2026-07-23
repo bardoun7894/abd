@@ -391,6 +391,31 @@ class InvoicePurchaseMapper
                     'note' => 'مُرحّلة إلى المشتريات #'.$purchaseId,
                 ]);
 
+                // Spec 015 — auto-create a cashbox سند قبض (money OUT) for the posted
+                // purchase so الصندوق reflects purchases, not only rent. Best-effort:
+                // a cashbox failure must NOT roll back the already-committed purchase.
+                try {
+                    $amt = (float) ($a['total_incl_vat'] ?? 0);
+                    if ($amt > 0) {
+                        app(\App\Services\CashboxService::class)->recordReceipt([
+                            'source_type' => 'purchase',
+                            'source_id' => $purchaseId,
+                            'direction' => 'out',
+                            'amount' => $amt,
+                            'receipt_date' => now()->toDateString(),
+                            'payer_name' => $a['supplier_name'] ?? null,
+                            'received_by' => $userId,
+                            'note' => 'ترحيل فاتورة مشتريات — رقم '.($no ?: '—').' (مشترى #'.$purchaseId.')',
+                            'create_user' => $userId,
+                        ]);
+                    }
+                } catch (\Throwable $cbx) {
+                    Log::warning('invoice push: cashbox سند creation failed (purchase kept)', [
+                        'purchase_id' => $purchaseId,
+                        'error' => $cbx->getMessage(),
+                    ]);
+                }
+
                 // Also add the invoice image to the purchase's attachments (المرفقات).
                 $this->attachToPurchase($purchaseId, $a['image_path'] ?? null, $userId, $attachTableExists, $attachMap, $summary);
 

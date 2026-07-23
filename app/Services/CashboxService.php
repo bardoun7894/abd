@@ -61,13 +61,16 @@ class CashboxService
             $receipt->receipt_no = 'R-' . $receipt->receipt_id;
             $receipt->save();
 
-            $balanceAfter = $this->lockLastBalance() + $amount;
+            // Direction-aware: 'in' (rent/income) ADDS to the balance, 'out' (purchase/
+            // expense — money spent) SUBTRACTS. Default 'in' keeps the rent flow unchanged.
+            $dir = ($data['direction'] ?? 'in') === 'out' ? 'out' : 'in';
+            $balanceAfter = $this->lockLastBalance() + ($dir === 'out' ? -$amount : $amount);
 
             CashboxLedger::create([
                 'receipt_id' => $receipt->receipt_id,
                 'source_type' => $receipt->source_type,
                 'source_id' => $receipt->source_id,
-                'direction' => 'in',
+                'direction' => $dir,
                 'amount' => $amount,
                 'balance_after' => $balanceAfter,
                 'reversal_of_entry_id' => null,
