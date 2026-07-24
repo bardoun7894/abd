@@ -345,7 +345,7 @@
                 if (v.needs_review && v.validation_notes) { flag += '<div class="fs-8 text-danger mt-1 fw-semibold" style="white-space:normal;max-width:240px;line-height:1.5"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(v.validation_notes) + '</div>'; }
                 // Spec 024 F1 — re-route action, only for ALREADY-posted invoices and
                 // only when the acting user has the special re-route permission
-                // (canReroute, emitted below strictly inside @if($canReroute)).
+                // (the canReroute flag is emitted server-side under the Blade guard).
                 var rerouteBtn = '';
                 if (canReroute && v.purchase_id) {
                     rerouteBtn = ' <button type="button" class="btn btn-sm btn-light-warning js-inv-reroute" data-id="' + v.id + '" title="إعادة توجيه إلى فرع آخر"><i class="bi bi-signpost-split me-1"></i>إعادة توجيه</button>';

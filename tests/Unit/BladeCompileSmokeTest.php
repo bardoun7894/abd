@@ -59,4 +59,15 @@ test('every live blade view compiles', function (string $path) {
 
     expect($error)->toBeNull("Blade compile failed for {$path}: {$error}");
     expect($compiled)->toBeString();
+
+    // compileString() does NOT balance directives — an unclosed @if compiles to an
+    // open "if(...):" with no exception and only fatals at RENDER time (500). Lint
+    // the COMPILED PHP so an unbalanced @if/@foreach (incl. one hidden in a JS
+    // comment/string, which Blade still parses) is caught here, not in prod.
+    $tmp = tempnam(sys_get_temp_dir(), 'blade_').'.php';
+    file_put_contents($tmp, $compiled);
+    $out = [];
+    exec('php -l '.escapeshellarg($tmp).' 2>&1', $out, $rc);
+    @unlink($tmp);
+    expect($rc)->toBe(0, "Compiled PHP is invalid for {$path}: ".implode(' ', $out));
 })->with(array_map(fn ($p) => [$p], $files));
