@@ -310,7 +310,11 @@
         $(document).on('blur', '.edit', function () {
             var $c = $(this), id = $c.data('id'), field = $c.data('field'), value = $c.text().trim();
             $.post(correctBase + '/' + id + '/correct', { field: field, value: value }).done(function (r) {
-                if (r.status) { $('#grand').text(Number(r.grand_total || 0).toFixed(2)); $c.closest('tr').css('background', ''); }
+                if (r.status) {
+                    $('#grand').text(Number(r.grand_total || 0).toFixed(2));
+                    $c.closest('tr').css('background', '');
+                    if (r.auto_posted) { poll(); } // edit flipped it to مُرحّلة → refresh row + count
+                }
             });
         });
 
@@ -420,11 +424,12 @@
         // call — concurrent writes risk SQLITE_BUSY on multi-worker prod. Chaining
         // mirrors the one-field-at-a-time contenteditable blur behaviour.
         function invEditPostSeq(id, changed, onDone, onFail) {
-            var i = 0;
+            var i = 0, last = null;
             (function next() {
-                if (i >= changed.length) { onDone(); return; }
+                if (i >= changed.length) { onDone(last); return; }
                 var c = changed[i++];
-                $.post(correctBase + '/' + id + '/correct', { field: c.field, value: c.value }).done(next).fail(onFail);
+                $.post(correctBase + '/' + id + '/correct', { field: c.field, value: c.value })
+                    .done(function (r) { last = r; next(); }).fail(onFail);
             })();
         }
         $(document).on('click', '#invEditSave', function () {
@@ -436,11 +441,26 @@
                 if (nv !== (orig[f] != null ? String(orig[f]) : '')) { changed.push({ field: f, value: nv }); }
             });
             var modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('invEditModal'));
-            if (!changed.length) { modal.hide(); $btn.prop('disabled', false); return; }
+            if (!changed.length) {
+                // Nothing edited — treat حفظ as "accept as-is": clear the review flag and
+                // (if the batch has a shop) auto-post. Covers invoices blocked only for
+                // medium image quality whose data is already correct.
+                $('#invEditResult').text('جارٍ الاعتماد…').removeClass('text-success text-danger');
+                $.post(correctBase + '/' + id + '/approve', {})
+                    .done(function (r) {
+                        $('#invEditResult').text((r && r.auto_posted) ? 'تم الاعتماد والترحيل ✓' : 'تم الاعتماد').addClass('text-success');
+                        modal.hide(); $btn.prop('disabled', false); poll();
+                    })
+                    .fail(function (xhr) {
+                        $('#invEditResult').text((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الاعتماد').addClass('text-danger');
+                        $btn.prop('disabled', false);
+                    });
+                return;
+            }
             $('#invEditResult').text('جارٍ الحفظ…').removeClass('text-success text-danger');
             invEditPostSeq(id, changed,
-                function () {
-                    $('#invEditResult').text('تم الحفظ').addClass('text-success');
+                function (last) {
+                    $('#invEditResult').text((last && last.auto_posted) ? 'تم التصحيح والترحيل ✓' : 'تم الحفظ').addClass('text-success');
                     modal.hide();
                     $btn.prop('disabled', false);
                     poll();

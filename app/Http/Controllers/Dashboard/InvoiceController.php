@@ -826,7 +826,17 @@ class InvoiceController extends Controller
 
         $grand = $invoice->batch->recomputeGrandTotal();
 
-        return response()->json(['status' => true, 'message_out' => 'تم اعتماد الفاتورة', 'grand_total' => $grand]);
+        // Spec 020 — accepting a blocked-but-correct invoice (e.g. flagged only for
+        // medium image quality) should also post it to the batch's shop.
+        [$autoPosted, $purchaseId] = $this->maybeAutoPost($invoice);
+
+        return response()->json([
+            'status' => true,
+            'message_out' => $autoPosted ? 'تم اعتماد الفاتورة وترحيلها إلى المشتريات' : 'تم اعتماد الفاتورة',
+            'grand_total' => $grand,
+            'auto_posted' => $autoPosted,
+            'purchase_id' => $purchaseId,
+        ]);
     }
 
     /** Reject one invoice: marks it rejected so it is excluded from purchases. */
@@ -1205,7 +1215,63 @@ class InvoiceController extends Controller
 
         $grand = $invoice->batch->recomputeGrandTotal();
 
-        return response()->json(['status' => true, 'grand_total' => $grand]);
+        // Spec 020 — after a correction makes the invoice FULLY eligible, auto-post it so
+        // editing a blocked invoice actually flips it to مُرحّلة (and the batch count
+        // updates). Only when: the user has push permission, the invoice is now eligible
+        // and not yet posted, AND the batch already has a posted sibling (so we know which
+        // shop/manager to post to — we never guess a destination). push() skips
+        // already-mapped siblings, so effectively only this newly-fixed invoice posts.
+        [$autoPosted, $purchaseId] = $this->maybeAutoPost($invoice);
+
+        return response()->json([
+            'status' => true,
+            'grand_total' => $grand,
+            'auto_posted' => $autoPosted,
+            'purchase_id' => $purchaseId,
+            'message_out' => $autoPosted ? 'تم تصحيح الفاتورة وترحيلها إلى المشتريات' : 'تم حفظ التعديل',
+        ]);
+    }
+
+    /**
+     * Spec 020 — after an edit/approve makes an invoice eligible, auto-post it so it
+     * flips to مُرحّلة (and the batch count updates) — but ONLY when the batch already
+     * has a posted sibling, so we post to that same shop/manager and never guess a
+     * destination. push() skips already-mapped siblings → only this invoice posts.
+     *
+     * @return array{0: bool, 1: ?int} [autoPosted, purchaseId]
+     */
+    private function maybeAutoPost(Invoice $invoice): array
+    {
+        if (! Perm::get_function_access(55)
+            || filled($invoice->purchase_id)
+            || InvoicePurchaseMapper::ineligibilityReason($invoice->getAttributes()) !== null) {
+            return [false, null];
+        }
+
+        $sibling = $invoice->batch->invoices()->whereNotNull('purchase_id')->first();
+        if (! $sibling) {
+            return [false, null];
+        }
+
+        $p = DB::table('purchase')->where('purchase_id', $sibling->purchase_id)->first();
+        $shopId = $p && $p->shop_id ? (int) $p->shop_id : null;
+        $managerId = $p && $p->manager_id ? (int) $p->manager_id : null;
+        if (! $shopId && ! $managerId) {
+            return [false, null];
+        }
+
+        try {
+            app(InvoicePurchaseMapper::class)->push($invoice->batch, $shopId, $managerId, Auth::id());
+            $purchaseId = $invoice->fresh()->purchase_id;
+
+            return [filled($purchaseId), $purchaseId];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('auto-post after edit/approve failed', [
+                'invoice_id' => (int) $invoice->id, 'error' => $e->getMessage(),
+            ]);
+
+            return [false, null];
+        }
     }
 
     /** Build a Laravel-served URL for a page attachment (web servers here don't serve the symlinked uploads dir). */
