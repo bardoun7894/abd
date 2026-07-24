@@ -21,6 +21,10 @@ class AuditLogger
     public const DUP_OVERRIDE = 'dup_override';
     public const READ = 'read';
     public const DELETE = 'delete';
+    public const TRANSFER = 'transfer';   // per-invoice branch transfer / re-route (F1)
+    public const PAID = 'paid';           // lease payment marked مدفوعة + سند issued (F2)
+    public const VOID = 'void';           // lease payment reverted / سند voided (F2)
+    public const BLOCKED = 'blocked';     // blocked attempt to revert a locked سند (F2)
 
     /**
      * @param  string  $documentType  'invoice' | 'lease'
