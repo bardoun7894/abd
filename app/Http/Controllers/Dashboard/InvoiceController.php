@@ -1343,7 +1343,20 @@ class InvoiceController extends Controller
             $existingNos = [];
         }
 
-        $invoices = $batchInvoices->map(function (Invoice $i) use ($batch, $existingNos) {
+        // Resolve the transferring employees' names in ONE query (spec 024 F1 —
+        // the grid shows "الفرع المُرحّل إليه" + who transferred). Falls back to
+        // null when the user row is gone; never let a name lookup break status().
+        $transferByNames = [];
+        try {
+            $byIds = $batchInvoices->pluck('transferred_by')->filter()->unique()->values()->all();
+            if (! empty($byIds)) {
+                $transferByNames = DB::table('users')->whereIn('id', $byIds)->pluck('name', 'id')->all();
+            }
+        } catch (\Throwable $e) {
+            $transferByNames = [];
+        }
+
+        $invoices = $batchInvoices->map(function (Invoice $i) use ($batch, $existingNos, $transferByNames) {
             // ZATCA Phase-1 QR — only for invoices that have a total (i.e.
             // extraction actually produced numbers worth encoding).
             $zatcaQr = null;
@@ -1375,6 +1388,10 @@ class InvoiceController extends Controller
                 'image_url' => $this->imageUrl($batch->id, $i->image_path),
                 'image_quality' => $i->image_quality,
                 'purchase_id' => $i->purchase_id,
+                // Spec 024 F1 — per-invoice branch transfer display (grid renders these).
+                'transferred_branch_label' => $i->transferred_branch_label,
+                'transferred_at' => $i->transferred_at?->format('Y-m-d'),
+                'transferred_by_name' => $i->transferred_by ? ($transferByNames[$i->transferred_by] ?? null) : null,
                 // True when this invoice number already exists in purchases from another
                 // batch (would be skipped as a duplicate on push). Not flagged for the
                 // invoice that is itself already mapped (that shows the "posted" badge).

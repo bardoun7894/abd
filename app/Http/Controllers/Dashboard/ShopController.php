@@ -342,7 +342,10 @@ class ShopController extends Controller
                 }
                 $row = array();
                 $row[] = $i;
-                $row[] = $x->shop_name;
+                // Spec 024 F3 — show the code beside the name: "A1 - فوال نور الصباح".
+                $row[] = (isset($x->shop_code) && trim((string) $x->shop_code) !== '')
+                    ? trim((string) $x->shop_code) . ' - ' . $x->shop_name
+                    : $x->shop_name;
                 $row[] = $x->establishment_number;
                 $row[] = $x->manager_name;
                 $row[] = $x->shop_respon;
@@ -1898,6 +1901,10 @@ class ShopController extends Controller
                 'shop_name' => ['required', 'string'],
                 'manager_id' => ['required', 'string'],
                 'calculate_month_val' => ['required', 'integer'],
+                // Spec 024 F3 — manual, unique shop code (A1, B2, ...). Optional.
+                'shop_code' => ['nullable', 'string', 'max:50', 'unique:shop,shop_code'],
+            ], [
+                'shop_code.unique' => 'كود المحل مستخدم مسبقاً، يرجى إدخال كود آخر.',
             ]);
             $validator->setAttributeNames($attributeNames);
             if ($validator->fails()) {
@@ -1906,6 +1913,9 @@ class ShopController extends Controller
                 $result['message_out'] = '';
             } else {
                 $ERROR_FLAG = 0;
+                // Empty code stored as NULL so blanks never collide on the unique index.
+                $shop_code = ($request->shop_code !== null && trim((string) $request->shop_code) !== '')
+                    ? trim((string) $request->shop_code) : null;
                 /* $user_photo='';
                  if ($request->hasFile('avatar')) {
                              $imageName = time() . '.' . $request->avatar->extension();
@@ -1926,6 +1936,7 @@ class ShopController extends Controller
                          }*/
                 $result2 = DB::table('shop')->insertGetId([
                     'shop_name' => $request->shop_name,
+                    'shop_code' => $shop_code,
                     'establishment_number' => $request->establishment_number,
                     'calculate_month_val' => $request->calculate_month_val,
                     'manager_id' => $request->manager_id,
@@ -2143,6 +2154,10 @@ class ShopController extends Controller
                 'shop_name' => ['required', 'string'],
                 'manager_id' => ['required', 'string'],
                 'calculate_month_val' => ['required', 'integer'],
+                // Spec 024 F3 — unique shop code, ignoring this shop's own row.
+                'shop_code' => ['nullable', 'string', 'max:50', 'unique:shop,shop_code,' . $id . ',shop_id'],
+            ], [
+                'shop_code.unique' => 'كود المحل مستخدم مسبقاً، يرجى إدخال كود آخر.',
             ]);
             $validator->setAttributeNames($attributeNames);
             if ($validator->fails()) {
@@ -2151,10 +2166,13 @@ class ShopController extends Controller
                 $result['message_out'] = '';
             } else {
                 $ERROR_FLAG = 0;
+                $shop_code = ($request->shop_code !== null && trim((string) $request->shop_code) !== '')
+                    ? trim((string) $request->shop_code) : null;
                 $result2 = DB::table('shop')
                     ->where('shop_id', $id)
                     ->update([
                         'shop_name' => $request->shop_name,
+                        'shop_code' => $shop_code,
                         'establishment_number' => $request->establishment_number,
                         'calculate_month_val' => $request->calculate_month_val,
                         'manager_id' => $request->manager_id,
