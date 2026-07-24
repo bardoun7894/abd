@@ -76,7 +76,8 @@ border=1 bordercolor=#000000  cellspacing="0" cellpadding="4">
         } else {
             $calculate_desc = 'متبقي';
         }
-        $shop_name = $x->shop_name;
+        $shop_code = $x->shop_id ? optional(App\Models\Shop::find($x->shop_id))->shop_code : null;
+        $shop_name = !empty($shop_code) ? ($shop_code.' - '.$x->shop_name) : $x->shop_name;
         $calculate_month_desc = $x->calculate_month_desc;
         $calculate_desc = $calculate_desc;
         $count_statement = $x->count_statement;

@@ -182,6 +182,52 @@ class ExcelReportStyler
     }
 
     /**
+     * Grand-totals footer row (e.g. "الإجمالي") written right below the last
+     * data row processed by finalize(). Writes $label into $labelCol, writes
+     * each total in $moneyTotals (column letter => numeric total) into that
+     * column, applies the same #,##0.00 money format finalize() uses, then
+     * bolds + emerald-tints the whole label..lastMoneyCol span so the footer
+     * reads as one branded row.
+     *
+     * Callers own the accumulator: sum the RAW numeric value per data row
+     * while writing it (not the formatted cell), then pass the totals here
+     * once after the loop. Extend the finalize(...) lastRow argument to
+     * include $rowIndex so the footer sits inside the styled/bordered block.
+     *
+     * @param  array<string,float|int>  $moneyTotals  column letter => total
+     */
+    public static function totalsRow(
+        Worksheet $sheet,
+        int $rowIndex,
+        string $labelCol,
+        string $label,
+        array $moneyTotals
+    ): void {
+        $sheet->setCellValue("{$labelCol}{$rowIndex}", $label);
+
+        foreach ($moneyTotals as $col => $total) {
+            $sheet->setCellValue("{$col}{$rowIndex}", $total);
+            $sheet->getStyle("{$col}{$rowIndex}")
+                ->getNumberFormat()->setFormatCode('#,##0.00');
+        }
+
+        $colLetters = array_merge([$labelCol], array_keys($moneyTotals));
+        $colIndexes = array_map(
+            fn (string $c): int => Coordinate::columnIndexFromString($c),
+            $colLetters
+        );
+        $minCol = Coordinate::stringFromColumnIndex(min($colIndexes));
+        $maxCol = Coordinate::stringFromColumnIndex(max($colIndexes));
+        $range = "{$minCol}{$rowIndex}:{$maxCol}{$rowIndex}";
+
+        $sheet->getStyle($range)->getFont()->setBold(true);
+        $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setARGB(self::ZEBRA);
+        $sheet->getStyle($range)->getBorders()->getAllBorders()
+            ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB(self::BORDER);
+    }
+
+    /**
      * Report-style page setup: landscape A4, fit one page wide, tidy margins,
      * print-ready zoom, screen gridlines off. Call directly for extra sheets.
      */

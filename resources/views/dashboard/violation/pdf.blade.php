@@ -103,7 +103,8 @@ border=1 bordercolor=#000000  cellspacing="0" cellpadding="4">
             } else {
                 $violation_desc = 'غير مدفوع';
             }
-            $shop_name = $x->shop_name;
+            $shop_code = $x->shop_id ? optional(App\Models\Shop::find($x->shop_id))->shop_code : null;
+            $shop_name = !empty($shop_code) ? ($shop_code.' - '.$x->shop_name) : $x->shop_name;
             $manager_name = $x->manager_name;
             $violation_val = $x->violation_val;
             $violation_dt=$x->violation_dt;
