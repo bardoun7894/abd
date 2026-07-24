@@ -1,9 +1,9 @@
 <link href="{{ asset('assets/plugins/custom/datatables/datatables.bundle.css') }}" rel="stylesheet" type="text/css" />
 <script src="{{ asset('assets/plugins/custom/datatables/datatables.bundle.js') }}"></script>
    <div class="py-5">
-        <table id="shop_table" class="table table-row-bordered gy-5">
+        <table id="shop_table" class="table table-row-bordered gy-5 sn-thead">
         	<thead>
-        		<tr class="fw-semibold fs-6 text-muted">
+        		<tr class="fw-bold fs-7 text-uppercase">
                     <th>#</th>
                     <th>اسم المحل</th>
                     <th>رقم المنشأة</th>
