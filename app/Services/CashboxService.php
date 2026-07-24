@@ -25,10 +25,18 @@ use RuntimeException;
 class CashboxService
 {
     /**
+     * Spec 024 F2 — source_types whose receipt vouchers are permanently
+     * hard-locked: only the issuer (cash_receipt.received_by) or a system
+     * admin may revert them. Every other source_type (purchase, expense, ...)
+     * is unaffected.
+     */
+    private const LEASE_LOCKED_SOURCE_TYPES = ['shop_rentpay', 'lease_payment'];
+
+    /**
      * Record an inbound receipt voucher (سند قبض) and append the matching
      * 'in' ledger entry. Returns the created CashReceipt.
      *
-     * @param array{source_type:string,source_id:int,direction?:string,amount:float,receipt_date:string,payer_name?:?string,received_by?:?int,note?:?string,create_user?:?int} $data
+     * @param array{source_type:string,source_id:int,direction?:string,amount:float,receipt_date:string,payer_name?:?string,received_by?:?int,note?:?string,create_user?:?int,contract_no?:?string,payment_no?:?string,period_from?:?string,period_to?:?string} $data
      */
     public function recordReceipt(array $data): CashReceipt
     {
@@ -43,7 +51,16 @@ class CashboxService
         return DB::transaction(function () use ($data, $amount) {
             $now = Carbon::now();
 
-            $receipt = CashReceipt::create([
+            // Spec 024 F2 — additive voucher-enrichment fields (contract no.,
+            // payment no., due period). Only included when the caller passes
+            // them, so callers/schemas that predate the migration (and the
+            // existing house tests that hand-build cash_receipt without these
+            // columns) are completely unaffected.
+            $enrichment = array_intersect_key($data, array_flip([
+                'contract_no', 'payment_no', 'period_from', 'period_to',
+            ]));
+
+            $receipt = CashReceipt::create(array_merge([
                 'source_type' => $data['source_type'],
                 'source_id' => $data['source_id'],
                 'direction' => $data['direction'] ?? 'in',
@@ -55,7 +72,7 @@ class CashboxService
                 'is_void' => 0,
                 'create_user' => $data['create_user'] ?? null,
                 'created_at' => $now,
-            ]);
+            ], $enrichment));
 
             // Derive a stable, unique, never-reused receipt_no from the PK.
             $receipt->receipt_no = 'R-' . $receipt->receipt_id;
@@ -89,20 +106,28 @@ class CashboxService
      * compensating 'out' reversal entry pointing back at the original 'in'
      * ledger entry via reversal_of_entry_id.
      */
-    public function voidReceipt(int $receiptId, string $reason, ?int $userId): CashReceipt
+    public function voidReceipt(int $receiptId, string $reason, ?int $userId, ?bool $isAdmin = null): CashReceipt
     {
         $reason = trim($reason);
         if ($reason === '') {
             throw new InvalidArgumentException('A void reason is required.');
         }
 
-        return DB::transaction(function () use ($receiptId, $reason, $userId) {
+        return DB::transaction(function () use ($receiptId, $reason, $userId, $isAdmin) {
             $receipt = CashReceipt::where('receipt_id', $receiptId)->lockForUpdate()->first();
             if (! $receipt) {
                 throw new RuntimeException('Receipt not found.');
             }
             if ((int) $receipt->is_void === 1) {
                 throw new RuntimeException('Receipt is already void.');
+            }
+
+            // Spec 024 F2 hard-lock. Opt-in: callers that don't pass $isAdmin
+            // (the pre-existing 3-arg call shape) get the exact old
+            // behaviour — no enforcement — so this is fully backward
+            // compatible with every existing caller/test.
+            if ($isAdmin !== null) {
+                $this->assertLeaseVoidAllowed($receipt, $userId, $isAdmin);
             }
 
             $originalEntry = CashboxLedger::where('receipt_id', $receiptId)
@@ -141,6 +166,39 @@ class CashboxService
 
             return $receipt;
         });
+    }
+
+    /**
+     * Spec 024 F2 hard-lock: reject reverting a lease/rentpay سند unless the
+     * acting user is the issuer (cash_receipt.received_by) or a system admin.
+     * No-op for every source_type outside LEASE_LOCKED_SOURCE_TYPES (e.g.
+     * 'purchase' voids are never gated by this check).
+     */
+    public function assertLeaseVoidAllowed(CashReceipt $receipt, ?int $actingUserId, bool $isAdmin): void
+    {
+        if (! in_array($receipt->source_type, self::LEASE_LOCKED_SOURCE_TYPES, true)) {
+            return;
+        }
+        if ($isAdmin) {
+            return;
+        }
+        if ($actingUserId !== null && (int) $receipt->received_by === (int) $actingUserId) {
+            return;
+        }
+
+        $issuerName = 'غير معروف';
+        if ($receipt->received_by) {
+            try {
+                $issuerName = DB::table('users')->where('id', $receipt->received_by)->value('name') ?? $issuerName;
+            } catch (\Throwable $e) {
+                // Name lookup must never turn into a misleading DB-error message.
+            }
+        }
+
+        throw new RuntimeException(
+            "لا يمكن تعديل حالة هذه الدفعة لأنها مرتبطة بسند سداد تم تحريره بواسطة الموظف ({$issuerName}). "
+            . 'في حال الحاجة إلى التعديل، يجب أن يتم من خلال الموظف الذي حرر السند أو مستخدم يمتلك صلاحية مدير النظام.'
+        );
     }
 
     /**

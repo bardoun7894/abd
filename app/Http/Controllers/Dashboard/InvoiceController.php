@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Perm;
 
@@ -40,6 +41,15 @@ class InvoiceController extends Controller
      * 100 (e.g. lease-only access) used to pass here too.
      */
     private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file', 'exportBatches', 'needsFix'];
+
+    /**
+     * Spec 024 Feature 1 — special permission (per_function id 222, seeded by
+     * 2026_07_24_000017_seed_invoice_reroute_permission.php) gating
+     * rerouteInvoice(): moving an ALREADY-posted invoice to a different
+     * shop/manager is riskier than the ordinary push (55) — it mutates a
+     * purchase row that already fed the cashbox.
+     */
+    public const REROUTE_FUNCTION_ID = 222;
 
     public function __construct()
     {
@@ -361,9 +371,11 @@ class InvoiceController extends Controller
         // Same shop XOR manager picker as index()'s bulk-push modal.
         $shops = Shop::get();
         $managers = $this->get_manager();
+        // Spec 024 Feature 1 — gates the per-invoice "إعادة توجيه بين الفروع" button.
+        $canReroute = (bool) (Perm::get_function_access(self::REROUTE_FUNCTION_ID) || (int) (Auth::user()->emp_job ?? 0) === 1);
 
         return view('dashboard.invoices.needs_fix', compact(
-            'page_title', 'invoices', 'batchId', 'affectedBatchIds', 'shops', 'managers'
+            'page_title', 'invoices', 'batchId', 'affectedBatchIds', 'shops', 'managers', 'canReroute'
         ));
     }
 
@@ -433,6 +445,8 @@ class InvoiceController extends Controller
         $shops = Shop::get();
         $managers = $this->get_manager();
         $canPush = (bool) Perm::get_function_access(55);
+        // Spec 024 Feature 1 — gates the per-invoice "إعادة توجيه بين الفروع" button.
+        $canReroute = (bool) (Perm::get_function_access(self::REROUTE_FUNCTION_ID) || (int) (Auth::user()->emp_job ?? 0) === 1);
 
         // Feature A — batch AI summary. Only computed once the batch is finished
         // extracting; a mid-run batch's numbers would just churn on every poll.
@@ -440,7 +454,7 @@ class InvoiceController extends Controller
             ? app(InvoiceBatchSummarizer::class)->summarize($batch->id)
             : null;
 
-        return view('dashboard.invoices.show', compact('page_title', 'batch', 'shops', 'managers', 'canPush', 'aiSummary'));
+        return view('dashboard.invoices.show', compact('page_title', 'batch', 'shops', 'managers', 'canPush', 'canReroute', 'aiSummary'));
     }
 
     /**
@@ -675,6 +689,215 @@ class InvoiceController extends Controller
         }
 
         return response()->json(['status' => true, 'message_out' => $msg, 'summary' => $combined]);
+    }
+
+    /**
+     * Spec 024 Feature 1 — per-invoice checkbox posting: push exactly the checked
+     * invoice_ids[] (which may span several of the caller's own batches) to a
+     * single shop XOR manager, via InvoicePurchaseMapper::push()'s new
+     * onlyInvoiceIds param. Returns the SAME combined summary shape bulkPush()
+     * returns so the UI can reuse its rendering. Reuses the ordinary push
+     * permission (55) — same risk level as pushToPurchase()/bulkPush().
+     */
+    public function pushInvoices(Request $request)
+    {
+        if (! Perm::get_function_access(55)) {
+            return response()->json(['status' => false, 'message_out' => 'ليس لديك صلاحية لإضافة المشتريات'], 403);
+        }
+
+        $validated = $request->validate([
+            'invoice_ids' => 'required|array|min:1',
+            'invoice_ids.*' => 'integer',
+            'shop_id' => 'nullable|integer',
+            'manager_id' => 'nullable|integer',
+        ]);
+
+        $shopId = $request->filled('shop_id') ? (int) $request->shop_id : null;
+        $managerId = $request->filled('manager_id') ? (int) $request->manager_id : null;
+
+        if (! $shopId && ! $managerId) {
+            return response()->json(['status' => false, 'message_out' => 'الرجاء اختيار قائد مجموعة أو محل'], 422);
+        }
+        if ($shopId && $managerId) {
+            return response()->json(['status' => false, 'message_out' => 'اختر قائد مجموعة أو محل وليس كليهما'], 422);
+        }
+
+        $ids = array_values(array_unique(array_map('intval', $validated['invoice_ids'])));
+        $targetLabel = $this->branchLabel($shopId, $managerId);
+
+        // Group the requested invoices by their batch — each batch is checked under
+        // the SAME non-admin ownership scope as findOwned()/bulkPush(), so an id from
+        // a batch the caller doesn't own is silently reported as not_found, never
+        // pushed. Ids that don't resolve to any invoice at all are also not_found.
+        $invoices = Invoice::whereIn('id', $ids)->get()->keyBy('id');
+        $notFound = array_values(array_diff($ids, $invoices->keys()->map(fn ($v) => (int) $v)->all()));
+        $byBatch = $invoices->groupBy('batch_id');
+
+        $mapper = app(InvoicePurchaseMapper::class);
+        $isAdmin = (int) (Auth::user()->emp_job ?? 0) === 1;
+
+        $combined = [
+            'batches' => 0,
+            'pushed' => 0,
+            'already_mapped' => 0,
+            'ineligible' => 0,
+            'duplicates' => 0,
+            'fuzzy_duplicates' => 0,
+            'errors' => 0,
+            'attached' => 0,
+            'link_errors' => 0,
+            'not_found' => $notFound,
+            'per_batch' => [],
+        ];
+
+        foreach ($byBatch as $batchId => $group) {
+            $batch = InvoiceBatch::find($batchId);
+            if (! $batch || (! $isAdmin && $batch->user_id != Auth::id())) {
+                $combined['not_found'] = array_merge($combined['not_found'], $group->pluck('id')->map(fn ($v) => (int) $v)->all());
+
+                continue;
+            }
+
+            $onlyIds = $group->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $alreadyMappedBefore = $group->filter(fn ($inv) => filled($inv->purchase_id))->pluck('id')->map(fn ($v) => (int) $v)->all();
+
+            try {
+                $summary = $mapper->push($batch, $shopId, $managerId, Auth::id(), [], $onlyIds);
+            } catch (\Throwable $e) {
+                $combined['errors']++;
+                $combined['per_batch'][] = ['batch_id' => $batchId, 'error' => $e->getMessage()];
+
+                continue;
+            }
+
+            $combined['batches']++;
+            $combined['pushed'] += $summary['pushed'];
+            $combined['already_mapped'] += $summary['already_mapped'];
+            $combined['ineligible'] += $summary['ineligible'];
+            $combined['duplicates'] += count($summary['duplicates']);
+            $combined['fuzzy_duplicates'] += count($summary['fuzzy_duplicates'] ?? []);
+            $combined['errors'] += count($summary['errors']);
+            $combined['attached'] += $summary['attached'] ?? 0;
+            $combined['link_errors'] += count($summary['link_errors'] ?? []);
+            $combined['per_batch'][] = [
+                'batch_id' => $batchId,
+                'pushed' => $summary['pushed'],
+                'already_mapped' => $summary['already_mapped'],
+                'ineligible' => $summary['ineligible'],
+                'duplicates' => count($summary['duplicates']),
+                'fuzzy_duplicates' => count($summary['fuzzy_duplicates'] ?? []),
+                'errors' => count($summary['errors']),
+            ];
+
+            // Per-invoice denormalized transfer columns + audit — only for invoices
+            // that were newly pushed BY THIS CALL (not ones that were already
+            // mapped before, which push() correctly skips as no-ops).
+            $fresh = Invoice::whereIn('id', $onlyIds)->get();
+            foreach ($fresh as $inv) {
+                if (filled($inv->purchase_id) && ! in_array((int) $inv->id, $alreadyMappedBefore, true)) {
+                    $inv->transferred_branch_label = $targetLabel;
+                    $inv->transferred_at = now();
+                    $inv->transferred_by = Auth::id();
+                    $inv->save();
+
+                    AuditLogger::log('invoice', (int) $inv->id, AuditLogger::TRANSFER, [
+                        'batch_id' => $inv->batch_id,
+                        'note' => 'ترحيل فردي إلى '.$targetLabel,
+                    ]);
+                }
+            }
+        }
+
+        $msg = 'تم ترحيل '.$combined['pushed'].' فاتورة إلى '.$targetLabel;
+        if ($combined['duplicates']) {
+            $msg .= ' — تخطّي '.$combined['duplicates'].' مكررة';
+        }
+        if ($combined['already_mapped']) {
+            $msg .= ' — '.$combined['already_mapped'].' مُرحّلة مسبقاً';
+        }
+        if ($combined['ineligible']) {
+            $msg .= ' — '.$combined['ineligible'].' غير مؤهلة';
+        }
+        if ($combined['not_found']) {
+            $msg .= ' — '.count($combined['not_found']).' فاتورة غير متاحة';
+        }
+
+        return response()->json(['status' => true, 'message_out' => $msg, 'summary' => $combined]);
+    }
+
+    /**
+     * Spec 024 Feature 1 — re-route an ALREADY-posted invoice to a different
+     * shop/manager. In-place UPDATE of the linked `purchase` row only — NEVER
+     * reverse+repush, which would churn the append-only cashbox_ledger (push()
+     * auto-creates a cashbox سند per posted purchase). Gated by a special
+     * permission (or system admin), independent of the ordinary push perm (55).
+     */
+    public function rerouteInvoice(Request $request, $id)
+    {
+        if (! Perm::get_function_access(self::REROUTE_FUNCTION_ID) && (int) (Auth::user()->emp_job ?? 0) !== 1) {
+            return response()->json(['status' => false, 'message_out' => 'ليست لديك صلاحية لإعادة توجيه الفاتورة بين الفروع'], 403);
+        }
+
+        $invoice = Invoice::findOrFail($id);
+        $this->authorizeBatch($invoice->batch);
+
+        if (! filled($invoice->purchase_id)) {
+            return response()->json(['status' => false, 'message_out' => 'الفاتورة غير مُرحّلة'], 422);
+        }
+
+        $shopId = $request->filled('shop_id') ? (int) $request->shop_id : null;
+        $managerId = $request->filled('manager_id') ? (int) $request->manager_id : null;
+
+        if (! $shopId && ! $managerId) {
+            return response()->json(['status' => false, 'message_out' => 'الرجاء اختيار قائد مجموعة أو محل'], 422);
+        }
+        if ($shopId && $managerId) {
+            return response()->json(['status' => false, 'message_out' => 'اختر قائد مجموعة أو محل وليس كليهما'], 422);
+        }
+
+        $purchase = DB::table('purchase')->where('purchase_id', $invoice->purchase_id)->first();
+        $fromLabel = $this->branchLabel($purchase->shop_id ?? null, $purchase->manager_id ?? null);
+        $toLabel = $this->branchLabel($shopId, $managerId);
+
+        // In-place UPDATE only — the cashbox سند created when this purchase was
+        // first posted is left completely untouched (Spec 024 decision).
+        DB::table('purchase')->where('purchase_id', $invoice->purchase_id)->update([
+            'shop_id' => $shopId,
+            'manager_id' => $managerId,
+        ]);
+
+        $invoice->transferred_branch_label = $toLabel;
+        $invoice->transferred_at = now();
+        $invoice->transferred_by = Auth::id();
+        $invoice->save();
+
+        AuditLogger::log('invoice', (int) $invoice->id, AuditLogger::TRANSFER, [
+            'batch_id' => $invoice->batch_id,
+            'old' => $fromLabel,
+            'new' => $toLabel,
+            'note' => 'إعادة توجيه بين الفروع',
+        ]);
+
+        return response()->json(['status' => true, 'message_out' => 'تم إعادة توجيه الفاتورة إلى '.$toLabel]);
+    }
+
+    /** Human-readable "الفرع" label for a shop XOR manager target (Spec 024). */
+    private function branchLabel(?int $shopId, ?int $managerId): string
+    {
+        if ($shopId) {
+            $shop = DB::table('shop')->where('shop_id', $shopId)->first();
+            $name = $shop->shop_name ?? ('محل #'.$shopId);
+            $code = ($shop && Schema::hasColumn('shop', 'shop_code')) ? ($shop->shop_code ?? null) : null;
+
+            return $code ? $code.' - '.$name : $name;
+        }
+        if ($managerId) {
+            $manager = DB::table('manager')->where('manager_id', $managerId)->first();
+
+            return $manager->manager_name ?? ('قائد مجموعة #'.$managerId);
+        }
+
+        return '';
     }
 
     /**
@@ -1238,6 +1461,12 @@ class InvoiceController extends Controller
      * has a posted sibling, so we post to that same shop/manager and never guess a
      * destination. push() skips already-mapped siblings → only this invoice posts.
      *
+     * Spec 024 guard — a batch can now legitimately span MULTIPLE branches (per-
+     * invoice transfer). If the batch's already-posted invoices point at more than
+     * one distinct (shop_id, manager_id) target, inheriting "the first one found"
+     * would silently guess wrong for some invoices. In that case, skip auto-post
+     * entirely so the user must post the fixed invoice to an explicit target.
+     *
      * @return array{0: bool, 1: ?int} [autoPosted, purchaseId]
      */
     private function maybeAutoPost(Invoice $invoice): array
@@ -1248,12 +1477,27 @@ class InvoiceController extends Controller
             return [false, null];
         }
 
-        $sibling = $invoice->batch->invoices()->whereNotNull('purchase_id')->first();
-        if (! $sibling) {
+        $postedPurchaseIds = $invoice->batch->invoices()
+            ->whereNotNull('purchase_id')
+            ->pluck('purchase_id')
+            ->filter()
+            ->unique()
+            ->values();
+        if ($postedPurchaseIds->isEmpty()) {
             return [false, null];
         }
 
-        $p = DB::table('purchase')->where('purchase_id', $sibling->purchase_id)->first();
+        $purchases = DB::table('purchase')->whereIn('purchase_id', $postedPurchaseIds)->get(['shop_id', 'manager_id']);
+        $distinctTargets = $purchases
+            ->map(fn ($p) => ($p->shop_id ? 's'.$p->shop_id : '').'|'.($p->manager_id ? 'm'.$p->manager_id : ''))
+            ->unique();
+
+        if ($distinctTargets->count() !== 1) {
+            // Spans >1 distinct target (or no resolvable target) — never guess.
+            return [false, null];
+        }
+
+        $p = $purchases->first();
         $shopId = $p && $p->shop_id ? (int) $p->shop_id : null;
         $managerId = $p && $p->manager_id ? (int) $p->manager_id : null;
         if (! $shopId && ! $managerId) {

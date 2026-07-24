@@ -20,6 +20,8 @@ class Invoice extends Model
         'raw_json', 'confidence', 'image_quality', 'status', 'needs_review',
         'validation_notes', 'error_message',
         'purchase_id', 'mapped_at',
+        // Spec 024 — per-invoice branch transfer / re-route denormalized columns.
+        'transferred_branch_label', 'transferred_at', 'transferred_by',
         // Spec 002/001 — extended fields.
         'invoice_type', 'currency', 'discount_total', 'vat_rate',
         'commercial_registration', 'payment_method', 'due_date',
@@ -38,6 +40,8 @@ class Invoice extends Model
         'raw_json' => 'array',
         'purchase_id' => 'integer',
         'mapped_at' => 'datetime',
+        'transferred_at' => 'datetime',
+        'transferred_by' => 'integer',
         // Spec 002/001 — extended casts.
         'discount_total' => 'decimal:2',
         'vat_rate' => 'decimal:3',

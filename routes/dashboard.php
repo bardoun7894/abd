@@ -483,6 +483,12 @@ Route::group([
         // manager. Non-numeric path, so it never collides with the whereNumber
         // /invoices/{id} routes below. JSON action (ai_access-guarded, not a WEB_METHOD).
         Route::post('/invoices/bulk-push', [InvoiceController::class, 'bulkPush'])->name('invoices.bulk-push');
+        // Spec 024 Feature 1 — per-invoice checkbox posting (invoice_ids[] across the
+        // caller's own batches) + re-routing an already-posted invoice between
+        // branches. Non-numeric static path, so push-invoices never collides with the
+        // whereNumber /invoices/{id} routes below. Both are JSON actions (ai_access-
+        // guarded, not WEB_METHODs), same as bulk-push.
+        Route::post('/invoices/push-invoices', [InvoiceController::class, 'pushInvoices'])->name('invoices.push-invoices');
         // Spec 013 Part A — "مركز التصحيح": cross-batch list of un-posted BLOCKED invoices
         // (needs_review or missing رقم/تاريخ/إجمالي) + fix + re-post. Non-numeric static
         // path, so it never collides with the whereNumber /invoices/{id} routes below.
@@ -492,6 +498,7 @@ Route::group([
         Route::get('/invoices/{id}/status', [InvoiceController::class, 'status'])->whereNumber('id')->name('invoices.status');
         Route::post('/invoices/{id}/correct', [InvoiceController::class, 'correct'])->whereNumber('id')->name('invoices.correct');
         Route::post('/invoices/{id}/push-to-purchase', [InvoiceController::class, 'pushToPurchase'])->whereNumber('id')->name('invoices.push');
+        Route::post('/invoices/{id}/reroute', [InvoiceController::class, 'rerouteInvoice'])->whereNumber('id')->name('invoices.reroute');
         Route::post('/invoices/{id}/rescan', [InvoiceController::class, 'rescan'])->whereNumber('id')->name('invoices.rescan');
         Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy'])->whereNumber('id')->name('invoices.destroy');
         Route::delete('/invoices/{batch}/invoice/{invoiceId}', [InvoiceController::class, 'destroyInvoice'])->whereNumber('batch')->whereNumber('invoiceId')->name('invoices.invoice.destroy');

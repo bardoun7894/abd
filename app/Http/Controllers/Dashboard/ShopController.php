@@ -16,6 +16,8 @@ use App\Http\Traits\ApimtitTrait;
 use App\Models\Shop_rent;
 use App\Models\CashReceipt;
 use App\Services\CashboxService;
+use App\Services\AuditLogger;
+use Illuminate\Support\Facades\Schema;
 use Jenssegers\Agent\Agent;
 
 use function PHPUnit\Framework\isNull;
@@ -779,9 +781,28 @@ class ShopController extends Controller
             'receipt_date' => 'required|date',
         ]);
 
+        // Spec 024 F2 — enrich the voucher with contract no. / payment no. /
+        // due period, pulled from the lease contract (shop_rent) linked to
+        // this rentpay's shop. Guarded (Schema::hasTable / hasColumn) so this
+        // stays fully backward compatible with any environment/test schema
+        // that predates the F2 migration or lacks the legacy shop_rent table.
+        $enrichment = [];
+        if (Schema::hasColumn('cash_receipt', 'contract_no')) {
+            $rent = Schema::hasTable('shop_rent')
+                ? DB::table('shop_rent')->where('shop_id', $row->shop_id)->first()
+                : null;
+
+            $enrichment = [
+                'contract_no' => $rent->rent_no ?? $rent->rent_name ?? null,
+                'payment_no' => (string) $rentpay_id,
+                'period_from' => $rent->rent_sdt ?? null,
+                'period_to' => $rent->rent_edt ?? null,
+            ];
+        }
+
         try {
-            $receipt = DB::transaction(function () use ($rentpay_id, $request) {
-                $receipt = (new CashboxService())->recordReceipt([
+            $receipt = DB::transaction(function () use ($rentpay_id, $request, $enrichment) {
+                $receipt = (new CashboxService())->recordReceipt(array_merge([
                     'source_type' => 'shop_rentpay',
                     'source_id' => $rentpay_id,
                     'amount' => $request->input('amount'),
@@ -790,7 +811,7 @@ class ShopController extends Controller
                     'received_by' => Auth::user()->id,
                     'note' => $request->input('note'),
                     'create_user' => Auth::user()->id,
-                ]);
+                ], $enrichment));
 
                 DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->update([
                     'rentpay_status' => 'paid',
@@ -804,6 +825,11 @@ class ShopController extends Controller
         } catch (\InvalidArgumentException $e) {
             return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
         }
+
+        AuditLogger::log('lease', $rentpay_id, AuditLogger::PAID, [
+            'note' => 'سند قبض ' . $receipt->receipt_no,
+            'user' => Auth::user()->id,
+        ]);
 
         return response()->json([
             'status' => true,
@@ -848,20 +874,44 @@ class ShopController extends Controller
             return response()->json(['status' => false, 'message_out' => 'تعذّر إيجاد سند القبض المرتبط بهذه الدفعة'], 422);
         }
 
+        // Spec 024 F2 hard-lock — only the issuer (received_by) or a system
+        // admin (emp_job==1) may revert a lease/rentpay سند. Checked at the
+        // controller entry (for the friendlier 403 + BLOCKED audit) AND
+        // enforced again inside CashboxService::voidReceipt() as the
+        // last-line-of-defense, so no other caller can bypass it.
+        $actingUserId = Auth::user()->id;
+        $isAdmin = (int) (Auth::user()->emp_job ?? 0) === 1;
+
         try {
-            DB::transaction(function () use ($receipt, $reason, $rentpay_id) {
-                (new CashboxService())->voidReceipt($receipt->receipt_id, $reason, Auth::user()->id);
+            (new CashboxService())->assertLeaseVoidAllowed($receipt, $actingUserId, $isAdmin);
+        } catch (\RuntimeException $e) {
+            AuditLogger::log('lease', $rentpay_id, AuditLogger::BLOCKED, [
+                'note' => $e->getMessage(),
+                'user' => $actingUserId,
+            ]);
+
+            return response()->json(['status' => false, 'message_out' => $e->getMessage()], 403);
+        }
+
+        try {
+            DB::transaction(function () use ($receipt, $reason, $rentpay_id, $actingUserId, $isAdmin) {
+                (new CashboxService())->voidReceipt($receipt->receipt_id, $reason, $actingUserId, $isAdmin);
 
                 DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->update([
                     'rentpay_status' => 'unpaid',
                     'paid_date' => null,
                     'updated_at' => Carbon::now(),
-                    'update_user' => Auth::user()->id,
+                    'update_user' => $actingUserId,
                 ]);
             });
         } catch (\Throwable $e) {
             return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
         }
+
+        AuditLogger::log('lease', $rentpay_id, AuditLogger::VOID, [
+            'note' => $reason,
+            'user' => $actingUserId,
+        ]);
 
         return response()->json([
             'status' => true,
