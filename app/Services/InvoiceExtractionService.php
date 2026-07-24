@@ -537,14 +537,64 @@ class InvoiceExtractionService
         return $v === '' ? null : $v;
     }
 
+    /**
+     * Parse an extracted invoice date to Y-m-d. Saudi invoices are written DD/MM/YYYY,
+     * but Carbon::parse() guesses US MM/DD for ambiguous separators — so "11-07-2026"
+     * (11 July) became "2026-07-11"? no: it became month=11 → a FALSE future date that
+     * tripped the "تاريخ الفاتورة في المستقبل" anomaly and blocked the invoice. Fix:
+     * trust ISO as-is; parse D/M/Y day-first; and when day↔month is ambiguous, pick the
+     * interpretation that is NOT in the future (invoices are essentially never future-dated).
+     */
     private function parseDate($v): ?string
     {
         $v = $this->cleanStr($v);
         if ($v === null) {
             return null;
         }
+        $v = trim($this->arabicDigits($v));
+
+        // Already ISO (YYYY-MM-DD…) — unambiguous, trust it.
+        if (preg_match('/^\d{4}-\d{1,2}-\d{1,2}/', $v)) {
+            try {
+                return Carbon::parse($v)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        // D/M/Y or D-M-Y or D.M.Y (any separator). Build day-first (Saudi) + swapped
+        // candidates, then prefer the non-future one.
+        if (preg_match('#^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$#', $v, $m)) {
+            $a = (int) $m[1];
+            $b = (int) $m[2];
+            $y = (int) $m[3];
+            if ($y < 100) {
+                $y += 2000;
+            }
+            $today = Carbon::today();
+            $candidates = [];
+            foreach ([['d' => $a, 'mo' => $b], ['d' => $b, 'mo' => $a]] as $c) {
+                if ($c['mo'] >= 1 && $c['mo'] <= 12 && $c['d'] >= 1 && $c['d'] <= 31) {
+                    try {
+                        $candidates[] = Carbon::createFromDate($y, $c['mo'], $c['d'])->startOfDay();
+                    } catch (\Throwable $e) {
+                        // invalid day for month — skip
+                    }
+                }
+            }
+            if ($candidates) {
+                $pick = $candidates[0]; // DD/MM (Saudi) first
+                if ($pick->gt($today) && isset($candidates[1]) && $candidates[1]->lte($today)) {
+                    $pick = $candidates[1]; // model swapped day/month — take the non-future reading
+                }
+
+                return $pick->format('Y-m-d');
+            }
+        }
+
+        // Fallback for anything else (month names, etc.).
         try {
-            return Carbon::parse($this->arabicDigits($v))->format('Y-m-d');
+            return Carbon::parse($v)->format('Y-m-d');
         } catch (\Throwable $e) {
             return null;
         }
