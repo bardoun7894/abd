@@ -133,9 +133,9 @@
     </div>
 
     <div class="table-responsive">
-        <table class="table table-striped gy-5 gs-5 align-middle">
+        <table class="table table-striped gy-5 gs-5 align-middle inv-show-tbl">
             <thead>
-                <tr class="fw-bold fs-6 text-gray-800 border-bottom-2 border-gray-800" style="background-color:#ffb822 !important;">
+                <tr class="fw-bold fs-7 text-uppercase" style="background-color:var(--sn-emerald)!important;color:#fff;">
                     <th>#</th>
                     <th class="min-w-150px">المورد</th>
                     <th class="min-w-150px">الرقم الضريبي</th>
@@ -178,6 +178,8 @@
             animation: ai-progress-stripes 1s linear infinite;
         }
         .ai-progress-done #bar { background-color: #17c653 !important; }
+        /* Emerald table header to match the extraction-log list + other pages. */
+        .inv-show-tbl thead th { color: #fff !important; border-color: rgba(255,255,255,.25) !important; }
         #aiProgressBanner.ai-progress-banner-done { color: #17c653; font-weight: 800; }
         @keyframes ai-progress-stripes { from { background-position: 1rem 0; } to { background-position: 0 0; } }
         @media (prefers-reduced-motion: reduce) {
