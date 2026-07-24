@@ -47,6 +47,26 @@ $html = '<div style="text-align:center;">'
     . '<tr><td style="font-weight:bold;border:1px solid #000;">ملاحظة</td><td style="border:1px solid #000;">' . e($receipt->note ?? '') . '</td></tr>'
     . '</table>';
 
+// Spec 024 F2 — lease/rentpay voucher enrichment: contract no. / payment no. /
+// due period (from→to), populated only for lease-linked receipts
+// (ShopController::rentpayReceipt()). Each row is independently guarded so a
+// non-lease receipt (these columns null) renders exactly as before.
+$enrichmentRows = '';
+if (! empty($receipt->contract_no)) {
+    $enrichmentRows .= '<tr><td style="font-weight:bold;border:1px solid #000;">رقم العقد</td><td style="border:1px solid #000;">' . e($receipt->contract_no) . '</td></tr>';
+}
+if (! empty($receipt->payment_no)) {
+    $enrichmentRows .= '<tr><td style="font-weight:bold;border:1px solid #000;">رقم الدفعة</td><td style="border:1px solid #000;">' . e($receipt->payment_no) . '</td></tr>';
+}
+if (! empty($receipt->period_from) || ! empty($receipt->period_to)) {
+    $periodFrom = $receipt->period_from ? \Carbon\Carbon::parse($receipt->period_from)->format('d-m-Y') : '—';
+    $periodTo = $receipt->period_to ? \Carbon\Carbon::parse($receipt->period_to)->format('d-m-Y') : '—';
+    $enrichmentRows .= '<tr><td style="font-weight:bold;border:1px solid #000;">الفترة المستحقة</td><td style="border:1px solid #000;">' . e($periodFrom . ' → ' . $periodTo) . '</td></tr>';
+}
+if ($enrichmentRows !== '') {
+    $html .= '<br/><table style="width:100%;border-collapse:collapse;" cellpadding="6">' . $enrichmentRows . '</table>';
+}
+
 if ($isVoid) {
     $html .= '<br/><table style="width:100%;border-collapse:collapse;" cellpadding="6">'
         . '<tr><td style="font-weight:bold;border:1px solid #a00;background:#fdd;">سبب الإلغاء</td><td style="border:1px solid #a00;background:#fdd;">' . e($receipt->void_reason ?? '') . '</td></tr>'

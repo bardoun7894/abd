@@ -126,6 +126,18 @@
         </div>
     @endif
 
+    {{-- Spec 024 F1 — per-invoice checkbox selection + "ترحيل إلى فرع" action bar,
+         mirroring #bulkBar in invoices/index.blade.php. Hidden until >=1 row is
+         checked (rows are built dynamically inside render() below). --}}
+    <div id="invBulkBar" class="alert alert-primary d-none align-items-center justify-content-between flex-wrap gap-2 mb-4 d-print-none">
+        <span class="fw-bold"><span id="invBulkCount">0</span> فاتورة محددة</span>
+        <div class="d-flex gap-2">
+            <button type="button" id="invPushOpenBtn" class="btn btn-sm btn-success fw-bold">
+                <i class="bi bi-send-check me-1"></i>ترحيل إلى فرع
+            </button>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-end mb-2 d-print-none">
         <button type="button" class="btn btn-sm btn-light-primary" onclick="window.print()">
             <i class="bi bi-printer me-1"></i> طباعة / حفظ PDF (مع رمز ZATCA)
@@ -136,6 +148,9 @@
         <table class="table table-striped gy-5 gs-5 align-middle inv-show-tbl">
             <thead>
                 <tr class="fw-bold fs-7 text-uppercase" style="background-color:var(--sn-emerald)!important;color:#fff;">
+                    <th class="d-print-none text-center" style="width:36px">
+                        <input type="checkbox" class="form-check-input" id="invSelAll" title="تحديد الكل">
+                    </th>
                     <th>#</th>
                     <th class="min-w-150px">المورد</th>
                     <th class="min-w-150px">الرقم الضريبي</th>
@@ -146,6 +161,7 @@
                     <th>الإجمالي</th>
                     <th>جودة الصورة</th>
                     <th>حالة</th>
+                    <th>الفرع المُرحّل إليه</th>
                     <th>المرفق</th>
                     <th class="d-print-table-cell">رمز ZATCA</th>
                     <th class="d-print-none text-center">إجراء</th>
@@ -155,6 +171,50 @@
         </table>
     </div>
     <div class="text-muted fs-7 d-print-none">تلميح: انقر على أي خلية لتعديل قيمتها، ثم انقر خارجها للحفظ. اضغط صورة المرفق لتكبيرها. الصفوف الصفراء تحتاج مراجعة.</div>
+
+    {{-- Spec 024 F1 — shop/manager picker modal, copied from invoices/index.blade.php's
+         bulk-push modal (:225-257). Reused for BOTH "ترحيل إلى فرع" (multi-select push)
+         and, gated by $canReroute, "إعادة توجيه" (single already-posted invoice re-route)
+         — invPushMode below switches the submit target/label. --}}
+    <div class="modal fade" id="invPushModal" tabindex="-1" aria-labelledby="invPushModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-4">
+                    <h3 class="modal-title fs-5" id="invPushModalLabel">ترحيل الفواتير المحددة إلى فرع</h3>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="invPushIntro" class="text-muted fs-7">سيتم ترحيل الفواتير المحددة (<span id="invPushCount">0</span>) إلى الفرع المختار. اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.</p>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label fs-7 fw-bold">المحل <span class="text-muted fw-normal">(مصاريف شراء محلات)</span></label>
+                            <select id="invShopId" class="form-select form-select-sm">
+                                <option value="">— اختر محلاً —</option>
+                                @foreach ($shops as $x)
+                                    <option value="{{ $x->shop_id }}">{{ $x->shop_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-1 text-center text-muted fs-7">أو</div>
+                        <div class="col-md-6">
+                            <label class="form-label fs-7">قائد المجموعة</label>
+                            <select id="invManagerId" class="form-select form-select-sm">
+                                <option value="">— اختر قائد مجموعة —</option>
+                                @foreach ($managers as $x)
+                                    <option value="{{ $x->manager_id }}">{{ $x->manager_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div id="invPushResult" class="mt-3 fs-7"></div>
+                    <div class="d-flex align-items-center gap-3 mt-4">
+                        <button type="button" id="invPushSubmitBtn" class="btn btn-sm btn-success">ترحيل</button>
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">إلغاء</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <style>
         /* Print/PDF output (browser "Print to PDF") keeps the ZATCA Phase-1 QR
@@ -200,6 +260,13 @@
         var correctBase = "{{ url('dashboard/invoices') }}";
         var assetBase = "{{ asset('') }}";
         var timer = null;
+        // Spec 024 F1 — the "إعادة توجيه" per-row action is gated on the SAME
+        // special permission the controller enforces (rerouteInvoice() re-checks
+        // it server-side regardless — this only controls whether the button renders).
+        var canReroute = false;
+        @if($canReroute)
+            canReroute = true;
+        @endif
 
         function esc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -236,6 +303,21 @@
             return '<span class="text-muted">—</span>';
         }
 
+        // Spec 024 F1 — "الفرع المُرحّل إليه" cell. Forward-compatible with
+        // transferred_branch_label/transferred_at/transferred_by_name once
+        // InvoiceController::status() adds them to the per-invoice JSON payload
+        // (not yet exposed there — see PR notes); renders a plain dash until then,
+        // and lights up automatically the moment those keys are present.
+        function transferredCell(v) {
+            if (!v.transferred_branch_label) { return '<span class="text-muted">—</span>'; }
+            var meta = [];
+            if (v.transferred_at) { meta.push(esc(v.transferred_at)); }
+            if (v.transferred_by_name) { meta.push(esc(v.transferred_by_name)); }
+            var html = '<span class="badge badge-light-primary">' + esc(v.transferred_branch_label) + '</span>';
+            if (meta.length) { html += '<div class="fs-9 text-muted mt-1">' + meta.join(' — ') + '</div>'; }
+            return html;
+        }
+
         function render(d) {
             $('#st').text(d.status);
             $('#bar').css('width', d.percent + '%').text(d.percent + '%');
@@ -261,18 +343,31 @@
                 // exact validation notes (رقم ضريبي غير صحيح، الإجمالي لا يطابق، حقل مفقود، ...)
                 // so "بحاجة مراجعة" is never unexplained.
                 if (v.needs_review && v.validation_notes) { flag += '<div class="fs-8 text-danger mt-1 fw-semibold" style="white-space:normal;max-width:240px;line-height:1.5"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(v.validation_notes) + '</div>'; }
-                html += '<tr' + warn + '><td>' + esc(v.page_number) + '</td>'
+                // Spec 024 F1 — re-route action, only for ALREADY-posted invoices and
+                // only when the acting user has the special re-route permission
+                // (canReroute, emitted below strictly inside @if($canReroute)).
+                var rerouteBtn = '';
+                if (canReroute && v.purchase_id) {
+                    rerouteBtn = ' <button type="button" class="btn btn-sm btn-light-warning js-inv-reroute" data-id="' + v.id + '" title="إعادة توجيه إلى فرع آخر"><i class="bi bi-signpost-split me-1"></i>إعادة توجيه</button>';
+                }
+                html += '<tr' + warn + '>'
+                    + '<td class="d-print-none text-center"><input type="checkbox" class="form-check-input js-inv-chk" value="' + v.id + '"></td>'
+                    + '<td>' + esc(v.page_number) + '</td>'
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')
                     + '<td>' + qualityBadge(v.image_quality) + '</td>'
-                    + '<td>' + flag + '</td><td>' + attachment(v) + '</td>'
+                    + '<td>' + flag + '</td>'
+                    + '<td>' + transferredCell(v) + '</td>'
+                    + '<td>' + attachment(v) + '</td>'
                     + '<td>' + zatcaQr(v) + '</td>'
                     + '<td class="d-print-none text-center text-nowrap">'
                     + '<button type="button" class="btn btn-sm btn-light-primary js-edit-inv mb-1" data-id="' + v.id + '" title="تعديل / إدخال يدوي"><i class="bi bi-pencil-square me-1"></i>تعديل</button> '
-                    + '<button type="button" class="btn btn-sm btn-icon btn-light-danger js-del-inv" data-id="' + v.id + '" data-posted="' + (v.purchase_id ? 1 : 0) + '" title="حذف الفاتورة"><i class="bi bi-trash"></i></button></td>'
+                    + '<button type="button" class="btn btn-sm btn-icon btn-light-danger js-del-inv" data-id="' + v.id + '" data-posted="' + (v.purchase_id ? 1 : 0) + '" title="حذف الفاتورة"><i class="bi bi-trash"></i></button>'
+                    + rerouteBtn + '</td>'
                     + '</tr>';
             });
-            $('#rows').html(html || '<tr><td colspan="13" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
+            $('#rows').html(html || '<tr><td colspan="15" class="text-center text-muted">لا توجد بيانات بعد…</td></tr>');
+            syncInvBar();
         }
 
         function poll() {
@@ -325,6 +420,96 @@
         // Shop XOR manager — selecting one clears the other (without re-firing the handler).
         $('#manager_id').on('change', function () { if ($(this).val()) $('#shop_id').val('').trigger('change.select2'); });
         $('#shop_id').on('change', function () { if ($(this).val()) $('#manager_id').val('').trigger('change.select2'); });
+
+        // Spec 024 F1 — per-invoice checkbox selection + "ترحيل إلى فرع" / "إعادة
+        // توجيه" (single-invoice re-route). Rows are rebuilt on every poll() cycle
+        // (see render() above), so all handlers below are delegated on #rows.
+        var invPushMode = 'push'; // 'push' (invoice_ids[] → push-invoices) or 'reroute' (single id → reroute)
+        var invRerouteId = null;
+        var invPushUrl = "{{ route('dashboard.invoices.push-invoices') }}";
+
+        function invSelectedIds() {
+            return $('.js-inv-chk:checked').map(function () { return $(this).val(); }).get();
+        }
+
+        function syncInvBar() {
+            var ids = invSelectedIds();
+            $('#invBulkCount').text(ids.length);
+            $('#invBulkBar').toggleClass('d-none', ids.length === 0).toggleClass('d-flex', ids.length > 0);
+            $('#invSelAll').prop('checked', ids.length > 0 && ids.length === $('.js-inv-chk').length);
+        }
+
+        $(document).on('change', '#invSelAll', function () {
+            $('.js-inv-chk').prop('checked', $(this).is(':checked'));
+            syncInvBar();
+        });
+        $(document).on('change', '.js-inv-chk', function () { syncInvBar(); });
+
+        if ($.fn.select2) { $('#invShopId, #invManagerId').select2({ dir: 'rtl', width: '100%', dropdownParent: $('#invPushModal') }); }
+        $('#invManagerId').on('change', function () { if ($(this).val()) $('#invShopId').val('').trigger('change.select2'); });
+        $('#invShopId').on('change', function () { if ($(this).val()) $('#invManagerId').val('').trigger('change.select2'); });
+
+        function openInvPushModal() {
+            invPushMode = 'push';
+            invRerouteId = null;
+            $('#invPushResult').text('');
+            $('#invPushModalLabel').text('ترحيل الفواتير المحددة إلى فرع');
+            $('#invPushIntro').html('سيتم ترحيل الفواتير المحددة (<span id="invPushCount">' + invSelectedIds().length + '</span>) إلى الفرع المختار. اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.');
+            $('#invPushSubmitBtn').text('ترحيل');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('invPushModal')).show();
+        }
+
+        $('#invPushOpenBtn').on('click', function () {
+            if (!invSelectedIds().length) { return; }
+            openInvPushModal();
+        });
+
+        // "إعادة توجيه" — opens the SAME modal targeting exactly one already-posted
+        // invoice; only rendered by render() when canReroute is true (server also
+        // re-checks the permission on rerouteInvoice()).
+        $(document).on('click', '.js-inv-reroute', function () {
+            invPushMode = 'reroute';
+            invRerouteId = $(this).data('id');
+            $('#invPushResult').text('');
+            $('#invPushModalLabel').text('إعادة توجيه الفاتورة #' + invRerouteId + ' إلى فرع آخر');
+            $('#invPushIntro').html('سيتم تغيير فرع هذه الفاتورة المُرحّلة مسبقاً. اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.');
+            $('#invPushSubmitBtn').text('إعادة توجيه');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('invPushModal')).show();
+        });
+
+        $('#invPushSubmitBtn').on('click', function () {
+            var shopId = $('#invShopId').val(), managerId = $('#invManagerId').val();
+            if (!shopId && !managerId) {
+                $('#invPushResult').html('<span class="text-danger">الرجاء اختيار قائد مجموعة أو محل.</span>');
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('جارٍ التنفيذ…');
+            $('#invPushResult').html('<span class="text-muted">جارٍ التنفيذ…</span>');
+
+            var request;
+            if (invPushMode === 'reroute') {
+                request = $.post(correctBase + '/' + invRerouteId + '/reroute', { shop_id: shopId, manager_id: managerId });
+            } else {
+                request = $.post(invPushUrl, { invoice_ids: invSelectedIds(), shop_id: shopId, manager_id: managerId });
+            }
+
+            request
+                .done(function (r) {
+                    var cls = r.status ? 'text-success' : 'text-danger';
+                    $('#invPushResult').html('<span class="' + cls + '">' + esc(r.message_out) + '</span>');
+                    if (r.status) {
+                        $('.js-inv-chk').prop('checked', false);
+                        syncInvBar();
+                        poll();
+                        setTimeout(function () { bootstrap.Modal.getOrCreateInstance(document.getElementById('invPushModal')).hide(); }, 1200);
+                    }
+                })
+                .fail(function (xhr) {
+                    var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر التنفيذ';
+                    $('#invPushResult').html('<span class="text-danger">' + esc(m) + '</span>');
+                })
+                .always(function () { $btn.prop('disabled', false).text(invPushMode === 'reroute' ? 'إعادة توجيه' : 'ترحيل'); });
+        });
 
         $('#pushBtn').on('click', function () {
             var managerId = $('#manager_id').val(), shopId = $('#shop_id').val();
