@@ -124,39 +124,14 @@ class TaskController extends Controller
 
         $schedule = Schedule::with(['tasks.worker', 'tasks.shop', 'tasks.service'])->findOrFail($id);
 
-        // إنشاء ملف Excel جديد
-        $spreadsheet = new Spreadsheet();
+        // إنشاء ملف Excel جديد — نفس التنسيق الاحترافي (الزمردي) المستخدم في تصدير الفواتير
+        $spreadsheet = \App\Services\ExcelReportStyler::newBook('العنوان: ' . $schedule->title);
         $sheet = $spreadsheet->getActiveSheet();
 
-        // تعيين اتجاه الصفحة من اليمين لليسار
-        $sheet->setRightToLeft(true);
-
-        // إعداد العناوين
-        $sheet->setCellValue('A1', 'العنوان: ' . $schedule->title);
-        $sheet->mergeCells('A1:F1');
-
-        // عناوين الأعمدة
-        $sheet->setCellValue('A2', '#');
-        $sheet->setCellValue('B2', 'العامل');
-        $sheet->setCellValue('C2', 'المتجر');
-        $sheet->setCellValue('D2', 'الخدمة');
-        $sheet->setCellValue('E2', 'الملاحظات');
-        $sheet->setCellValue('F2', 'يحتاج متابعة');
-
-        // تنسيق العناوين
-        $headerStyle = [
-            'font' => ['bold' => true],
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                ],
-            ],
-        ];
-        $sheet->getStyle('A1:F2')->applyFromArray($headerStyle);
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'العنوان: ' . $schedule->title, 'F');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'العامل', 'المتجر', 'الخدمة', 'الملاحظات', 'يحتاج متابعة',
+        ]);
 
         // إضافة البيانات
         $row = 3;
@@ -170,24 +145,7 @@ class TaskController extends Controller
             $row++;
         }
 
-        // تنسيق البيانات
-        $dataStyle = [
-            'alignment' => [
-                'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical' => Alignment::VERTICAL_CENTER,
-            ],
-            'borders' => [
-                'allBorders' => [
-                    'borderStyle' => Border::BORDER_THIN,
-                ],
-            ],
-        ];
-        $sheet->getStyle('A3:F' . ($row - 1))->applyFromArray($dataStyle);
-
-        // تعديل عرض الأعمدة لتناسب المحتوى
-        foreach (range('A', 'F') as $column) {
-            $sheet->getColumnDimension($column)->setAutoSize(true);
-        }
+        \App\Services\ExcelReportStyler::finalize($sheet, 'F', 3, $row - 1, []);
 
         // إنشاء الملف وتحميله
         $writer = new Xlsx($spreadsheet);

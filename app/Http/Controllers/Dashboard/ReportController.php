@@ -53,73 +53,17 @@ class ReportController extends Controller
         $manager_id = $request->manager_id;
         $shop_id = $request->shop_id;
         $list = Purchase::serachspenddatarep($purchase_id,$purchase_no, $purchase_dt_from, $purchase_dt_to, $purchase_respon, $manager_id,$shop_id,$request->shops);
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "I1";
-        $from = "A2";
-        $to = "I2";
-        $from_c = "A";
-        $to_c = "I";
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:H1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير مصاريف شراء");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:I1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'رقم الفاتورة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'تاريخ الفاتورة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', ' قيمة الفاتورة شامل الضريبة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'اسم المورد');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'المجموعة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'تاريح الادخال');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'الملاحظة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'اسم المحل');
 
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير مصاريف شراء');
+        $sheet = $objPHPExcel->getActiveSheet();
+
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير مصاريف شراء', 'I');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'رقم الفاتورة', 'تاريخ الفاتورة', ' قيمة الفاتورة شامل الضريبة',
+            'اسم المورد', 'المجموعة', 'تاريح الادخال', 'الملاحظة', 'اسم المحل',
+        ]);
+
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
 
         foreach ($list as $x) {
@@ -132,32 +76,21 @@ class ReportController extends Controller
             $shop_name= isset($shop) ? ( $shop->shop_name ." - ". ($shop->municip->municip_no ?? "") ) : "";
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
             $note = $x->note;
-            $objPHPExcel->getActiveSheet()->SetCellValue('A' . $rowCount, $i);
-            $objPHPExcel->getActiveSheet()->SetCellValue('B' . $rowCount, $purchase_no);
-            $objPHPExcel->getActiveSheet()->SetCellValue('C' . $rowCount, $purchase_dt);
-            $objPHPExcel->getActiveSheet()->SetCellValue('D' . $rowCount, $purchase_price);
-            $objPHPExcel->getActiveSheet()->SetCellValue('E' . $rowCount, $purchase_respon);
-            $objPHPExcel->getActiveSheet()->SetCellValue('F' . $rowCount, $manager_name);
-            $objPHPExcel->getActiveSheet()->SetCellValue('G' . $rowCount, $created_at);
-            $objPHPExcel->getActiveSheet()->SetCellValue('H' . $rowCount, $note);
-            $objPHPExcel->getActiveSheet()->SetCellValue('I' . $rowCount, $shop_name);
+            $sheet->SetCellValue('A' . $rowCount, $i);
+            $sheet->SetCellValue('B' . $rowCount, $purchase_no);
+            $sheet->SetCellValue('C' . $rowCount, $purchase_dt);
+            $sheet->SetCellValue('D' . $rowCount, $purchase_price);
+            $sheet->SetCellValue('E' . $rowCount, $purchase_respon);
+            $sheet->SetCellValue('F' . $rowCount, $manager_name);
+            $sheet->SetCellValue('G' . $rowCount, $created_at);
+            $sheet->SetCellValue('H' . $rowCount, $note);
+            $sheet->SetCellValue('I' . $rowCount, $shop_name);
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
+
+        \App\Services\ExcelReportStyler::finalize($sheet, 'I', 3, $rowCount - 1, ['D']);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -241,78 +174,16 @@ class ReportController extends Controller
 
         $list = Expense::serachspenddataarepll($expense_type_id, $expense_categoty_id, $expense_month_desc, $manager_id, $worker_id, $shop_id,$type,$det_calculate_month_remain);
 
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "N1";
-        $from = "A2";
-        $to = "N2";
-        $from_c = "A";
-        $to_c = "N";
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:N1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير مصاريف  تشغيلية ");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:N1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'نوع المصروف');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'التصنيف');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'المحل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'العامل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'المجموعة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'الشهر');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'المبلغ');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'المدفوع');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'المتبقي');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'الحالة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('L2', 'ملاحظة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('M2', 'المدخل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('N2', 'تاريح الادخال');
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير مصاريف  تشغيلية ');
+        $sheet = $objPHPExcel->getActiveSheet();
 
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير مصاريف  تشغيلية ', 'N');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'نوع المصروف', 'التصنيف', 'المحل', 'العامل', 'المجموعة', 'الشهر',
+            'المبلغ', 'المدفوع', 'المتبقي', 'الحالة', 'ملاحظة', 'المدخل', 'تاريح الادخال',
+        ]);
+
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
 
         foreach ($list as $x) {
@@ -387,20 +258,9 @@ class ReportController extends Controller
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
+
+        \App\Services\ExcelReportStyler::finalize($sheet, 'N', 3, $rowCount - 1, ['H', 'I', 'J']);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -459,80 +319,16 @@ class ReportController extends Controller
         }
         $list = Calculate::serachspenddatarep($calculate_id,$calculate_month_m, $calculate_month_y, $shop_id,$manager_id);
 
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير  حسابات المحل');
+        $sheet = $objPHPExcel->getActiveSheet();
 
-        //  $list = vacation::serachspendrep('','','','','');
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير  حسابات المحل', 'L');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'اسم المحل', 'شهر الدفع', 'حالة', 'المبلغ المطلوب', 'اجمالي المدفوع',
+            'اجمالي المتبقي', 'عدد الاقساط', 'الملاحظة', 'المدخل', 'تاريخ الادخال', '',
+        ]);
 
-        //  $spreadsheet = new Spreadsheet();
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "L1";
-        $from = "A2";
-        $to = "L2";
-        $from_c = "A";
-        $to_c = "L";
-
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:L1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير  حسابات المحل");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:L1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'اسم المحل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'شهر الدفع');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'حالة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'المبلغ المطلوب');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'اجمالي المدفوع');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'اجمالي المتبقي');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'عدد الاقساط');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'الملاحظة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'المدخل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'تاريخ الادخال');
-        $objPHPExcel->getActiveSheet()->SetCellValue('L2', '');
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
 
         foreach ($list as $x) {
@@ -569,22 +365,9 @@ class ReportController extends Controller
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
 
-
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, ['E', 'F', 'G']);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -662,75 +445,17 @@ class ReportController extends Controller
             $financial_month_y = '';
         }
         $list = Financial::serachspenddatarep($financial_id,$financial_month_m, $financial_month_y, $worker_id,$manager_id);
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "L1";
-        $from = "A2";
-        $to = "L2";
-        $from_c = "A";
-        $to_c = "L";
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:L1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير  حسابات العمال");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:L1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'اسم العامل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'شهر الدفع');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'حالة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'المبلغ المطلوب');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'اجمالي المدفوع');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'اجمالي المتبقي');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'عدد الاقساط');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'الملاحظة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'المدخل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'تاريخ الادخال');
-        $objPHPExcel->getActiveSheet()->SetCellValue('L2', '');
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
+
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير  حسابات العمال');
+        $sheet = $objPHPExcel->getActiveSheet();
+
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير  حسابات العمال', 'L');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'اسم العامل', 'شهر الدفع', 'حالة', 'المبلغ المطلوب', 'اجمالي المدفوع',
+            'اجمالي المتبقي', 'عدد الاقساط', 'الملاحظة', 'المدخل', 'تاريخ الادخال', '',
+        ]);
+
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
 
         foreach ($list as $x) {
@@ -767,20 +492,9 @@ class ReportController extends Controller
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
+
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, ['E', 'F', 'G']);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -923,76 +637,18 @@ class ReportController extends Controller
         $municip_no = $request->municip_no;
         $rentpay_price = $request->rentpay_price;
         $list = Shop::serachspenddata($shop_name, $shop_mobile, $manager_id, $city_id, $comme_no, $municip_no,$rentpay_price,$order_date,$comme_month,$comme_year,$municip_month,$municip_year,$rentpay_month,$rentpay_year);
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "L1";
-        $from = "A2";
-        $to = "L2";
-        $from_c = "A";
-        $to_c = "L";
 
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:L1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير  المحلات");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:L1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'اسم المحل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'المجموعة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'اسم المسؤول');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'المدينة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'رقم جوال المسؤول');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'موقع المحل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'معلومات البلدية');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'معلومات السجل التجاري');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'معلومات الإيجار');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'معلومات الدفاع المدني');
-        $objPHPExcel->getActiveSheet()->SetCellValue('L2', 'تاريخ الادخال');
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير  المحلات');
+        $sheet = $objPHPExcel->getActiveSheet();
+
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير  المحلات', 'L');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'اسم المحل', 'المجموعة', 'اسم المسؤول', 'المدينة', 'رقم جوال المسؤول',
+            'موقع المحل', 'معلومات البلدية', 'معلومات السجل التجاري', 'معلومات الإيجار',
+            'معلومات الدفاع المدني', 'تاريخ الادخال',
+        ]);
+
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
         foreach ($list as $x) {
             $shop_name = $x->shop_name;
@@ -1175,22 +831,9 @@ class ReportController extends Controller
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
 
-
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, []);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -1290,75 +933,16 @@ class ReportController extends Controller
     $list = Violation::serachspenddatarep($violation_id,$violation_month_m,$violation_month_y,$shop_id,$manager_id,$violation_no,$violation_ispay,
         $comme_no,$municip_no,$shop_respon);
 
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "L1";
-        $from = "A2";
-        $to = "L2";
-        $from_c = "A";
-        $to_c = "L";
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:L1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير  المخالفات");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:L1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'اسم المحل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'المجموعة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'تاريخ المخالفة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'قيمة المخالفة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'حالة دفع');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'جهة المخالفة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'السبب');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'اسم المسؤول');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'رقم السجل التجاري');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'رقم الرخصة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('L2', 'بيانات الادخال');
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير  المخالفات');
+        $sheet = $objPHPExcel->getActiveSheet();
+
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير  المخالفات', 'L');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'اسم المحل', 'المجموعة', 'تاريخ المخالفة', 'قيمة المخالفة', 'حالة دفع',
+            'جهة المخالفة', 'السبب', 'اسم المسؤول', 'رقم السجل التجاري', 'رقم الرخصة', 'بيانات الادخال',
+        ]);
+
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
         foreach ($list as $x) {
 
@@ -1395,22 +979,9 @@ class ReportController extends Controller
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
 
-
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, ['E']);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -1583,80 +1154,17 @@ class ReportController extends Controller
         // $list = Workers::workreport($worker_id, $worker_name, $ssn, $work_place_id, $doe, $updatedcancal_at, $job_id, $end_dt, $end_p_dt,$manager_id,$inside,$is_imp,$nation);
         $list = Workers::serachspenddata($worker_name, $ssn, $work_place_id, $doe, $updatedcancal_at, $job_id, $end_dt, $end_p_dt, $manager_id, $inside, $is_imp, $nation , $order_date , $request["residence_month"],$request["residence_year"],$request["passport_month"],$request["passport_year"]);
 
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير  العمال');
+        $sheet = $objPHPExcel->getActiveSheet();
 
-        //  $spreadsheet = new Spreadsheet();
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "M1";
-        $from = "A2";
-        $to = "M2";
-        $from_c = "A";
-        $to_c = "M";
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير  العمال', 'M');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'اسم العامل', 'رقم الإقامة / الوطني للسعوديين', 'المجموعة', 'تاريخ اصدار الاقامة',
+            'تاريخ إنتهاء الإقامة', 'تاريخ انتهاء الجواز', 'الجنسية', 'تاريخ التعيين', 'مكان العمل',
+            'المهنة', 'التواجد', 'تاريخ الادخال',
+        ]);
 
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:M1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير  العمال");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:M1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'اسم العامل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'رقم الإقامة / الوطني للسعوديين');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'المجموعة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'تاريخ اصدار الاقامة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'تاريخ إنتهاء الإقامة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'تاريخ انتهاء الجواز');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'الجنسية');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'تاريخ التعيين');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'مكان العمل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'المهنة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('L2', 'التواجد');
-        $objPHPExcel->getActiveSheet()->SetCellValue('M2', 'تاريخ الادخال');
-
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
 
         foreach ($list as $x) {
@@ -1729,22 +1237,9 @@ class ReportController extends Controller
             $i++;
             $rowCount++;
         }
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
 
-
+        \App\Services\ExcelReportStyler::finalize($sheet, 'M', 3, $rowCount - 1, []);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
@@ -1891,75 +1386,17 @@ class ReportController extends Controller
         }
 
         $list = vacation::serachspendrep($vacation_id, $vacation_month_m, $vacation_month_y, $worker_id, $vacation_type_id);
-        $objPHPExcel = new Spreadsheet();
-        $getActiveSheet = $objPHPExcel->getActiveSheet();
-        $from_h = "A1";
-        $to_h = "K1";
-        $from = "A2";
-        $to = "K2";
-        $from_c = "A";
-        $to_c = "K";
 
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
-        $objPHPExcel->getActiveSheet()->getPageSetup()
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4);
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
-        $objPHPExcel->getActiveSheet()->setTitle('NourSabah');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getProperties()->setCreator("NourSabah");
-        $objPHPExcel->getProperties()->setLastModifiedBy("NourSabah");
-        $objPHPExcel->getProperties()->setTitle("NourSabah");
-        $objPHPExcel->getProperties()->setSubject("NourSabah");
-        $objPHPExcel->getProperties()->setDescription("NourSabah");
-        $objPHPExcel->setActiveSheetIndex(0)->mergeCells('A1:K1');
-        $objPHPExcel->getActiveSheet()->getCell('A1')->setValue("تقرير الاجازات");
-        $objPHPExcel->getActiveSheet()->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-        $objPHPExcel->getActiveSheet()->getStyle('A1:K1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)->getStartColor()->setARGB('33F0FF'); //FF3399 33F0FF F28A8C
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setSize(14);
-        $objPHPExcel->getActiveSheet()->getStyle("$from_h:$to_h")->getFont()->setItalic(false);
-        $objPHPExcel->getActiveSheet()->getSheetView()->setZoomScale(75);
-        $objPHPExcel->getTheme()->setThemeFontName('custom')->setMinorFontValues('Calibri', 'Arial', 'Arial', []);
-        $objPHPExcel->getDefaultStyle()->getFont()->setScheme('minor');
-        $objPHPExcel->setActiveSheetIndex(0);
-        $objPHPExcel->getActiveSheet()->SetCellValue('A2', '#');
-        $objPHPExcel->getActiveSheet()->SetCellValue('B2', 'اسم العامل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('C2', 'بداية الاجازة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('D2', 'نهاية الاجازة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('E2', 'عدد ايام الاجازة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('F2', 'نوع الاجازة');
-        $objPHPExcel->getActiveSheet()->SetCellValue('G2', 'المسمى الوظيفي');
-        $objPHPExcel->getActiveSheet()->SetCellValue('H2', 'مكان العمل');
-        $objPHPExcel->getActiveSheet()->SetCellValue('I2', 'ملاحظات  ');
-        $objPHPExcel->getActiveSheet()->SetCellValue('J2', 'مدخل البيانات');
-        $objPHPExcel->getActiveSheet()->SetCellValue('K2', 'تاريخ الادخال');
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setBold(true);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setSize(12);
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->getFont()->setItalic(false);
-        $styleArray = array(
-            'borders' => array(
-                'allborders' => array(
-                    'style' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THICK,
-                    'color' => array('argb' => 'D3D3D3'),
-                ),
-            ),
-        );
-        $objPHPExcel->getActiveSheet()->getStyle("$from:$to")->applyFromArray(
-            array(
-                'fill' => array(
-                    'type' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'color' => array('rgb' => 'D3D3D3'))));
-        foreach ($objPHPExcel->getWorksheetIterator() as $worksheet) {
-            $objPHPExcel->setActiveSheetIndex($objPHPExcel->getIndex($worksheet));
-            $sheet = $objPHPExcel->getActiveSheet();
-            $cellIterator = $sheet->getRowIterator()->current()->getCellIterator();
-            $cellIterator->setIterateOnlyExistingCells(true);
-            foreach ($cellIterator as $cell) {
-                $sheet->getColumnDimension($cell->getColumn())->setAutoSize(true);
-            }
-        }
+        $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير الاجازات');
+        $sheet = $objPHPExcel->getActiveSheet();
+
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير الاجازات', 'K');
+        \App\Services\ExcelReportStyler::headerRow($sheet, [
+            '#', 'اسم العامل', 'بداية الاجازة', 'نهاية الاجازة', 'عدد ايام الاجازة', 'نوع الاجازة',
+            'المسمى الوظيفي', 'مكان العمل', 'ملاحظات  ', 'مدخل البيانات', 'تاريخ الادخال',
+        ]);
+
         $rowCount = 3;
-        $objPHPExcel->getActiveSheet()->setRightToLeft(true);
         $i = 1;
         foreach ($list as $x) {
             $worker_name = $x->worker_name;
@@ -1988,23 +1425,8 @@ class ReportController extends Controller
             $rowCount++;
         }
 
-
-        $objWriter = new Xlsx($objPHPExcel);
-        ob_start();
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="myfile.xlsx"');
-        header('Cache-Control: max-age=0');
-        $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($objPHPExcel, 'Xlsx');
-        $writer->save('php://output');
-        $xlsData = ob_get_contents();
-        ob_end_clean();
-        $response = array(
-            'op' => 'ok',
-            'file' => "data:application/vnd.ms-excel;base64," . base64_encode($xlsData)
-        );
-        die(json_encode($response));
-
-
+        \App\Services\ExcelReportStyler::finalize($sheet, 'K', 3, $rowCount - 1, []);
+        \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
 
