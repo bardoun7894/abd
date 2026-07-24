@@ -101,9 +101,9 @@
     </div>
 </div>
    <div class="py-5">
-        <table id="worker_tbl" class="table table-row-bordered gy-5">
+        <table id="worker_tbl" class="table table-row-bordered gy-5 sn-thead">
         	<thead>
-        		<tr class="fw-semibold fs-6 text-muted">
+        		<tr class="fw-bold fs-7 text-uppercase">
                     <th >#</th>
                     <th >اسم العامل</th>
                     <th >رقم الإقامة</th>

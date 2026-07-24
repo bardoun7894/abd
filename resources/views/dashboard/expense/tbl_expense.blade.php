@@ -131,9 +131,9 @@
                 <i class="fas fa-print"></i> طباعة PDF
             </button>
         </div>
-        <table id="expense_tbl" class="table table-row-bordered gy-5">
+        <table id="expense_tbl" class="table table-row-bordered gy-5 sn-thead">
         	<thead>
-        		<tr class="fw-semibold fs-6 text-muted">
+        		<tr class="fw-bold fs-7 text-uppercase">
                     <th>#</th>
                     <th>نوع الرئيسي</th>
                     <th>نوع المصروف</th>
@@ -163,7 +163,7 @@
         	<tbody>
         	</tbody>
             <tfoot>
-                <tr style="color:#4a0ce7 !important  ;background: #B5B5C3;">
+                <tr class="sn-tfoot-total">
                     <th style="text-align:center">الاجمالي:</th>
                     <th></th>
                     <th></th>

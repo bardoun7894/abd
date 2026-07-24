@@ -27,7 +27,7 @@
     </div>
 </div>
    <div class="py-5">
-        <table id="financial_tbl" class="table table-row-bordered gy-5">
+        <table id="financial_tbl" class="table table-row-bordered gy-5 sn-thead">
         	<thead>
         		<tr class="fw-semibold fs-6 text-muted">
                     <th >#</th>
@@ -50,7 +50,7 @@
         	<tbody>
         	</tbody>
             <tfoot>
-                <tr style="color:#4a0ce7 !important  ;background: #B5B5C3;">
+                <tr class="sn-tfoot-total">
                     <th style="text-align:center">الاجمالي:</th>
                     <th></th>
                     <th></th>

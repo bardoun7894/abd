@@ -7,6 +7,7 @@
 <script type="module" src="../../../Amiri.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
 
+    <div class="exp-log">
 
     @if (session()->has('alert.success'))
         <div class="alert alert-success">
@@ -21,6 +22,11 @@
         <div class="d-flex flex-column flex-lg-row">
             <div class="flex-lg-row-fluid mb-10 mb-lg-0 ">
                 <div class="card">
+                    <div class="card-header border-0 pt-6">
+                        <div class="card-title">
+                            <h3 class="fw-bold mb-0">بحث في سجل المصروفات</h3>
+                        </div>
+                    </div>
                     <div class="card-body px-1">
                         <div class="mb-0">
                             <div class="row gx-5 mb-5">
@@ -194,7 +200,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="result_expense_tbl" name="result_expense_tbl">
+                        <div id="result_expense_tbl" name="result_expense_tbl" class="exp-log-results">
                         </div>
                     </div>
                 </div>
@@ -239,9 +245,145 @@
             </div>
         </div>
     </div>
+
+    </div>{{-- /.exp-log --}}
 @endsection
 {{-- Styles Section --}}
 @section('styles')
+    <style>
+        /* -------------------------------------------------------------------
+           Expenses list — restyled to match resources/views/dashboard/
+           purchase/view.blade.php + invoices/index.blade.php's "سجل عمليات
+           الاستخراج" redesign. Scoped entirely under .exp-log so nothing
+           leaks to other pages. Reuses the --sn-* brand tokens already
+           defined in public/css/app-ui.css (not touched — page-scoped
+           override, same approach as the purchases/invoices redesign).
+
+           #expense_tbl is loaded via AJAX (view_all_expense() -> tbl())
+           and injected into #result_expense_tbl, which lives inside
+           .exp-log — so these selectors reach the AJAX-injected table too,
+           without needing any JS/DataTables changes.
+           ------------------------------------------------------------- */
+
+        /* ---- filter card polish -------------------------------------------- */
+        .exp-log .card {
+            border-radius: var(--sn-r-lg);
+            border-color: var(--sn-line);
+        }
+        .exp-log .form-label {
+            color: var(--sn-ink) !important;
+        }
+
+        /* ---- table header: solid emerald fill, white bold text -------------
+               Out-specifies the global tint-only .sn-thead rule
+               (app-ui.css §6) on purpose, matching the purchases/invoices
+               pages. ------------------------------------------------------ */
+        .exp-log #expense_tbl.sn-thead thead tr,
+        .exp-log #expense_tbl thead.sn-thead tr {
+            background: var(--sn-emerald) !important;
+            color: #fff !important;
+        }
+        .exp-log #expense_tbl.sn-thead thead th,
+        .exp-log #expense_tbl thead.sn-thead th {
+            color: #fff !important;
+            font-weight: 700;
+            border-bottom: 2px solid var(--sn-emerald-deep) !important;
+            padding-block: .85rem;
+        }
+
+        /* ---- data legibility: dark high-contrast ink instead of washed grey - */
+        .exp-log #expense_tbl td {
+            color: var(--sn-ink);
+        }
+        .exp-log #expense_tbl .text-muted {
+            color: var(--sn-ink-soft) !important;
+        }
+        .exp-log #expense_tbl tbody td:nth-child(9),
+        .exp-log #expense_tbl tbody td:nth-child(10),
+        .exp-log #expense_tbl tbody td:nth-child(11),
+        .exp-log #expense_tbl tbody td:nth-child(12),
+        .exp-log #expense_tbl tbody td:nth-child(13) {
+            font-variant-numeric: tabular-nums lining-nums;
+            font-feature-settings: "tnum" 1, "lnum" 1;
+        }
+
+        /* ---- totals row: readable emerald tint instead of the old inline
+               purple-on-grey (#4a0ce7 on #B5B5C3). Column count/indices
+               untouched — only the visual treatment changes. -------------- */
+        .exp-log #expense_tbl tfoot tr.sn-tfoot-total {
+            background: var(--sn-emerald-tint) !important;
+            color: var(--sn-emerald-deep) !important;
+        }
+        .exp-log #expense_tbl tfoot tr.sn-tfoot-total th {
+            color: var(--sn-emerald-deep) !important;
+            font-weight: 700;
+        }
+
+        /* ---- row-group headers (rowGroup: dataSrc) — keep readable but on
+               the emerald palette instead of the old flat grey #B5B5C3. --- */
+        .exp-log #expense_tbl .dtrg-group {
+            background: var(--sn-emerald-tint) !important;
+            color: var(--sn-emerald-deep) !important;
+            font-weight: 700;
+        }
+
+        /* ---- buttons: subtle hover/active feedback --------------------------- */
+        .exp-log .btn {
+            transition: transform var(--sn-dur-fast) var(--sn-ease-out),
+                        box-shadow var(--sn-dur-fast) var(--sn-ease-out),
+                        background-color var(--sn-dur-base) var(--sn-ease-out);
+        }
+        .exp-log .btn:hover {
+            transform: translateY(-1px);
+        }
+        .exp-log .btn:active {
+            transform: translateY(0);
+        }
+
+        /* ---- row hover + staggered entrance -----------------------------------
+               CSS-only (no per-row class needed): #expense_tbl's rows are
+               generated by DataTables from AJAX JSON, but they are still
+               ordinary <tr> children of the same static #expense_tbl, so
+               :nth-child staggering and :hover both work without touching
+               the DataTables init/columnDefs/footerCallback JS. ------------ */
+        .exp-log #expense_tbl tbody tr {
+            animation: sn-row-in var(--sn-dur-slow) var(--sn-ease-out) both;
+            transition: background-color var(--sn-dur-fast) var(--sn-ease-out),
+                        transform var(--sn-dur-fast) var(--sn-ease-out);
+        }
+        .exp-log #expense_tbl tbody tr:hover {
+            background-color: var(--sn-emerald-tint) !important;
+            transform: translateY(-1px);
+        }
+        @keyframes sn-row-in {
+            from { opacity: 0; transform: translateY(6px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .exp-log #expense_tbl tbody tr:nth-child(1)  { animation-delay: 0ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(2)  { animation-delay: 30ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(3)  { animation-delay: 60ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(4)  { animation-delay: 90ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(5)  { animation-delay: 120ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(6)  { animation-delay: 150ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(7)  { animation-delay: 180ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(8)  { animation-delay: 210ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(9)  { animation-delay: 240ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(10) { animation-delay: 270ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(11) { animation-delay: 300ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(12) { animation-delay: 330ms; }
+        .exp-log #expense_tbl tbody tr:nth-child(n+13) { animation-delay: 350ms; }
+
+        /* ---- accessibility: hard-disable all motion added above -------------- */
+        @media (prefers-reduced-motion: reduce) {
+            .exp-log *,
+            .exp-log *::before,
+            .exp-log *::after {
+                animation: none !important;
+                transition: none !important;
+                transform: none !important;
+            }
+        }
+    </style>
 @endsection
 @section('scripts')
     <script src="{{ asset('assets/js/custom/documentation/forms/select2.js') }}"></script>
