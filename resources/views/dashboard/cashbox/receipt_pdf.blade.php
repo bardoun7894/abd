@@ -49,8 +49,23 @@ $amountLabel = $isIn ? 'المبلغ المستلم' : 'المبلغ المصر�
 $amount = (float) ($receipt->amount ?? 0);
 $amountWords = ArabicNumberToWords::amount($amount);
 
-$logo = public_path('assets/media/logos/logo.jpg');
-$hasLogo = is_file($logo);
+/*
+ * logo-voucher.png is logo.jpg with its surrounding padding trimmed and
+ * flattened onto white: the raw file carries a wide near-white margin that
+ * prints as a visible grey rectangle beside the company name at masthead size.
+ *
+ * It lives under resources/ and NOT next to the original, because
+ * public/assets is gitignored — a derived asset placed there would never reach
+ * the server. TCPDF reads it straight off the filesystem, so it does not need
+ * to be web-served. Falls back to the original public logo if it is ever
+ * missing; the company name is typed beside the mark either way, so the
+ * masthead can never come out blank.
+ */
+$logo = collect([
+    resource_path('images/logo-voucher.png'),
+    public_path('assets/media/logos/logo.jpg'),
+])->first(fn ($p) => is_file($p));
+$hasLogo = $logo !== null;
 
 $fmtDate = function ($v) {
     if (empty($v)) {
@@ -91,15 +106,24 @@ $row = function (string $label, $value) use ($TINT, $LINE, $INK, $MUTED) {
         . '</tr>';
 };
 
-/* ---- 1. masthead: logo + document type ----------------------------------- */
+/* ---- 1. masthead: logo + company, document type --------------------------
+ * The logo is sized in points here (~62pt ≈ 22mm). TCPDF reserves the declared
+ * height as real cell height, so an oversized value silently pushes the whole
+ * voucher down the page — that is what a first pass at 150 did. The company
+ * name is always typed alongside it, so the identity survives even if the
+ * image asset is ever missing or fails to decode. */
 $html = '<table cellpadding="0" style="width:100%;">'
     . '<tr>'
-    . '<td width="50%" style="vertical-align:middle;">'
-    . ($hasLogo ? '<img src="' . $logo . '" width="150" height="150" />' : '<span style="font-size:16px;font-weight:bold;color:' . $EMERALD . ';">شركة صباح النور</span>')
+    . '<td width="14%" style="vertical-align:middle;">'
+    . ($hasLogo ? '<img src="' . $logo . '" width="62" height="62" />' : '')
     . '</td>'
-    . '<td width="50%" style="vertical-align:middle;text-align:left;">'
-    . '<span style="font-size:22px;font-weight:bold;color:' . $EMERALD . ';">' . $docTitle . '</span><br />'
-    . '<span style="font-size:9px;color:' . $MUTED . ';">' . ($isIn ? 'RECEIPT VOUCHER' : 'PAYMENT VOUCHER') . '</span>'
+    . '<td width="46%" style="vertical-align:middle;">'
+    . '<span style="font-size:15px;font-weight:bold;color:' . $EMERALD_DEEP . ';">شركة صباح النور</span><br />'
+    . '<span style="font-size:8px;color:' . $MUTED . ';">SABAH ALNOOR CO.</span>'
+    . '</td>'
+    . '<td width="40%" style="vertical-align:middle;text-align:left;">'
+    . '<span style="font-size:21px;font-weight:bold;color:' . $EMERALD . ';">' . $docTitle . '</span><br />'
+    . '<span style="font-size:8px;color:' . $MUTED . ';">' . ($isIn ? 'RECEIPT VOUCHER' : 'PAYMENT VOUCHER') . '</span>'
     . '</td>'
     . '</tr>'
     . '</table>';
@@ -110,7 +134,7 @@ $html .= '<table cellpadding="0" style="width:100%;"><tr>'
     . '</tr></table>';
 
 /* ---- 2. serial + date strip ---------------------------------------------- */
-$html .= '<br /><table cellpadding="7" style="width:100%;">'
+$html .= '<table cellpadding="7" style="width:100%;">'
     . '<tr>'
     . '<td width="50%" style="background-color:' . $EMERALD . ';color:#ffffff;font-weight:bold;font-size:12px;">'
     . 'رقم السند: ' . e($receipt->receipt_no ?? '—')

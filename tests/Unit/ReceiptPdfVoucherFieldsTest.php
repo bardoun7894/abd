@@ -134,11 +134,17 @@ it('renders a valid PDF for a lease receipt carrying contract/payment/period fie
 it('carries the brand identity: logo, app emerald tokens and the logo amber accent', function () {
     $src = receiptPdfBladeSource();
 
-    // The company logo, not just a typed company name.
-    expect($src)->toContain("assets/media/logos/logo.jpg");
-    expect(file_exists(public_path('assets/media/logos/logo.jpg')))->toBeTrue();
-    // ...but a missing logo file must not blank the masthead.
+    // The company logo, not just a typed company name. logo-voucher.png is
+    // logo.jpg with its padding trimmed — the raw file's near-white margin
+    // prints as a visible grey rectangle at masthead size. It lives under
+    // resources/ because public/assets is gitignored and would never deploy.
+    expect($src)->toContain('images/logo-voucher.png');
+    expect(file_exists(resource_path('images/logo-voucher.png')))->toBeTrue();
+    // Falls back to the original, and the name is typed either way, so a
+    // missing asset can never blank the masthead.
+    expect($src)->toContain('assets/media/logos/logo.jpg');
     expect($src)->toContain('$hasLogo');
+    expect($src)->toContain('شركة صباح النور');
 
     // Structure uses the SAME emerald tokens as the UI (public/css/app-ui.css),
     // so a printed سند matches the screen it came from.
