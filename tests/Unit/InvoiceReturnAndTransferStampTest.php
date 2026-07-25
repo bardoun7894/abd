@@ -429,5 +429,36 @@ it('keeps the Excel palette identical to the CSS brand tokens', function () {
     // And no call site may re-declare the hexes (the old drift vector).
     $controller = file_get_contents(base_path('app/Http/Controllers/Dashboard/InvoiceController.php'));
     expect($controller)->not->toContain("'1B8A5A'");
+    expect($controller)->not->toContain("'116149'");
+    expect($controller)->not->toContain("'D7EEE3'");   // off-brand mint on the totals row
     expect($controller)->toContain('ExcelReportStyler::EMERALD');
+});
+
+it('leaves no off-brand fill hex in any live Excel export', function () {
+    // ReportController@@.php is a dead, unrouted backup (cyan 33F0FF headers) and
+    // is excluded on purpose — nothing references it.
+    $live = [
+        'app/Http/Controllers/Dashboard/InvoiceController.php',
+        'app/Http/Controllers/Dashboard/ReportController.php',
+        'app/Http/Controllers/Dashboard/WorkersController.php',
+        'app/Http/Controllers/TaskController.php',
+        'app/Services/ExcelReportStyler.php',
+    ];
+    $allowed = ['0E6B4F', '0A4F3A', 'E4EFE9', 'CBD5D1', 'FFFFFFFF', 'FF000000'];
+
+    $offBrand = [];
+    foreach ($live as $rel) {
+        $path = base_path($rel);
+        if (! file_exists($path)) {
+            continue;
+        }
+        preg_match_all("/setARGB\(\s*'([0-9A-Fa-f]{6,8})'\s*\)/", file_get_contents($path), $m);
+        foreach ($m[1] as $hex) {
+            if (! in_array(strtoupper($hex), $allowed, true)) {
+                $offBrand[] = "{$rel}: {$hex}";
+            }
+        }
+    }
+
+    expect($offBrand)->toBe([]);
 });

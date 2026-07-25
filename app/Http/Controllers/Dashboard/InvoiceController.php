@@ -225,7 +225,9 @@ class InvoiceController extends Controller
         $sheet->setCellValue('C'.$tr, $sumCount);
         $sheet->setCellValue('D'.$tr, $sumTotal);
         $sheet->getStyle('A'.$tr.':F'.$tr)->getFont()->setBold(true);
-        $sheet->getStyle('A'.$tr.':F'.$tr)->getFill()->setFillType($FILL)->getStartColor()->setARGB('D7EEE3');
+        // Same tint the styler's totalsRow() uses everywhere else — this row was
+        // the last hardcoded hex left in the export (D7EEE3, an off-brand mint).
+        $sheet->getStyle('A'.$tr.':F'.$tr)->getFill()->setFillType($FILL)->getStartColor()->setARGB($ZEBRA);
         $sheet->getStyle('D'.$tr)->getNumberFormat()->setFormatCode('#,##0.00');
 
         $sheet->getStyle('A2:F'.$tr)->getBorders()->getOutline()
