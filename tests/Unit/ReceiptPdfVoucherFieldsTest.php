@@ -131,6 +131,59 @@ it('renders a valid PDF for a lease receipt carrying contract/payment/period fie
     expect(strlen($out))->toBeGreaterThan(500);
 });
 
+it('carries the brand identity: logo, app emerald tokens and the logo amber accent', function () {
+    $src = receiptPdfBladeSource();
+
+    // The company logo, not just a typed company name.
+    expect($src)->toContain("assets/media/logos/logo.jpg");
+    expect(file_exists(public_path('assets/media/logos/logo.jpg')))->toBeTrue();
+    // ...but a missing logo file must not blank the masthead.
+    expect($src)->toContain('$hasLogo');
+
+    // Structure uses the SAME emerald tokens as the UI (public/css/app-ui.css),
+    // so a printed سند matches the screen it came from.
+    expect($src)->toContain('#0e6b4f');
+    expect($src)->toContain('#0a4f3a');
+    expect($src)->toContain('#e4efe9');
+
+    // Single accent sampled from the logo's wheat/sunrise.
+    expect($src)->toContain('#e0a020');
+
+    $css = file_get_contents(base_path('public/css/app-ui.css'));
+    expect($css)->toContain('--sn-emerald: #0e6b4f');
+    expect($css)->toContain('--sn-emerald-deep: #0a4f3a');
+});
+
+it('prints the voucher elements a Gulf سند is expected to carry', function () {
+    $src = receiptPdfBladeSource();
+
+    expect($src)->toContain('رقم السند');
+    expect($src)->toContain('التاريخ');
+    expect($src)->toContain('البيان');
+    expect($src)->toContain('تفقيط');            // figures AND words
+    expect($src)->toContain('ArabicNumberToWords');
+    expect($src)->toContain('أمين الصندوق');      // signature block
+    expect($src)->toContain('صادر إلكترونياً');    // footer provenance
+
+    // Direction-aware wording — a صرف voucher must not say "المبلغ المستلم".
+    expect($src)->toContain('سند صرف');
+    expect($src)->toContain('المبلغ المصروف');
+});
+
+it('renders a valid PDF for a VOID receipt, with the reason banner and watermark', function () {
+    $receipt = makeLeaseReceiptRow();
+    DB::table('cash_receipt')->where('receipt_id', $receipt->receipt_id)
+        ->update(['is_void' => 1, 'void_reason' => 'أُلغي للتصحيح']);
+    $receipt = \App\Models\CashReceipt::where('receipt_id', $receipt->receipt_id)->first();
+
+    view('dashboard.cashbox.receipt_pdf', ['receipt' => $receipt, 'receivedByName' => 'موظف تجريبي'])->render();
+    $out = PDF::Output('t.pdf', 'S');
+
+    expect(substr($out, 0, 4))->toBe('%PDF');
+    expect(strlen($out))->toBeGreaterThan(500);
+    expect(receiptPdfBladeSource())->toContain('ملغى / VOID');
+});
+
 it('renders a valid PDF unchanged for a non-lease receipt lacking those fields', function () {
     $receipt = makeNonLeaseReceiptRow();
 

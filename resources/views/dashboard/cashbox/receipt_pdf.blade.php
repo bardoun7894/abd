@@ -1,95 +1,214 @@
 <?php
 use Elibyy\TCPDF\Facades\TCPDF;
+use App\Support\ArabicNumberToWords;
 
 /**
- * Printable سند قبض voucher — Spec 008 bundle 1 (cashbox). Mirrors the
- * established house pattern in dashboard/purchase/pdf.blade.php: a fresh
- * TCPDF instance is created here and PDF::Output() is called from the
- * controller afterwards against the same underlying singleton.
+ * Printable سند قبض / سند صرف — Spec 008 bundle 1 (cashbox), redesigned.
  *
- * Font: 'aealarabiya' — confirmed bundled under
- * vendor/tecnickcom/tcpdf/fonts/aealarabiya.* — TCPDF's own Arabic font,
- * unlike 'almohanad'/'xnahid' referenced (unverified/absent) elsewhere in the
- * app's legacy PDF views.
+ * DESIGN NOTES
+ * ------------
+ * Built entirely with writeHTML tables rather than TCPDF's drawing API. The
+ * drawing API needs absolute coordinates, and TCPDF mirrors x for Cell() but
+ * NOT for Image() under setRTL(true) — mixing the two is where RTL PDFs go
+ * wrong. The HTML engine handles RTL consistently, so the whole voucher is one
+ * HTML pass; the only direct API calls left are the VOID watermark transform.
+ *
+ * Palette — the app's emerald structure (so a printed سند matches the screen it
+ * came from) with the LOGO's amber sunrise as the single accent. Sampled from
+ * public/assets/media/logos/logo.jpg: teal-green #00C090, amber #E0A020,
+ * orange #F08010. The deep emerald sits comfortably beside the logo's teal
+ * while staying identical to --sn-emerald in public/css/app-ui.css.
+ *
+ * Content follows the conventional Arabic/Gulf receipt-voucher layout: serial
+ * number, date, payer, amount in FIGURES AND WORDS (تفقيط — the standard guard
+ * against tampering), the reference it settles, and signature lines.
+ * Deliberately NOT printed: a Hijri date (the app ships no converter, and a
+ * wrong date on a financial document is worse than no date) and a payment
+ * method (never captured, so it would have to be invented).
+ *
+ * Font: 'aealarabiya' — TCPDF's own bundled Arabic font, confirmed present
+ * under vendor/tecnickcom/tcpdf/fonts/. Do not swap it for 'almohanad'/'xnahid'
+ * referenced elsewhere in the app's legacy PDFs; those files are absent.
  */
+
+/* ---- brand tokens ------------------------------------------------------- */
+$EMERALD      = '#0e6b4f';   // --sn-emerald
+$EMERALD_DEEP = '#0a4f3a';   // --sn-emerald-deep
+$TINT         = '#e4efe9';   // --sn-emerald-tint
+$LINE         = '#cbd5d1';
+$INK          = '#1a2b25';
+$MUTED        = '#5b6b64';
+$AMBER        = '#e0a020';   // logo — wheat / sunrise accent
+$DANGER       = '#a01515';
+
+$isVoid = (int) ($receipt->is_void ?? 0) === 1;
+$isIn = ($receipt->direction ?? 'in') === 'in';
+$docTitle = $isIn ? 'سند قبض' : 'سند صرف';
+$amountLabel = $isIn ? 'المبلغ المستلم' : 'المبلغ المصروف';
+
+$amount = (float) ($receipt->amount ?? 0);
+$amountWords = ArabicNumberToWords::amount($amount);
+
+$logo = public_path('assets/media/logos/logo.jpg');
+$hasLogo = is_file($logo);
+
+$fmtDate = function ($v) {
+    if (empty($v)) {
+        return null;
+    }
+    try {
+        return \Carbon\Carbon::parse($v)->format('d-m-Y');
+    } catch (\Throwable $e) {
+        return (string) $v;
+    }
+};
+
 $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
 $pdf::SetAuthor('شركة صباح النور');
-$pdf::SetTitle('سند قبض ' . ($receipt->receipt_no ?? ''));
+$pdf::SetTitle($docTitle . ' ' . ($receipt->receipt_no ?? ''));
 $pdf::SetPrintHeader(false);
 $pdf::SetPrintFooter(false);
-$pdf::SetMargins(15, 15, 15);
-$lg = [];
-$lg['a_meta_charset'] = 'UTF-8';
-$lg['a_meta_dir'] = 'rtl';
-$lg['a_meta_language'] = 'ar';
-$lg['w_page'] = 'صفحة';
+$pdf::SetMargins(12, 12, 12);
+$pdf::SetAutoPageBreak(true, 14);
+$lg = ['a_meta_charset' => 'UTF-8', 'a_meta_dir' => 'rtl', 'a_meta_language' => 'ar', 'w_page' => 'صفحة'];
 $pdf::setLanguageArray($lg);
 $pdf::AddPage('P', 'A4');
 $pdf::setRTL(true);
-$pdf::SetFont('aealarabiya', '', 12);
+$pdf::SetFont('aealarabiya', '', 11);
 
-$isVoid = (int) ($receipt->is_void ?? 0) === 1;
+/* ---- helpers ------------------------------------------------------------- */
 
-$directionLabel = ($receipt->direction ?? 'in') === 'in' ? 'سند قبض' : 'سند صرف';
+/** One label/value row. Returns '' for an empty value, so a non-lease receipt
+ *  prints a shorter but still complete voucher instead of a row of dashes. */
+$row = function (string $label, $value) use ($TINT, $LINE, $INK, $MUTED) {
+    if ($value === null || $value === '') {
+        return '';
+    }
 
-$html = '<div style="text-align:center;">'
-    . '<h2>شركة صباح النور</h2>'
-    . '<h3>' . $directionLabel . '</h3>'
-    . '</div>'
-    . '<table style="width:100%;border-collapse:collapse;" cellpadding="6">'
-    . '<tr><td style="width:30%;font-weight:bold;border:1px solid #000;">رقم السند</td><td style="border:1px solid #000;">' . e($receipt->receipt_no) . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">التاريخ</td><td style="border:1px solid #000;">' . e(\Carbon\Carbon::parse($receipt->receipt_date)->format('d-m-Y')) . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">المبلغ</td><td style="border:1px solid #000;">' . number_format((float) $receipt->amount, 2) . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">اسم الدافع</td><td style="border:1px solid #000;">' . e($receipt->payer_name ?? '') . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">استلمه</td><td style="border:1px solid #000;">' . e($receivedByName ?? '') . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">نوع المصدر</td><td style="border:1px solid #000;">' . e($receipt->source_type) . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">رقم المرجع</td><td style="border:1px solid #000;">' . e($receipt->source_id) . '</td></tr>'
-    . '<tr><td style="font-weight:bold;border:1px solid #000;">ملاحظة</td><td style="border:1px solid #000;">' . e($receipt->note ?? '') . '</td></tr>'
+    return '<tr>'
+        . '<td width="32%" style="background-color:' . $TINT . ';border:0.6px solid ' . $LINE . ';color:' . $MUTED . ';font-weight:bold;">' . e($label) . '</td>'
+        . '<td width="68%" style="border:0.6px solid ' . $LINE . ';color:' . $INK . ';">' . e($value) . '</td>'
+        . '</tr>';
+};
+
+/* ---- 1. masthead: logo + document type ----------------------------------- */
+$html = '<table cellpadding="0" style="width:100%;">'
+    . '<tr>'
+    . '<td width="50%" style="vertical-align:middle;">'
+    . ($hasLogo ? '<img src="' . $logo . '" width="150" height="150" />' : '<span style="font-size:16px;font-weight:bold;color:' . $EMERALD . ';">شركة صباح النور</span>')
+    . '</td>'
+    . '<td width="50%" style="vertical-align:middle;text-align:left;">'
+    . '<span style="font-size:22px;font-weight:bold;color:' . $EMERALD . ';">' . $docTitle . '</span><br />'
+    . '<span style="font-size:9px;color:' . $MUTED . ';">' . ($isIn ? 'RECEIPT VOUCHER' : 'PAYMENT VOUCHER') . '</span>'
+    . '</td>'
+    . '</tr>'
     . '</table>';
 
-// Spec 024 F2 — lease/rentpay voucher enrichment: shop name / contract no. /
-// payment no. / due period (from→to), populated only for lease-linked receipts
-// (ShopController::rentpayReceipt()). Each row is independently guarded so a
-// non-lease receipt (these columns null) renders exactly as before.
-$enrichmentRows = '';
-if (! empty($receipt->shop_name)) {
-    $enrichmentRows .= '<tr><td style="width:30%;font-weight:bold;border:1px solid #000;">اسم المحل</td><td style="border:1px solid #000;">' . e($receipt->shop_name) . '</td></tr>';
+// Sunrise rule — the logo's amber, the document's single accent.
+$html .= '<table cellpadding="0" style="width:100%;"><tr>'
+    . '<td style="background-color:' . $AMBER . ';height:3px;line-height:3px;font-size:1px;">&nbsp;</td>'
+    . '</tr></table>';
+
+/* ---- 2. serial + date strip ---------------------------------------------- */
+$html .= '<br /><table cellpadding="7" style="width:100%;">'
+    . '<tr>'
+    . '<td width="50%" style="background-color:' . $EMERALD . ';color:#ffffff;font-weight:bold;font-size:12px;">'
+    . 'رقم السند: ' . e($receipt->receipt_no ?? '—')
+    . '</td>'
+    . '<td width="50%" style="background-color:' . $EMERALD_DEEP . ';color:#ffffff;font-weight:bold;font-size:12px;text-align:left;">'
+    . 'التاريخ: ' . e($fmtDate($receipt->receipt_date ?? null) ?? '—')
+    . '</td>'
+    . '</tr>'
+    . '</table>';
+
+/* ---- 3. amount + تفقيط ---------------------------------------------------- */
+$html .= '<br /><table cellpadding="9" style="width:100%;border:1.2px solid ' . $EMERALD . ';">'
+    . '<tr>'
+    . '<td width="38%" style="background-color:' . $TINT . ';color:' . $EMERALD_DEEP . ';font-weight:bold;font-size:12px;">' . $amountLabel . '</td>'
+    . '<td width="62%" style="font-size:19px;font-weight:bold;color:' . $EMERALD . ';">'
+    . number_format($amount, 2) . ' <span style="font-size:10px;color:' . $MUTED . ';">ريال</span>'
+    . '</td>'
+    . '</tr>';
+
+if ($amountWords) {
+    $html .= '<tr>'
+        . '<td colspan="2" style="border-top:0.6px solid ' . $LINE . ';color:' . $INK . ';font-size:10px;">'
+        . '<span style="color:' . $MUTED . ';">تفقيط: </span>' . e($amountWords)
+        . '</td>'
+        . '</tr>';
 }
-if (! empty($receipt->contract_no)) {
-    $enrichmentRows .= '<tr><td style="width:30%;font-weight:bold;border:1px solid #000;">رقم العقد</td><td style="border:1px solid #000;">' . e($receipt->contract_no) . '</td></tr>';
+$html .= '</table>';
+
+/* ---- 4. البيان ------------------------------------------------------------ */
+$period = null;
+if (! empty($receipt->period_from) || ! empty($receipt->period_to)) {
+    $period = ($fmtDate($receipt->period_from ?? null) ?? '—') . '  إلى  ' . ($fmtDate($receipt->period_to ?? null) ?? '—');
 }
+
+$paymentNo = null;
 if (! empty($receipt->payment_no)) {
     // payment_no is stored as a bare ordinal so it stays sortable/queryable —
     // "n من m" is composed here, at print time, from payment_total.
-    $paymentLabel = ! empty($receipt->payment_total)
+    $paymentNo = ! empty($receipt->payment_total)
         ? $receipt->payment_no . ' من ' . $receipt->payment_total
         : $receipt->payment_no;
-    $enrichmentRows .= '<tr><td style="width:30%;font-weight:bold;border:1px solid #000;">رقم الدفعة</td><td style="border:1px solid #000;">' . e($paymentLabel) . '</td></tr>';
-}
-if (! empty($receipt->period_from) || ! empty($receipt->period_to)) {
-    $periodFrom = $receipt->period_from ? \Carbon\Carbon::parse($receipt->period_from)->format('d-m-Y') : '—';
-    $periodTo = $receipt->period_to ? \Carbon\Carbon::parse($receipt->period_to)->format('d-m-Y') : '—';
-    $enrichmentRows .= '<tr><td style="font-weight:bold;border:1px solid #000;">الفترة المستحقة</td><td style="border:1px solid #000;">' . e($periodFrom . ' → ' . $periodTo) . '</td></tr>';
-}
-if ($enrichmentRows !== '') {
-    $html .= '<br/><table style="width:100%;border-collapse:collapse;" cellpadding="6">' . $enrichmentRows . '</table>';
 }
 
+$details = $row('اسم المحل', $receipt->shop_name ?? null)
+    . $row('رقم العقد', $receipt->contract_no ?? null)
+    . $row('رقم الدفعة', $paymentNo)
+    . $row('الفترة المستحقة', $period)
+    . $row($isIn ? 'اسم الدافع' : 'المستفيد', $receipt->payer_name ?? null)
+    . $row($isIn ? 'استلمه' : 'صرفه', $receivedByName ?? null)
+    . $row('المرجع', trim(($receipt->source_type ?? '') . ' #' . ($receipt->source_id ?? '')))
+    . $row('ملاحظة', $receipt->note ?? null);
+
+$html .= '<br /><table cellpadding="7" style="width:100%;">'
+    . '<tr><td colspan="2" style="background-color:' . $EMERALD_DEEP . ';color:#ffffff;font-weight:bold;font-size:11px;">البيان</td></tr>'
+    . $details
+    . '</table>';
+
+/* ---- 5. void banner ------------------------------------------------------- */
 if ($isVoid) {
-    $html .= '<br/><table style="width:100%;border-collapse:collapse;" cellpadding="6">'
-        . '<tr><td style="font-weight:bold;border:1px solid #a00;background:#fdd;">سبب الإلغاء</td><td style="border:1px solid #a00;background:#fdd;">' . e($receipt->void_reason ?? '') . '</td></tr>'
+    $html .= '<br /><table cellpadding="8" style="width:100%;border:1px solid ' . $DANGER . ';">'
+        . '<tr><td width="28%" style="background-color:#fdecec;color:' . $DANGER . ';font-weight:bold;">سند ملغى — السبب</td>'
+        . '<td width="72%" style="color:' . $DANGER . ';">' . e($receipt->void_reason ?? '—') . '</td></tr>'
         . '</table>';
 }
 
-$pdf::writeHTML($html, true, false, true, false, 'J');
+/* ---- 6. signatures -------------------------------------------------------- */
+$sig = function (string $label) use ($LINE, $MUTED) {
+    return '<td width="33%" style="text-align:center;color:' . $MUTED . ';font-size:9px;">'
+        . $label . '<br /><br /><br />'
+        . '<span style="color:' . $LINE . ';">............................</span>'
+        . '</td>';
+};
 
+$html .= '<br /><br /><table cellpadding="4" style="width:100%;"><tr>'
+    . $sig($isIn ? 'توقيع الدافع' : 'توقيع المستلم')
+    . $sig('أمين الصندوق')
+    . $sig('المدير المالي')
+    . '</tr></table>';
+
+/* ---- 7. footer ------------------------------------------------------------ */
+$html .= '<br /><table cellpadding="0" style="width:100%;"><tr>'
+    . '<td style="background-color:' . $LINE . ';height:1px;line-height:1px;font-size:1px;">&nbsp;</td>'
+    . '</tr></table>'
+    . '<table cellpadding="4" style="width:100%;"><tr>'
+    . '<td width="58%" style="font-size:8px;color:' . $MUTED . ';">شركة صباح النور — Sabah Alnoor CO. · سند صادر إلكترونياً من النظام المالي</td>'
+    . '<td width="42%" style="font-size:8px;color:' . $MUTED . ';text-align:left;">تاريخ الطباعة: ' . \Carbon\Carbon::now()->format('d-m-Y H:i') . '</td>'
+    . '</tr></table>';
+
+$pdf::writeHTML($html, true, false, true, false, '');
+
+/* ---- 8. VOID watermark ---------------------------------------------------- */
 if ($isVoid) {
-    $pdf::SetAlpha(0.3);
-    $pdf::SetFont('aealarabiya', 'B', 60);
-    $pdf::SetTextColor(200, 0, 0);
+    $pdf::SetAlpha(0.25);
+    $pdf::SetFont('aealarabiya', 'B', 58);
+    $pdf::SetTextColor(160, 21, 21);
     $pdf::StartTransform();
     $pdf::Rotate(45, 105, 150);
-    $pdf::Text(60, 150, 'ملغى / VOID');
+    $pdf::Text(58, 150, 'ملغى / VOID');
     $pdf::StopTransform();
     $pdf::SetAlpha(1);
 }
