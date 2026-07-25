@@ -571,3 +571,44 @@ a.text-hover-primary:hover,
 		width: auto;
 	}
 }
+
+/* ============================================================================
+   §12. Row-lift stacking fix — keeps action dropdowns above the rows below
+   ----------------------------------------------------------------------------
+   The list restyles (specs 021-024) animate rows in with `sn-row-in` and lift
+   them on hover with `transform: translateY(...)`. A transform makes every
+   <tr> its own stacking context, which TRAPS an open dropdown inside its own
+   row: Bootstrap gives .dropdown-menu z-index:1000, but that z-index is then
+   scoped to the row, so the NEXT rows — painted later in DOM order — cover the
+   menu and its lower items become unclickable. Reproduced on the shops list
+   ("الاجراءات" menu, ShopController) where 21 sample points inside the open
+   menu were occluded by the following rows' buttons; the workers list renders
+   the same menu and had the same defect.
+
+   Two parts:
+     1. `animation-fill-mode: backwards` — the entrance animation stops leaving
+        a permanent transform on every idle row, so idle rows are no longer
+        stacking contexts at all. Visually identical: the animation already
+        ended on `opacity:1; translateY(0)`, which is also the untransformed
+        resting state.
+     2. The row holding focus (a Bootstrap dropdown keeps focus on its toggle
+        while open) is promoted above its siblings and drops its hover lift, so
+        the menu paints over everything below it.
+
+   `:focus-within` rather than `:has(.dropdown-menu.show)` on purpose — wider
+   browser support, and it is true for exactly as long as the menu is open.
+   `!important` is required only because the page-scoped rules that introduce
+   the transform carry an id selector (`.shop-log #shop_table tbody tr`).
+   ========================================================================== */
+table tbody tr {
+	animation-fill-mode: backwards !important;
+}
+table tbody tr:hover {
+	position: relative;
+	z-index: 2;
+}
+table tbody tr:focus-within {
+	position: relative;
+	z-index: 1060;
+	transform: none !important;
+}
