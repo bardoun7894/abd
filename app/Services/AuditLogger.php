@@ -4,12 +4,19 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Support\RequestFingerprint;
 
 /**
  * Append-only audit trail for AI documents (Spec 001 FR-006 + governance).
  * Records every read/extract/edit/approve/reject/reprocess/duplicate-override with
  * the actor and timestamp. Writes to the main-DB `ai_audit_log` table following the
  * house `*_history` convention. Never throws — auditing must not break the action.
+ *
+ * Spec 024 F2 follow-up: also captures the request IP + device (User-Agent) via
+ * RequestFingerprint, which is schema-guarded — on an environment that has not
+ * run 2026_07_25_120100_add_device_columns_to_audit_logs the keys are simply
+ * omitted, instead of every insert failing into the swallowing catch below and
+ * silently blacking out the whole audit trail.
  */
 class AuditLogger
 {
@@ -22,6 +29,7 @@ class AuditLogger
     public const READ = 'read';
     public const DELETE = 'delete';
     public const TRANSFER = 'transfer';   // per-invoice branch transfer / re-route (F1)
+    public const RETURNED = 'returned';   // invoice pulled back out of a branch (F1)
     public const PAID = 'paid';           // lease payment marked مدفوعة + سند issued (F2)
     public const VOID = 'void';           // lease payment reverted / سند voided (F2)
     public const BLOCKED = 'blocked';     // blocked attempt to revert a locked سند (F2)
@@ -33,7 +41,7 @@ class AuditLogger
     public static function log(string $documentType, ?int $documentId, string $action, array $opts = []): void
     {
         try {
-            DB::table('ai_audit_log')->insert([
+            DB::table('ai_audit_log')->insert(array_merge([
                 'document_type' => $documentType,
                 'document_id' => $documentId,
                 'batch_id' => $opts['batch_id'] ?? null,
@@ -44,7 +52,7 @@ class AuditLogger
                 'change_user' => $opts['user'] ?? (Auth::check() ? Auth::id() : null),
                 'change_at' => now(),
                 'note' => $opts['note'] ?? null,
-            ]);
+            ], RequestFingerprint::forTable('ai_audit_log')));
         } catch (\Throwable $e) {
             // Swallow — the audit log is best-effort and must not abort the action.
         }

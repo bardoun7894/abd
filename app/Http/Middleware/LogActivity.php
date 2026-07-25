@@ -83,6 +83,9 @@ class LogActivity
         $request->attributes->set('_activity_snapshot', [
             'user_id' => Auth::check() ? Auth::id() : null,
             'ip' => $request->ip(),
+            // Spec 024 F2 follow-up — الجهاز, captured next to the IP so the
+            // audit trail answers "from where AND on what device".
+            'user_agent' => $request->userAgent(),
             'route' => $route?->getName(),
             'method' => $request->method(),
             'entity_id' => $this->guessEntityId($request, $route),
@@ -138,6 +141,7 @@ class LogActivity
                 'route' => $routeName,
                 'method' => $method,
                 'ip' => $snap['ip'],
+                'user_agent' => $snap['user_agent'] ?? null,
             ]
         );
     }

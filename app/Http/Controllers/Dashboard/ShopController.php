@@ -16,6 +16,7 @@ use App\Http\Traits\ApimtitTrait;
 use App\Models\Shop_rent;
 use App\Models\CashReceipt;
 use App\Services\CashboxService;
+use App\Services\RentpayVoucherContext;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\Schema;
 use Jenssegers\Agent\Agent;
@@ -527,8 +528,17 @@ class ShopController extends Controller
                 $result['status'] = false;
                 $result['message'] = $validator->errors();
                 $result['message_out'] = '';
+            } elseif ($blocked = $this->guardRentpayMutation($rentpay_id, 'update', $request->all())) {
+                // Spec 024 F2 follow-up — editing an installment already tied to
+                // a live سند is a modification of a settled payment, so it takes
+                // the same lock as reverting it.
+                $result = $blocked;
             } else {
                 $ERROR_FLAG = 0;
+                $before = $rentpay_id
+                    ? DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->first()
+                    : null;
+
                 $result2= DB::table('shop_rentpay')
                        ->updateOrInsert(
                            ['rentpay_id' =>$rentpay_id],
@@ -542,7 +552,13 @@ class ShopController extends Controller
                            ]
                        );
 
-
+                // Spec 024 F2 follow-up — "تسجيل جميع عمليات التعديل" with the
+                // old/new values. The LogActivity middleware only records that
+                // *something* under /shop changed; the client needs the actual
+                // before/after on the payment itself.
+                if ($before) {
+                    $this->auditRentpayEdit($before, $request);
+                }
 
                 $result['url'] = route('dashboard.shop.tbl_rentpay');
                 $result['status'] = $result2;
@@ -627,6 +643,18 @@ class ShopController extends Controller
             $result['message'] = 'تم';
 
             $id = $request->id;
+
+            // Spec 024 F2 follow-up — a payment tied to a سند may not be deleted
+            // out from under it. Refused for EVERYONE while the سند is live
+            // (issuer and admin included): voiding is what appends the
+            // compensating ledger entry, so a raw delete would orphan the سند
+            // and skew the cashbox balance. Void first, then delete.
+            if ($id != '' && ($blocked = $this->guardRentpayMutation($id, 'delete'))) {
+                echo json_encode($blocked);
+
+                return;
+            }
+
             if($id!=''){
                 try {
 
@@ -760,6 +788,166 @@ class ShopController extends Controller
     }
 
     /**
+     * Spec 024 F2 follow-up — the hard-lock originally covered only the
+     * paid->unpaid flip (rentpayVoid). The client's rule is wider: once a سند is
+     * issued the operation is closed and no other employee may revert the
+     * payment "أو تعديلها". del_rentpay()/updrentpay() bypassed that entirely.
+     *
+     * Returns null when the mutation may proceed, or a ready-to-emit JSON error
+     * payload (status/message/message_out, matching what the existing rentpay
+     * JS handlers read) when it must be refused. Every refusal is written to the
+     * audit trail as a BLOCKED row before being returned.
+     *
+     * @param  string  $operation  'update' — issuer/admin only, AND the money
+     *                             fields (amount, due date) are frozen even for
+     *                             them while the سند is live, for the same
+     *                             reason as delete below: the سند and its ledger
+     *                             entry certify a specific amount for a specific
+     *                             period, and editing the payment underneath
+     *                             them makes the cashbox stop reconciling. Notes
+     *                             stay editable.
+     *                             'delete' — refused for everyone while the سند
+     *                             is live, because voidReceipt() is what appends
+     *                             the compensating ledger entry; deleting the
+     *                             payment row first would orphan the سند and
+     *                             skew the cashbox balance.
+     * @param  array  $incoming  the submitted values, for the update case
+     */
+    private function guardRentpayMutation($rentpay_id, string $operation, array $incoming = []): ?array
+    {
+        if (! $rentpay_id || ! Schema::hasTable('cash_receipt')) {
+            return null;
+        }
+
+        $receipt = CashReceipt::where('source_type', 'shop_rentpay')
+            ->where('source_id', $rentpay_id)
+            ->where('is_void', 0)
+            ->orderByDesc('receipt_id')
+            ->first();
+
+        // No live سند — an ordinary unpaid/never-receipted installment. Legacy
+        // rows marked paid before the cashbox existed carry no سند either and
+        // stay editable on purpose: there is no voucher to protect.
+        if (! $receipt) {
+            return null;
+        }
+
+        $actingUserId = Auth::user()->id ?? null;
+        $isAdmin = (int) (Auth::user()->emp_job ?? 0) === 1;
+
+        try {
+            (new CashboxService())->assertLeaseVoidAllowed($receipt, $actingUserId, $isAdmin);
+        } catch (\RuntimeException $e) {
+            return $this->blockRentpayMutation($rentpay_id, $actingUserId, $e->getMessage(), $operation);
+        }
+
+        if ($operation === 'delete') {
+            return $this->blockRentpayMutation(
+                $rentpay_id,
+                $actingUserId,
+                'لا يمكن حذف دفعة مرتبطة بسند سداد ساري (' . $receipt->receipt_no . '). '
+                . 'يجب إلغاء السند أولاً مع ذكر السبب، ثم حذف الدفعة.',
+                $operation
+            );
+        }
+
+        if ($operation === 'update' && $this->rentpayMoneyFieldsChanged($rentpay_id, $incoming)) {
+            return $this->blockRentpayMutation(
+                $rentpay_id,
+                $actingUserId,
+                'لا يمكن تعديل مبلغ أو تاريخ دفعة مرتبطة بسند سداد ساري (' . $receipt->receipt_no . '). '
+                . 'يجب إلغاء السند أولاً مع ذكر السبب، ثم تعديل الدفعة.',
+                $operation
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * True when the submitted amount or due date differs from what is stored —
+     * i.e. the edit would contradict the سند that certifies this installment.
+     * A note-only edit is harmless and stays allowed.
+     */
+    private function rentpayMoneyFieldsChanged($rentpay_id, array $incoming): bool
+    {
+        $row = DB::table('shop_rentpay')->where('rentpay_id', $rentpay_id)->first();
+        if (! $row) {
+            return false;
+        }
+
+        if (array_key_exists('rentpay_price', $incoming)
+            && (float) $incoming['rentpay_price'] !== (float) $row->rentpay_price) {
+            return true;
+        }
+
+        return array_key_exists('rentpay_dt', $incoming)
+            && $this->normaliseDate($incoming['rentpay_dt']) !== $this->normaliseDate($row->rentpay_dt);
+    }
+
+    /** Y-m-d or null, so '2026-07-01' and '2026-07-01 00:00:00' compare equal. */
+    private function normaliseDate($value): ?string
+    {
+        if (empty($value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable $e) {
+            return (string) $value;
+        }
+    }
+
+    /** Append the before/after of an allowed rentpay edit to the audit trail. */
+    private function auditRentpayEdit($before, Request $request): void
+    {
+        $fields = [
+            'rentpay_price' => $request->input('rentpay_price'),
+            'rentpay_dt' => $request->input('rentpay_dt'),
+            'rentpay_note' => $request->input('rentpay_note'),
+        ];
+
+        foreach ($fields as $field => $new) {
+            $old = $before->{$field} ?? null;
+            if ((string) $old === (string) $new) {
+                continue;
+            }
+
+            AuditLogger::log('lease', (int) $before->rentpay_id, AuditLogger::EDIT, [
+                'field' => $field,
+                'old' => $old,
+                'new' => $new,
+                'user' => Auth::user()->id ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Audit the refusal, then shape it as the JSON payload the caller's JS reads.
+     * The two consumers disagree on the envelope and both are legacy:
+     *   - del_rentpay  (upd_rentpay.blade.php) does swal.fire('خطأ', resp.message)
+     *     — `message` must be a plain string.
+     *   - updrentpay   (public/assets/module/shop_j.js) does
+     *     $.each(resp.message, ...) then prints resp.message_out — `message` must
+     *     stay an errors-bag-shaped array, or jQuery iterates the string
+     *     character by character.
+     */
+    private function blockRentpayMutation($rentpay_id, $actingUserId, string $message, string $operation): array
+    {
+        AuditLogger::log('lease', (int) $rentpay_id, AuditLogger::BLOCKED, [
+            'note' => $message,
+            'user' => $actingUserId,
+        ]);
+
+        if ($operation === 'delete') {
+            return ['status' => false, 'message' => $message, 'message_out' => $message];
+        }
+
+        return ['status' => false, 'message' => [], 'message_out' => $message];
+    }
+
+    /**
      * Spec 008 bundle 1 (cashbox) — unpaid->paid. Creates a سند قبض (cash_receipt)
      * + an 'in' cashbox_ledger entry via CashboxService, then flips rentpay_status.
      * The receipt and the status flip are committed atomically.
@@ -784,24 +972,13 @@ class ShopController extends Controller
             'receipt_date' => 'required|date',
         ]);
 
-        // Spec 024 F2 — enrich the voucher with contract no. / payment no. /
-        // due period, pulled from the lease contract (shop_rent) linked to
-        // this rentpay's shop. Guarded (Schema::hasTable / hasColumn) so this
-        // stays fully backward compatible with any environment/test schema
-        // that predates the F2 migration or lacks the legacy shop_rent table.
-        $enrichment = [];
-        if (Schema::hasColumn('cash_receipt', 'contract_no')) {
-            $rent = Schema::hasTable('shop_rent')
-                ? DB::table('shop_rent')->where('shop_id', $row->shop_id)->first()
-                : null;
-
-            $enrichment = [
-                'contract_no' => $rent->rent_no ?? $rent->rent_name ?? null,
-                'payment_no' => (string) $rentpay_id,
-                'period_from' => $rent->rent_sdt ?? null,
-                'period_to' => $rent->rent_edt ?? null,
-            ];
-        }
+        // Spec 024 F2 — enrich the voucher with اسم المحل / رقم العقد / رقم
+        // الدفعة (n من m) / الفترة المستحقة الخاصة بهذه الدفعة. All of the
+        // resolution logic (contract selection, installment ranking, per-
+        // installment period, schema guards) lives in RentpayVoucherContext so
+        // it is testable in isolation; it returns only the keys the current
+        // cash_receipt schema can actually store.
+        $enrichment = (new RentpayVoucherContext())->build($row);
 
         try {
             $receipt = DB::transaction(function () use ($rentpay_id, $request, $enrichment) {

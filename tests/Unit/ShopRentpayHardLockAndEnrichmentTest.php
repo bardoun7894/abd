@@ -49,6 +49,11 @@ beforeEach(function () {
         $table->date('rent_edt')->nullable();
     });
 
+    Schema::create('shop', function ($table) {
+        $table->increments('shop_id');
+        $table->string('shop_name')->nullable();
+    });
+
     Schema::create('cash_receipt', function ($table) {
         $table->id('receipt_id');
         $table->string('receipt_no', 30)->nullable()->unique();
@@ -70,6 +75,8 @@ beforeEach(function () {
         $table->string('payment_no', 50)->nullable();
         $table->date('period_from')->nullable();
         $table->date('period_to')->nullable();
+        $table->string('shop_name', 255)->nullable();
+        $table->string('payment_total', 20)->nullable();
     });
 
     Schema::create('cashbox_ledger', function ($table) {
@@ -151,6 +158,7 @@ function grantRentpayPermission(int $empId): void
 function seedRentpayWithContract(array $overrides = []): int
 {
     $shopId = 1;
+    DB::table('shop')->insert(['shop_id' => $shopId, 'shop_name' => 'محل الأندلس']);
     DB::table('shop_rent')->insert([
         'shop_id' => $shopId,
         'rent_no' => 'RENT-2026-05',
@@ -169,7 +177,7 @@ function seedRentpayWithContract(array $overrides = []): int
     ], $overrides), 'rentpay_id');
 }
 
-it('enriches the سند with contract_no/payment_no/period_from/period_to and logs a PAID audit row', function () {
+it('enriches the سند with shop_name/contract_no/payment_no/period and logs a PAID audit row', function () {
     actAs(10, 1); // admin, also the issuer
     $rentpayId = seedRentpayWithContract();
 
@@ -179,8 +187,11 @@ it('enriches the سند with contract_no/payment_no/period_from/period_to and lo
     expect(json_decode($response->getContent(), true)['status'])->toBeTrue();
 
     $receipt = CashReceipt::first();
+    expect($receipt->shop_name)->toBe('محل الأندلس');
     expect($receipt->contract_no)->toBe('RENT-2026-05');
-    expect($receipt->payment_no)->toBe((string) $rentpayId);
+    // Sole installment of the contract: ordinal 1 of 1, covering the full span.
+    expect($receipt->payment_no)->toBe('1');
+    expect($receipt->payment_total)->toBe('1');
     expect($receipt->period_from)->toBe('2026-01-01');
     expect($receipt->period_to)->toBe('2026-12-31');
 
@@ -209,8 +220,10 @@ it('blocks a non-issuer non-admin rentpayVoid with the exact message and logs a 
     expect($response->getStatusCode())->toBe(403);
     $data = json_decode($response->getContent(), true);
     expect($data['message_out'])->toBe(
+        // Verbatim client wording — any drift here is a spec violation, not a nit.
         'لا يمكن تعديل حالة هذه الدفعة لأنها مرتبطة بسند سداد تم تحريره بواسطة الموظف (موظف الإصدار). '
-        . 'في حال الحاجة إلى التعديل، يجب أن يتم من خلال الموظف الذي حرر السند أو مستخدم يمتلك صلاحية مدير النظام.'
+        . 'في حال الحاجة إلى التعديل، يجب أن يتم ذلك من خلال الموظف الذي حرر السند '
+        . 'أو من خلال مستخدم يمتلك صلاحية مدير النظام.'
     );
 
     expect(CashReceipt::first()->is_void)->toBe(0);

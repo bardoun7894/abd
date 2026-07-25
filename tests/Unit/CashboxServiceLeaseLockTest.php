@@ -115,8 +115,10 @@ it('rejects a non-issuer non-admin void of a shop_rentpay receipt with the exact
     $act = fn () => (new CashboxService())->voidReceipt($receipt->receipt_id, 'محاولة إلغاء', 99, false);
 
     expect($act)->toThrow(RuntimeException::class,
+        // Verbatim client wording — any drift here is a spec violation, not a nit.
         'لا يمكن تعديل حالة هذه الدفعة لأنها مرتبطة بسند سداد تم تحريره بواسطة الموظف (أحمد الحلو). '
-        . 'في حال الحاجة إلى التعديل، يجب أن يتم من خلال الموظف الذي حرر السند أو مستخدم يمتلك صلاحية مدير النظام.');
+        . 'في حال الحاجة إلى التعديل، يجب أن يتم ذلك من خلال الموظف الذي حرر السند '
+        . 'أو من خلال مستخدم يمتلك صلاحية مدير النظام.');
 
     expect(CashReceipt::find($receipt->receipt_id)->is_void)->toBe(0); // rolled back, untouched
 });

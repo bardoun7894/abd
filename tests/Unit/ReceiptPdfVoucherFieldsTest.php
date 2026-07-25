@@ -47,6 +47,8 @@ beforeEach(function () {
         $table->string('payment_no', 50)->nullable();
         $table->date('period_from')->nullable();
         $table->date('period_to')->nullable();
+        $table->string('shop_name', 255)->nullable();
+        $table->string('payment_total', 20)->nullable();
     });
 
     DB::beginTransaction();
@@ -73,9 +75,11 @@ function makeLeaseReceiptRow(): \App\Models\CashReceipt
         'payer_name' => 'فوال نور الصباح',
         'created_at' => now(),
         'contract_no' => 'RENT-2026-05',
-        'payment_no' => '1',
-        'period_from' => '2026-01-01',
-        'period_to' => '2026-12-31',
+        'payment_no' => '3',
+        'payment_total' => '4',
+        'shop_name' => 'محل الأندلس',
+        'period_from' => '2026-07-01',
+        'period_to' => '2026-09-30',
     ]);
 
     return \App\Models\CashReceipt::where('receipt_id', $id)->first();
@@ -107,6 +111,14 @@ it('references the lease voucher fields guarded by @if in the blade source', fun
     expect($src)->toContain('رقم العقد');
     expect($src)->toContain('رقم الدفعة');
     expect($src)->toContain('الفترة المستحقة');
+
+    // Spec 024 F2 follow-up — اسم المحل was missing from the voucher entirely,
+    // and رقم الدفعة is now composed as "n من m" at print time from the bare
+    // ordinal + payment_total (kept separate so the column stays sortable).
+    expect($src)->toContain('$receipt->shop_name');
+    expect($src)->toContain('اسم المحل');
+    expect($src)->toContain('$receipt->payment_total');
+    expect($src)->toContain(' من ');
 });
 
 it('renders a valid PDF for a lease receipt carrying contract/payment/period fields', function () {

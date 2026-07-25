@@ -36,7 +36,7 @@ class CashboxService
      * Record an inbound receipt voucher (سند قبض) and append the matching
      * 'in' ledger entry. Returns the created CashReceipt.
      *
-     * @param array{source_type:string,source_id:int,direction?:string,amount:float,receipt_date:string,payer_name?:?string,received_by?:?int,note?:?string,create_user?:?int,contract_no?:?string,payment_no?:?string,period_from?:?string,period_to?:?string} $data
+     * @param array{source_type:string,source_id:int,direction?:string,amount:float,receipt_date:string,payer_name?:?string,received_by?:?int,note?:?string,create_user?:?int,shop_name?:?string,contract_no?:?string,payment_no?:?string,payment_total?:?string,period_from?:?string,period_to?:?string} $data
      */
     public function recordReceipt(array $data): CashReceipt
     {
@@ -51,13 +51,15 @@ class CashboxService
         return DB::transaction(function () use ($data, $amount) {
             $now = Carbon::now();
 
-            // Spec 024 F2 — additive voucher-enrichment fields (contract no.,
-            // payment no., due period). Only included when the caller passes
-            // them, so callers/schemas that predate the migration (and the
-            // existing house tests that hand-build cash_receipt without these
-            // columns) are completely unaffected.
+            // Spec 024 F2 — additive voucher-enrichment fields (shop name,
+            // contract no., payment no. + total, due period). Only included when
+            // the caller passes them, so callers/schemas that predate the
+            // migrations (and the existing house tests that hand-build
+            // cash_receipt without these columns) are completely unaffected.
+            // RentpayVoucherContext already drops keys the schema cannot store.
             $enrichment = array_intersect_key($data, array_flip([
-                'contract_no', 'payment_no', 'period_from', 'period_to',
+                'shop_name', 'contract_no', 'payment_no', 'payment_total',
+                'period_from', 'period_to',
             ]));
 
             $receipt = CashReceipt::create(array_merge([
@@ -195,9 +197,11 @@ class CashboxService
             }
         }
 
+        // Wording is the client's, verbatim — do not paraphrase.
         throw new RuntimeException(
             "لا يمكن تعديل حالة هذه الدفعة لأنها مرتبطة بسند سداد تم تحريره بواسطة الموظف ({$issuerName}). "
-            . 'في حال الحاجة إلى التعديل، يجب أن يتم من خلال الموظف الذي حرر السند أو مستخدم يمتلك صلاحية مدير النظام.'
+            . 'في حال الحاجة إلى التعديل، يجب أن يتم ذلك من خلال الموظف الذي حرر السند '
+            . 'أو من خلال مستخدم يمتلك صلاحية مدير النظام.'
         );
     }
 
