@@ -69,6 +69,16 @@ Route::get('profile', function () {
 require __DIR__ . '/auth.php';
 require __DIR__ . '/dashboard.php';
 Route::get('/zatca', [ZatcaController::class, 'index'])->middleware('auth')->name('zatca.index');
+/*
+ * tasks / schedules / services were the only route groups in this file WITHOUT
+ * auth middleware. They still render layouts.app, which reads Auth::user()
+ * (->dark) and calls Perm::get_function_access() (->emp_job) — both of which
+ * dereference null for a guest. The result was a hard 500 on /tasks and
+ * /services for anyone not logged in, instead of a redirect to the login page.
+ * Every other group here already uses middleware('auth'); these now match.
+ */
+Route::middleware('auth')->group(function () {
+
 Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
 Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
 Route::get('/tasks/{task}/subtasks', [TaskController::class, 'getSubtasks'])->name('tasks.subtasks');
@@ -77,6 +87,11 @@ Route::get('/tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.e
 Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
 Route::get('/tasks/{task}', [TaskController::class, 'destroyTask'])->name('tasks.destroy');
 // جداول المهام
+// NOTE: schedules.show (GET /{id}) and schedules.destroy (GET /{id}) below are the
+// SAME pattern, so show wins and destroy is unreachable — the same shadowing bug
+// that was fixed for services.update. Left as-is deliberately: un-shadowing it
+// would switch schedule deletion from "silently does nothing" to "actually
+// deletes", which is a behaviour change that needs sign-off, not a drive-by fix.
 Route::prefix('schedules')->group(function () {
     Route::post('/', [TaskController::class, 'storeSchedule'])->name('schedules.store');
     Route::get('/{id}', [TaskController::class, 'showSchedule'])->name('schedules.show');
@@ -94,6 +109,11 @@ Route::prefix('services')->group(function () {
     Route::post('/', [ServiceController::class, 'store'])->name('services.store');
     Route::get('/', [ServiceController::class, 'index'])->name('services.index');
     Route::get('/{service}', [ServiceController::class, 'show'])->name('services.show');
-    Route::get('/{service}', [ServiceController::class, 'update'])->name('services.update');
+    // Was a second GET '/{service}' — identical pattern to services.show above, so
+    // Laravel matched show first and services.update was DEAD (never reachable).
+    // update() mutates, so POST is both correct and un-shadows it.
+    Route::post('/{service}', [ServiceController::class, 'update'])->name('services.update');
     Route::get('/destroy/{service}', [ServiceController::class, 'destroy'])->name('services.destroy');
 });
+
+}); // end auth group (tasks / schedules / services)
