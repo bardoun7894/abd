@@ -499,6 +499,10 @@ Route::group([
         Route::post('/invoices/{id}/correct', [InvoiceController::class, 'correct'])->whereNumber('id')->name('invoices.correct');
         Route::post('/invoices/{id}/push-to-purchase', [InvoiceController::class, 'pushToPurchase'])->whereNumber('id')->name('invoices.push');
         Route::post('/invoices/{id}/reroute', [InvoiceController::class, 'rerouteInvoice'])->whereNumber('id')->name('invoices.reroute');
+        // Spec 024 F1 follow-up — "إرجاع الفاتورة من الفرع": reverses the push
+        // (voids the سند, deletes the purchase) so the invoice can be re-transferred.
+        // Same special permission (222) + mandatory reason.
+        Route::post('/invoices/{id}/return', [InvoiceController::class, 'returnInvoice'])->whereNumber('id')->name('invoices.return');
         Route::post('/invoices/{id}/rescan', [InvoiceController::class, 'rescan'])->whereNumber('id')->name('invoices.rescan');
         Route::delete('/invoices/{id}', [InvoiceController::class, 'destroy'])->whereNumber('id')->name('invoices.destroy');
         Route::delete('/invoices/{batch}/invoice/{invoiceId}', [InvoiceController::class, 'destroyInvoice'])->whereNumber('batch')->whereNumber('invoiceId')->name('invoices.invoice.destroy');

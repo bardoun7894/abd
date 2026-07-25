@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Dashboard;
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ApimtitTrait;
 use App\Jobs\ProcessInvoiceBatch;
+use App\Models\CashReceipt;
 use App\Models\Invoice;
 use App\Models\InvoiceBatch;
 use App\Models\InvoiceItem;
 use App\Models\Shop;
 use App\Services\AiSubscriptionGate;
 use App\Services\AuditLogger;
+use App\Services\CashboxService;
 use App\Services\InvoiceBatchSummarizer;
 use App\Services\InvoicePurchaseMapper;
 use App\Services\ZatcaQrGenerator;
@@ -487,7 +489,19 @@ class InvoiceController extends Controller
             ? true
             : array_map('intval', (array) $confirm);
 
+        // Spec 024 F1 follow-up — snapshot before/after so the whole-batch push
+        // stamps "الفرع المُرحّل إليه" + audits exactly like the per-invoice path.
+        $alreadyMappedBefore = $this->postedInvoiceIds($batch->id);
+        $batchInvoiceIds = $this->batchInvoiceIds($batch->id);
+
         $summary = app(InvoicePurchaseMapper::class)->push($batch, $shopId, $managerId, Auth::id(), $dupOverride);
+
+        $this->stampTransferred(
+            $batchInvoiceIds,
+            $alreadyMappedBefore,
+            $this->branchLabel($shopId, $managerId),
+            'ترحيل دفعة'
+        );
 
         $msg = 'تم ترحيل '.$summary['pushed'].' فاتورة إلى المشتريات';
         if ($summary['attached']) {
@@ -589,6 +603,7 @@ class InvoiceController extends Controller
         }
 
         $mapper = app(InvoicePurchaseMapper::class);
+        $targetLabel = $this->branchLabel($shopId, $managerId);
 
         $combined = [
             'batches' => 0,          // batches actually processed
@@ -611,6 +626,12 @@ class InvoiceController extends Controller
                 continue;
             }
 
+            // Spec 024 F1 follow-up — same before/after snapshot as the other two
+            // push paths, so a bulk ترحيل also fills "الفرع المُرحّل إليه" and
+            // leaves a per-invoice audit row instead of only the batch-level one.
+            $alreadyMappedBefore = $this->postedInvoiceIds($bid);
+            $batchInvoiceIds = $this->batchInvoiceIds($bid);
+
             try {
                 $summary = $mapper->push($owned->get($bid), $shopId, $managerId, Auth::id());
             } catch (\Throwable $e) {
@@ -619,6 +640,8 @@ class InvoiceController extends Controller
 
                 continue;
             }
+
+            $this->stampTransferred($batchInvoiceIds, $alreadyMappedBefore, $targetLabel, 'ترحيل جماعي');
 
             $combined['batches']++;
             $combined['pushed'] += $summary['pushed'];
@@ -658,9 +681,8 @@ class InvoiceController extends Controller
         // Explicit audit trail — records WHO ran the bulk ترحيل and WHAT it did, in
         // Arabic, in the invoice audit log (the LogActivity middleware separately logs
         // the request itself to employee_activity_log). change_user = Auth::id().
-        $target = $shopId ? 'المحل #'.$shopId : ($managerId ? 'قائد المجموعة #'.$managerId : '');
         AuditLogger::log('invoice', null, AuditLogger::APPROVE, [
-            'note' => 'ترحيل جماعي: '.$combined['pushed'].' فاتورة مُرحّلة من '.$combined['batches'].' دفعة إلى '.$target
+            'note' => 'ترحيل جماعي: '.$combined['pushed'].' فاتورة مُرحّلة من '.$combined['batches'].' دفعة إلى '.$targetLabel
                 .($combined['already_mapped'] ? '، '.$combined['already_mapped'].' مُرحّلة مسبقاً' : '')
                 .($combined['ineligible'] ? '، '.$combined['ineligible'].' غير مؤهلة' : ''),
         ]);
@@ -792,20 +814,7 @@ class InvoiceController extends Controller
             // Per-invoice denormalized transfer columns + audit — only for invoices
             // that were newly pushed BY THIS CALL (not ones that were already
             // mapped before, which push() correctly skips as no-ops).
-            $fresh = Invoice::whereIn('id', $onlyIds)->get();
-            foreach ($fresh as $inv) {
-                if (filled($inv->purchase_id) && ! in_array((int) $inv->id, $alreadyMappedBefore, true)) {
-                    $inv->transferred_branch_label = $targetLabel;
-                    $inv->transferred_at = now();
-                    $inv->transferred_by = Auth::id();
-                    $inv->save();
-
-                    AuditLogger::log('invoice', (int) $inv->id, AuditLogger::TRANSFER, [
-                        'batch_id' => $inv->batch_id,
-                        'note' => 'ترحيل فردي إلى '.$targetLabel,
-                    ]);
-                }
-            }
+            $this->stampTransferred($onlyIds, $alreadyMappedBefore, $targetLabel, 'ترحيل فردي');
         }
 
         $msg = 'تم ترحيل '.$combined['pushed'].' فاتورة إلى '.$targetLabel;
@@ -881,18 +890,213 @@ class InvoiceController extends Controller
         return response()->json(['status' => true, 'message_out' => 'تم إعادة توجيه الفاتورة إلى '.$toLabel]);
     }
 
-    /** Human-readable "الفرع" label for a shop XOR manager target (Spec 024). */
+    /**
+     * Spec 024 F1 follow-up — "إرجاع الفاتورة من الفرع".
+     *
+     * The client's rule was "منع ترحيل نفس الفاتورة أكثر من مرة إلا بعد إرجاعها
+     * أو بموجب صلاحية خاصة". Only the special-permission half existed
+     * (rerouteInvoice); there was no way to pull an invoice back out of a branch
+     * at all, so a mis-transferred invoice was stuck forever.
+     *
+     * This is a real reversal, not an unlink: the push created a `purchase` row,
+     * its line items, its attachment row AND a cashbox سند صرف. Simply clearing
+     * `purchase_id` would leave the money counted against the wrong branch. So:
+     *   1. void the linked سند through CashboxService (append-only — the سند is
+     *      never deleted, it is flipped + a compensating ledger entry appended),
+     *   2. delete purchase_attach / purchase_items / purchase,
+     *   3. clear the invoice's purchase link + transfer columns, which makes it
+     *      eligible for a normal ترحيل again (push() only skips rows that still
+     *      have a purchase_id).
+     *
+     * Gated by the same special permission as re-routing (222) or system admin,
+     * with a MANDATORY reason, and fully audited.
+     */
+    public function returnInvoice(Request $request, $id)
+    {
+        if (! Perm::get_function_access(self::REROUTE_FUNCTION_ID) && (int) (Auth::user()->emp_job ?? 0) !== 1) {
+            return response()->json(['status' => false, 'message_out' => 'ليست لديك صلاحية لإرجاع الفاتورة من الفرع'], 403);
+        }
+
+        $invoice = Invoice::findOrFail($id);
+        $this->authorizeBatch($invoice->batch);
+
+        if (! filled($invoice->purchase_id)) {
+            return response()->json(['status' => false, 'message_out' => 'الفاتورة غير مُرحّلة أصلاً'], 422);
+        }
+
+        $reason = trim((string) $request->input('reason', ''));
+        if ($reason === '') {
+            return response()->json(['status' => false, 'message_out' => 'سبب الإرجاع مطلوب'], 422);
+        }
+
+        $purchaseId = (int) $invoice->purchase_id;
+        $purchase = DB::table('purchase')->where('purchase_id', $purchaseId)->first();
+        $fromLabel = $invoice->transferred_branch_label
+            ?: $this->branchLabel($purchase->shop_id ?? null, $purchase->manager_id ?? null);
+
+        try {
+            DB::transaction(function () use ($purchaseId, $reason) {
+                // Void the سند صرف this purchase created (Spec 015). 3-arg call on
+                // purpose: the F2 issuer/admin hard-lock covers lease sources only,
+                // never 'purchase', so this must keep the pre-existing behaviour.
+                $receipt = CashReceipt::where('source_type', 'purchase')
+                    ->where('source_id', $purchaseId)
+                    ->where('is_void', 0)
+                    ->orderByDesc('receipt_id')
+                    ->first();
+
+                if ($receipt) {
+                    app(CashboxService::class)->voidReceipt(
+                        (int) $receipt->receipt_id,
+                        'إرجاع الفاتورة من الفرع: '.$reason,
+                        Auth::id()
+                    );
+                }
+
+                if (Schema::hasTable('purchase_attach')) {
+                    DB::table('purchase_attach')->where('purchase_id', $purchaseId)->delete();
+                }
+                if (Schema::hasTable('purchase_items')) {
+                    DB::table('purchase_items')->where('purchase_id', $purchaseId)->delete();
+                }
+                DB::table('purchase')->where('purchase_id', $purchaseId)->delete();
+            });
+        } catch (\Throwable $e) {
+            return response()->json(['status' => false, 'message_out' => 'تعذّر إرجاع الفاتورة: '.$e->getMessage()], 422);
+        }
+
+        // Only after the main-DB reversal committed — mirrors push()'s ordering, so a
+        // failure above can never leave the invoice unlinked from a live purchase.
+        $invoice->forceFill([
+            'purchase_id' => null,
+            'mapped_at' => null,
+            'transferred_branch_label' => null,
+            'transferred_at' => null,
+            'transferred_by' => null,
+        ])->save();
+
+        AuditLogger::log('invoice', (int) $invoice->id, AuditLogger::RETURNED, [
+            'batch_id' => $invoice->batch_id,
+            'field' => 'transferred_branch_label',
+            'old' => $fromLabel,
+            'new' => null,
+            'note' => 'إرجاع من '.($fromLabel ?: 'الفرع').' — السبب: '.$reason.' (حُذف المشترى #'.$purchaseId.')',
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message_out' => 'تم إرجاع الفاتورة من '.($fromLabel ?: 'الفرع').' — يمكن ترحيلها من جديد',
+        ]);
+    }
+
+    /**
+     * Spec 024 F1 follow-up — THE single place that stamps the denormalized
+     * transfer columns (الفرع المُرحّل إليه / تاريخ الترحيل / الموظف) and writes
+     * the TRANSFER audit row.
+     *
+     * It used to live inline in pushInvoices() only, so an invoice transferred
+     * through the batch-level paths (pushToPurchase / bulkPush) ended up posted
+     * with an EMPTY "الفرع المُرحّل إليه" cell and no audit trail — invisible in
+     * exactly the screen the client asked for. Every push path now funnels here.
+     *
+     * The audit row carries the branch in `new_value` (not just the free-text
+     * note) so the log stays queryable by branch, matching what rerouteInvoice()
+     * already did.
+     *
+     * @param  array<int>  $invoiceIds  candidate invoices touched by this call
+     * @param  array<int>  $alreadyMappedBefore  ids that were ALREADY posted before
+     *                     this call — push() skips them as no-ops, so re-stamping
+     *                     them would forge a transfer that never happened
+     * @return int number of invoices stamped
+     */
+    private function stampTransferred(array $invoiceIds, array $alreadyMappedBefore, string $targetLabel, string $note): int
+    {
+        if (empty($invoiceIds)) {
+            return 0;
+        }
+
+        // Schema-guarded: the F1 columns are additive+nullable, so an environment
+        // that has not run 2026_07_24_000016 must still be able to ترحيل — it just
+        // loses the denormalized label. The audit row is written either way, since
+        // it lives in a different table.
+        $hasColumns = Schema::connection('invoices')->hasColumn('invoices', 'transferred_branch_label');
+
+        $stamped = 0;
+        foreach (Invoice::whereIn('id', $invoiceIds)->get() as $inv) {
+            if (! filled($inv->purchase_id) || in_array((int) $inv->id, $alreadyMappedBefore, true)) {
+                continue;
+            }
+
+            $previousLabel = $hasColumns ? $inv->transferred_branch_label : null;
+
+            if ($hasColumns) {
+                $inv->transferred_branch_label = $targetLabel;
+                $inv->transferred_at = now();
+                $inv->transferred_by = Auth::id();
+                $inv->save();
+            }
+            $stamped++;
+
+            AuditLogger::log('invoice', (int) $inv->id, AuditLogger::TRANSFER, [
+                'batch_id' => $inv->batch_id,
+                'field' => 'transferred_branch_label',
+                'old' => $previousLabel,          // null on a first transfer
+                'new' => $targetLabel,
+                'note' => $note.' إلى '.$targetLabel,
+            ]);
+        }
+
+        return $stamped;
+    }
+
+    /**
+     * Ids of the batch's invoices that are ALREADY posted — snapshot taken before
+     * a push so stampTransferred() can tell "newly transferred by this call" from
+     * "was already there".
+     *
+     * @return array<int>
+     */
+    private function postedInvoiceIds($batchId): array
+    {
+        return Invoice::where('batch_id', $batchId)
+            ->whereNotNull('purchase_id')
+            ->pluck('id')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+    }
+
+    /** @return array<int> every invoice id in the batch */
+    private function batchInvoiceIds($batchId): array
+    {
+        return Invoice::where('batch_id', $batchId)
+            ->pluck('id')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+    }
+
+    /**
+     * Human-readable "الفرع" label for a shop XOR manager target (Spec 024).
+     *
+     * hasTable-guarded: this is now called on EVERY push path (not just the
+     * per-invoice one), including environments/test schemas that never provision
+     * `shop`/`manager`. A label is cosmetic — it must degrade to "محل #5" rather
+     * than throw and abort a ترحيل that would otherwise succeed.
+     */
     private function branchLabel(?int $shopId, ?int $managerId): string
     {
         if ($shopId) {
-            $shop = DB::table('shop')->where('shop_id', $shopId)->first();
+            $shop = Schema::hasTable('shop')
+                ? DB::table('shop')->where('shop_id', $shopId)->first()
+                : null;
             $name = $shop->shop_name ?? ('محل #'.$shopId);
             $code = ($shop && Schema::hasColumn('shop', 'shop_code')) ? ($shop->shop_code ?? null) : null;
 
             return $code ? $code.' - '.$name : $name;
         }
         if ($managerId) {
-            $manager = DB::table('manager')->where('manager_id', $managerId)->first();
+            $manager = Schema::hasTable('manager')
+                ? DB::table('manager')->where('manager_id', $managerId)->first()
+                : null;
 
             return $manager->manager_name ?? ('قائد مجموعة #'.$managerId);
         }

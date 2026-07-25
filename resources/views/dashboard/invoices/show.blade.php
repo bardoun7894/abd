@@ -303,11 +303,10 @@
             return '<span class="text-muted">—</span>';
         }
 
-        // Spec 024 F1 — "الفرع المُرحّل إليه" cell. Forward-compatible with
-        // transferred_branch_label/transferred_at/transferred_by_name once
-        // InvoiceController::status() adds them to the per-invoice JSON payload
-        // (not yet exposed there — see PR notes); renders a plain dash until then,
-        // and lights up automatically the moment those keys are present.
+        // Spec 024 F1 — "الفرع المُرحّل إليه" cell, fed by
+        // transferred_branch_label/transferred_at/transferred_by_name from
+        // InvoiceController::status(). Renders a dash for an invoice that has not
+        // been transferred yet.
         function transferredCell(v) {
             if (!v.transferred_branch_label) { return '<span class="text-muted">—</span>'; }
             var meta = [];
@@ -349,6 +348,10 @@
                 var rerouteBtn = '';
                 if (canReroute && v.purchase_id) {
                     rerouteBtn = ' <button type="button" class="btn btn-sm btn-light-warning js-inv-reroute" data-id="' + v.id + '" title="إعادة توجيه إلى فرع آخر"><i class="bi bi-signpost-split me-1"></i>إعادة توجيه</button>';
+                    // Spec 024 F1 follow-up — "إرجاع": pulls the invoice back out of the
+                    // branch (voids its سند + deletes the purchase) so it becomes
+                    // transferable again. Same permission gate as إعادة توجيه.
+                    rerouteBtn += ' <button type="button" class="btn btn-sm btn-light-danger js-inv-return" data-id="' + v.id + '" title="إرجاع الفاتورة من الفرع"><i class="bi bi-arrow-counterclockwise me-1"></i>إرجاع</button>';
                 }
                 html += '<tr' + warn + '>'
                     + '<td class="d-print-none text-center"><input type="checkbox" class="form-check-input js-inv-chk" value="' + v.id + '"></td>'
@@ -475,6 +478,26 @@
             $('#invPushIntro').html('سيتم تغيير فرع هذه الفاتورة المُرحّلة مسبقاً. اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.');
             $('#invPushSubmitBtn').text('إعادة توجيه');
             bootstrap.Modal.getOrCreateInstance(document.getElementById('invPushModal')).show();
+        });
+
+        // "إرجاع" — reverses a transfer. Destructive (voids the سند and deletes the
+        // purchase row), so it asks for a mandatory reason and confirms first; the
+        // server re-checks the permission and re-validates the reason.
+        $(document).on('click', '.js-inv-return', function () {
+            var id = $(this).data('id');
+            var reason = window.prompt('سبب إرجاع الفاتورة #' + id + ' من الفرع (إلزامي):', '');
+            if (reason === null) { return; }
+            reason = $.trim(reason);
+            if (!reason) { alert('سبب الإرجاع مطلوب'); return; }
+
+            $.post(correctBase + '/' + id + '/return', { reason: reason })
+                .done(function (r) {
+                    alert(r.message_out || 'تم');
+                    if (r.status) { poll(); }
+                })
+                .fail(function (xhr) {
+                    alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الإرجاع');
+                });
         });
 
         $('#invPushSubmitBtn').on('click', function () {
