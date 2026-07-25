@@ -48,8 +48,18 @@ php artisan cache:clear
 php artisan config:clear
 php artisan view:clear
 
-# Run database migrations
+# Run database migrations (main schema)
 php artisan migrate
+
+# Run migrations for the ISOLATED `invoices` connection.
+# REQUIRED — `php artisan migrate` alone does NOT pick these up: they live in a
+# subdirectory (database/migrations/invoices) and no service provider registers
+# that path, so Laravel never discovers them. Forgetting this step does not
+# error; the app degrades silently, because the invoice code is
+# Schema::hasColumn-guarded. Spec 024 symptom: ترحيل still works but
+# "الفرع المُرحّل إليه" / "تاريخ الترحيل" / the employee name stay permanently
+# empty, which is precisely the column the client asked for.
+php artisan migrate --database=invoices --path=database/migrations/invoices --force
 
 # Generate IDE helper files
 php artisan ide-helper:generate
