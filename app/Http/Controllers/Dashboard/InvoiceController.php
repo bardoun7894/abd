@@ -13,6 +13,7 @@ use App\Models\Shop;
 use App\Services\AiSubscriptionGate;
 use App\Services\AuditLogger;
 use App\Services\CashboxService;
+use App\Services\ExcelReportStyler;
 use App\Services\InvoiceBatchSummarizer;
 use App\Services\InvoicePurchaseMapper;
 use App\Services\ZatcaQrGenerator;
@@ -52,6 +53,16 @@ class InvoiceController extends Controller
      * purchase row that already fed the cashbox.
      */
     public const REROUTE_FUNCTION_ID = 222;
+
+    /**
+     * Spec 024 F1 follow-up — separate permission (per_function id 223, seeded by
+     * 2026_07_25_130000_seed_invoice_return_permission.php) gating
+     * returnInvoice(). Deliberately NOT the re-route permission: re-routing
+     * updates a purchase in place and leaves its سند alone, while returning
+     * voids the سند and DELETES the purchase + its items/attachments. Holding
+     * 222 must not implicitly grant that.
+     */
+    public const RETURN_FUNCTION_ID = 223;
 
     public function __construct()
     {
@@ -152,11 +163,13 @@ class InvoiceController extends Controller
         $sheet->setRightToLeft(true);
         $sheet->setTitle('سجل عمليات الاستخراج');
 
-        // Brand palette (صباح النور emerald) for a professional, colored export.
-        $EMERALD = '1B8A5A';
-        $EMERALD_DEEP = '116149';
-        $ZEBRA = 'EAF6F0';
-        $BORDER = 'CBD5D1';
+        // Brand palette (صباح النور emerald). Taken from ExcelReportStyler rather
+        // than re-declared: this block used to carry its own copy of the hexes,
+        // which silently drifted from both the styler and the CSS brand tokens.
+        $EMERALD = ExcelReportStyler::EMERALD;
+        $EMERALD_DEEP = ExcelReportStyler::EMERALD_DEEP;
+        $ZEBRA = ExcelReportStyler::ZEBRA;
+        $BORDER = ExcelReportStyler::BORDER;
         $FILL = \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID;
         $CENTER = \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER;
         $VCENTER = \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER;
@@ -447,8 +460,12 @@ class InvoiceController extends Controller
         $shops = Shop::get();
         $managers = $this->get_manager();
         $canPush = (bool) Perm::get_function_access(55);
+        $isAdmin = (int) (Auth::user()->emp_job ?? 0) === 1;
         // Spec 024 Feature 1 — gates the per-invoice "إعادة توجيه بين الفروع" button.
-        $canReroute = (bool) (Perm::get_function_access(self::REROUTE_FUNCTION_ID) || (int) (Auth::user()->emp_job ?? 0) === 1);
+        $canReroute = (bool) (Perm::get_function_access(self::REROUTE_FUNCTION_ID) || $isAdmin);
+        // Spec 024 F1 follow-up — "إرجاع" has its own, stricter permission: it
+        // deletes the purchase instead of moving it, so it is not implied by 222.
+        $canReturn = (bool) (Perm::get_function_access(self::RETURN_FUNCTION_ID) || $isAdmin);
 
         // Feature A — batch AI summary. Only computed once the batch is finished
         // extracting; a mid-run batch's numbers would just churn on every poll.
@@ -456,7 +473,7 @@ class InvoiceController extends Controller
             ? app(InvoiceBatchSummarizer::class)->summarize($batch->id)
             : null;
 
-        return view('dashboard.invoices.show', compact('page_title', 'batch', 'shops', 'managers', 'canPush', 'canReroute', 'aiSummary'));
+        return view('dashboard.invoices.show', compact('page_title', 'batch', 'shops', 'managers', 'canPush', 'canReroute', 'canReturn', 'aiSummary'));
     }
 
     /**
@@ -908,12 +925,13 @@ class InvoiceController extends Controller
      *      eligible for a normal ترحيل again (push() only skips rows that still
      *      have a purchase_id).
      *
-     * Gated by the same special permission as re-routing (222) or system admin,
-     * with a MANDATORY reason, and fully audited.
+     * Gated by its OWN permission (223) or system admin — never the re-route
+     * permission, since this deletes the purchase rather than moving it — with
+     * a MANDATORY reason, and fully audited.
      */
     public function returnInvoice(Request $request, $id)
     {
-        if (! Perm::get_function_access(self::REROUTE_FUNCTION_ID) && (int) (Auth::user()->emp_job ?? 0) !== 1) {
+        if (! Perm::get_function_access(self::RETURN_FUNCTION_ID) && (int) (Auth::user()->emp_job ?? 0) !== 1) {
             return response()->json(['status' => false, 'message_out' => 'ليست لديك صلاحية لإرجاع الفاتورة من الفرع'], 403);
         }
 

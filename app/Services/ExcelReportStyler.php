@@ -33,12 +33,23 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class ExcelReportStyler
 {
-    /** Brand palette — صباح النور emerald. */
-    public const EMERALD = '1B8A5A';       // header row fill
+    /**
+     * Brand palette — صباح النور emerald. THE single source of truth for every
+     * exported workbook; do not re-declare these hexes at a call site.
+     *
+     * Kept in lock-step with the CSS brand tokens in public/css/app-ui.css so an
+     * exported file and the screen it was exported from are the same green:
+     *   EMERALD      = --sn-emerald      (#0e6b4f)
+     *   EMERALD_DEEP = --sn-emerald-deep (#0a4f3a)
+     *   ZEBRA        = --sn-emerald-tint (#e4efe9)
+     * Previously these were 1B8A5A / 116149 / EAF6F0 — a lighter, unrelated
+     * green that made every export visibly off-brand.
+     */
+    public const EMERALD = '0E6B4F';       // header row fill
 
-    public const EMERALD_DEEP = '116149';  // title row fill
+    public const EMERALD_DEEP = '0A4F3A';  // title row fill
 
-    public const ZEBRA = 'EAF6F0';         // even data-row fill
+    public const ZEBRA = 'E4EFE9';         // even data-row fill
 
     public const BORDER = 'CBD5D1';        // thin data borders
 

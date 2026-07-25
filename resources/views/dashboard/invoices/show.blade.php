@@ -267,6 +267,13 @@
         @if($canReroute)
             canReroute = true;
         @endif
+        // "إرجاع" is gated separately (per_function 223): it deletes the purchase
+        // rather than moving it, so holding the re-route permission must not
+        // render it. returnInvoice() re-checks 223 server-side regardless.
+        var canReturn = false;
+        @if($canReturn)
+            canReturn = true;
+        @endif
 
         function esc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -348,9 +355,12 @@
                 var rerouteBtn = '';
                 if (canReroute && v.purchase_id) {
                     rerouteBtn = ' <button type="button" class="btn btn-sm btn-light-warning js-inv-reroute" data-id="' + v.id + '" title="إعادة توجيه إلى فرع آخر"><i class="bi bi-signpost-split me-1"></i>إعادة توجيه</button>';
-                    // Spec 024 F1 follow-up — "إرجاع": pulls the invoice back out of the
-                    // branch (voids its سند + deletes the purchase) so it becomes
-                    // transferable again. Same permission gate as إعادة توجيه.
+                }
+                // Spec 024 F1 follow-up — "إرجاع": pulls the invoice back out of the
+                // branch (voids its سند + deletes the purchase) so it becomes
+                // transferable again. Gated on its OWN permission, independently of
+                // إعادة توجيه — one may be granted without the other.
+                if (canReturn && v.purchase_id) {
                     rerouteBtn += ' <button type="button" class="btn btn-sm btn-light-danger js-inv-return" data-id="' + v.id + '" title="إرجاع الفاتورة من الفرع"><i class="bi bi-arrow-counterclockwise me-1"></i>إرجاع</button>';
                 }
                 html += '<tr' + warn + '>'

@@ -257,9 +257,9 @@ it('refuses إرجاع for a non-admin without the special permission (403)', fu
     expect(DB::table('purchase')->where('purchase_id', $purchaseId)->exists())->toBeTrue();
 });
 
-it('allows إرجاع for a non-admin holding the special permission', function () {
+it('allows إرجاع for a non-admin holding the return permission', function () {
     returnActingAs(42, 0);
-    DB::table('permission')->insert(['emp_id' => 42, 'function_id' => InvoiceController::REROUTE_FUNCTION_ID]);
+    DB::table('permission')->insert(['emp_id' => 42, 'function_id' => InvoiceController::RETURN_FUNCTION_ID]);
     [$invId, $purchaseId] = seedFullyPostedInvoice(42, 10);
 
     $response = (new InvoiceController())->returnInvoice(
@@ -268,6 +268,24 @@ it('allows إرجاع for a non-admin holding the special permission', function 
 
     expect($response->getStatusCode())->toBe(200);
     expect(DB::table('purchase')->where('purchase_id', $purchaseId)->exists())->toBeFalse();
+});
+
+it('does NOT let the re-route permission alone authorise an إرجاع', function () {
+    // The whole point of splitting 222/223: re-routing moves a purchase, returning
+    // DELETES it. Someone trusted to move an invoice between branches is not
+    // thereby trusted to erase the purchase and void its سند.
+    returnActingAs(42, 0);
+    DB::table('permission')->insert(['emp_id' => 42, 'function_id' => InvoiceController::REROUTE_FUNCTION_ID]);
+    [$invId, $purchaseId] = seedFullyPostedInvoice(42, 10);
+
+    $response = (new InvoiceController())->returnInvoice(
+        Request::create('/', 'POST', ['reason' => 'محاولة']), $invId
+    );
+
+    expect($response->getStatusCode())->toBe(403);
+    expect(DB::table('purchase')->where('purchase_id', $purchaseId)->exists())->toBeTrue();
+    expect((int) DB::table('cash_receipt')->where('source_id', $purchaseId)->value('is_void'))->toBe(0);
+    expect(InvoiceController::RETURN_FUNCTION_ID)->not->toBe(InvoiceController::REROUTE_FUNCTION_ID);
 });
 
 it('refuses إرجاع for an invoice that was never transferred (422)', function () {
@@ -384,11 +402,32 @@ it('still posts (and audits) on a schema that predates the F1 transfer columns',
     expect(DB::table('ai_audit_log')->where('action', 'transfer')->count())->toBe(1);
 });
 
-it('wires the إرجاع route and its UI button', function () {
+it('wires the إرجاع route and its UI button behind its own flag', function () {
     expect(file_get_contents(base_path('routes/dashboard.php')))
         ->toContain("'returnInvoice'");
 
     $blade = file_get_contents(base_path('resources/views/dashboard/invoices/show.blade.php'));
     expect($blade)->toContain('js-inv-return');
     expect($blade)->toContain("'/return'");
+    // The button must follow $canReturn, not $canReroute.
+    expect($blade)->toContain('@if($canReturn)');
+    expect($blade)->toContain('if (canReturn && v.purchase_id)');
+});
+
+it('keeps the Excel palette identical to the CSS brand tokens', function () {
+    // Exports used to ship 1B8A5A — a lighter, unrelated green — so every
+    // workbook looked off-brand next to the screen it came from.
+    expect(\App\Services\ExcelReportStyler::EMERALD)->toBe('0E6B4F');
+    expect(\App\Services\ExcelReportStyler::EMERALD_DEEP)->toBe('0A4F3A');
+    expect(\App\Services\ExcelReportStyler::ZEBRA)->toBe('E4EFE9');
+
+    $css = file_get_contents(base_path('public/css/app-ui.css'));
+    expect($css)->toContain('--sn-emerald: #0e6b4f');
+    expect($css)->toContain('--sn-emerald-deep: #0a4f3a');
+    expect($css)->toContain('--sn-emerald-tint: #e4efe9');
+
+    // And no call site may re-declare the hexes (the old drift vector).
+    $controller = file_get_contents(base_path('app/Http/Controllers/Dashboard/InvoiceController.php'));
+    expect($controller)->not->toContain("'1B8A5A'");
+    expect($controller)->toContain('ExcelReportStyler::EMERALD');
 });
