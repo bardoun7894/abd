@@ -70,14 +70,32 @@ class RentpayVoucherContext
         return array_intersect_key($context, array_flip($this->writableColumns()));
     }
 
-    /** اسم المحل — snapshotted so a later rename never rewrites issued vouchers. */
+    /**
+     * اسم المحل — snapshotted so a later rename never rewrites issued vouchers.
+     *
+     * Prefixed with the shop code when one is set ("A1 - فوال نور الصباح"), the
+     * same shape InvoiceController::branchLabel() prints on "الفرع المُرحّل إليه",
+     * so a shop reads identically on a سند, on an invoice row and in an export.
+     */
     private function resolveShopName($shopId): ?string
     {
         if (! $shopId || ! Schema::hasTable('shop')) {
             return null;
         }
 
-        return DB::table('shop')->where('shop_id', $shopId)->value('shop_name');
+        $shop = DB::table('shop')->where('shop_id', $shopId)->first();
+        if (! $shop) {
+            return null;
+        }
+
+        $name = $shop->shop_name ?? null;
+        if (! $name) {
+            return null;
+        }
+
+        $code = Schema::hasColumn('shop', 'shop_code') ? trim((string) ($shop->shop_code ?? '')) : '';
+
+        return $code !== '' ? $code.' - '.$name : $name;
     }
 
     /**

@@ -276,6 +276,29 @@ it('picks the contract whose window contains the due date, not an arbitrary row'
     expect($ctx['shop_name'])->toBe('محل الأندلس');
 });
 
+it('prefixes اسم المحل with the shop code when one is set', function () {
+    $ids = vSeedQuarterlySchedule();   // NOT rentpay_id 1 — that is a decoy row on another shop
+    Schema::table('shop', function ($t) {
+        $t->string('shop_code', 50)->nullable();
+    });
+    DB::table('shop')->where('shop_id', 1)->update(['shop_code' => 'A1']);
+
+    $ctx = (new RentpayVoucherContext())->build(vRentpay($ids[0]));
+
+    // Same "CODE - NAME" shape InvoiceController::branchLabel() prints, so a shop
+    // reads identically on a سند, on an invoice row and in an Excel export.
+    expect($ctx['shop_name'])->toBe('A1 - محل الأندلس');
+});
+
+it('falls back to the bare shop name when no code is set', function () {
+    $ids = vSeedQuarterlySchedule();
+    Schema::table('shop', function ($t) {
+        $t->string('shop_code', 50)->nullable();
+    });
+
+    expect((new RentpayVoucherContext())->build(vRentpay($ids[0]))['shop_name'])->toBe('محل الأندلس');
+});
+
 it('falls back to the contract span for a single or undated installment', function () {
     DB::table('shop')->insert(['shop_id' => 2, 'shop_name' => 'محل الياسمين']);
     DB::table('shop_rent')->insert([

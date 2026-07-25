@@ -32,7 +32,8 @@ use Illuminate\Support\Facades\Schema;
 class BackfillInvoiceTransferLabels extends Command
 {
     protected $signature = 'invoices:backfill-transfer-labels
-                            {--dry-run : Print what would change without writing}';
+                            {--dry-run : Print what would change without writing}
+                            {--refresh : Also re-derive labels that already have a value}';
 
     protected $description = 'Backfill "الفرع المُرحّل إليه" for invoices transferred before Spec 024 F1 stamping';
 
@@ -45,9 +46,13 @@ class BackfillInvoiceTransferLabels extends Command
         }
 
         $dryRun = (bool) $this->option('dry-run');
+        $refresh = (bool) $this->option('refresh');
 
+        // --refresh also re-derives rows that ALREADY carry a label. Needed after
+        // a shop gains a shop_code: the stored label was built without it, so it
+        // reads "محل تجريبي" where a freshly stamped one reads "A2 - محل تجريبي".
         $pending = Invoice::whereNotNull('purchase_id')
-            ->whereNull('transferred_branch_label')
+            ->when(! $refresh, fn ($q) => $q->whereNull('transferred_branch_label'))
             ->orderBy('id');
 
         $total = (clone $pending)->count();
@@ -57,15 +62,18 @@ class BackfillInvoiceTransferLabels extends Command
             return self::SUCCESS;
         }
 
-        $this->info("Found {$total} transferred invoice(s) with no branch label.");
+        $this->info($refresh
+            ? "Found {$total} transferred invoice(s) to re-derive."
+            : "Found {$total} transferred invoice(s) with no branch label.");
 
         // Resolve every branch label once instead of per invoice — 235 invoices
         // across a handful of shops would otherwise be 235 lookups.
         $labels = [];
         $updated = 0;
         $orphaned = 0;
+        $skipped = 0;
 
-        $pending->chunkById(200, function ($invoices) use (&$labels, &$updated, &$orphaned, $dryRun) {
+        $pending->chunkById(200, function ($invoices) use (&$labels, &$updated, &$orphaned, &$skipped, $dryRun) {
             $purchaseIds = $invoices->pluck('purchase_id')->filter()->unique()->all();
             $purchases = DB::table('purchase')
                 ->whereIn('purchase_id', $purchaseIds)
@@ -92,12 +100,22 @@ class BackfillInvoiceTransferLabels extends Command
                     continue;
                 }
 
+                if ((string) $inv->transferred_branch_label === $label) {
+                    $skipped++;   // already correct — re-writing it would be noise
+
+                    continue;
+                }
+
                 if (! $dryRun) {
-                    $inv->forceFill([
-                        'transferred_branch_label' => $label,
-                        'transferred_at' => $inv->mapped_at,   // when the push actually happened
-                        // transferred_by stays NULL — unknown, never guessed.
-                    ])->save();
+                    $fill = ['transferred_branch_label' => $label];
+                    // Only stamp the date on a first fill. On a --refresh the
+                    // existing transferred_at is the real one; overwriting it with
+                    // mapped_at (or anything else) would rewrite history.
+                    if (! $inv->transferred_at) {
+                        $fill['transferred_at'] = $inv->mapped_at;  // when the push actually happened
+                    }
+                    // transferred_by stays untouched — unknown on old rows, never guessed.
+                    $inv->forceFill($fill)->save();
                 }
                 $updated++;
             }
@@ -108,7 +126,7 @@ class BackfillInvoiceTransferLabels extends Command
         }
 
         $verb = $dryRun ? 'سيتم تحديث' : 'تم تحديث';
-        $this->info("{$verb} {$updated} فاتورة — {$orphaned} بلا مشترى مرتبط (تُركت كما هي).");
+        $this->info("{$verb} {$updated} فاتورة — {$skipped} بلا تغيير — {$orphaned} بلا مشترى مرتبط (تُركت كما هي).");
 
         return self::SUCCESS;
     }
