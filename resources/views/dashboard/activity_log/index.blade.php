@@ -70,6 +70,7 @@
                             <th>الجدول</th>
                             <th>ملخص</th>
                             <th>IP</th>
+                            <th>الجهاز</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -91,10 +92,17 @@
                                 <td class="fs-8">{{ $row->entity_type ?? '—' }}</td>
                                 <td class="fs-8">{{ $row->summary }}</td>
                                 <td class="fs-8 text-muted">{{ $row->ip ?? '—' }}</td>
+                                {{-- Spec 024 F2 follow-up — الجهاز. The raw User-Agent is long and
+                                     unreadable in a table cell, so show a short human label and keep
+                                     the full string in the title attribute for forensics. Guarded with
+                                     ?? so the screen still renders before the migration has run. --}}
+                                <td class="fs-8 text-muted" title="{{ $row->user_agent ?? '' }}">
+                                    {{ \App\Support\DeviceLabel::short($row->user_agent ?? null) }}
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="text-center text-muted py-8">لا توجد سجلات مطابقة</td>
+                                <td colspan="7" class="text-center text-muted py-8">لا توجد سجلات مطابقة</td>
                             </tr>
                         @endforelse
                     </tbody>

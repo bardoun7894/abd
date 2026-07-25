@@ -120,6 +120,20 @@
 
                         </div>
 
+                        {{-- Spec 024 F3 — manual, unique shop code (e.g. A1, A2, B1). Never
+                             auto-generated; duplicate submission is rejected server-side with
+                             "كود المحل مستخدم مسبقاً، يرجى إدخال كود آخر." --}}
+                        <div class="mb-5 col-12 col-lg-2 col-md-12 col-sm-12"><label for="shop_code"
+                            class="mb-3 form-label fs-6 fw-bold text-dark">كود المحل</label>
+                        <div class="input-group">
+                            <div class="input-group-prepend"><span class="input-group-text"><i
+                                        class="fas fa-hashtag fa-fw text-dark"></i></span></div><input
+                                type="text" name="shop_code" id="shop_code"
+                                class="form-control fw-bold text-dark" placeholder="A1" value="{{ $shop->shop_code ?? '' }}"
+                                autocomplete="off">
+                        </div>
+                    </div>
+
                                 <div class="mb-5 col-12 col-lg-4 col-md-12 col-sm-12"><label for="establishment_number"
                             class="mb-3 form-label fs-6 fw-bold text-dark">رقم المنشأة</label>
                         <div class="input-group">

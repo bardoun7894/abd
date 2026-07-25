@@ -191,7 +191,17 @@ it('exportBatches() mirrors index()\'s date_from/date_to/min_count filters', fun
     $loaded = \PhpOffice\PhpSpreadsheet\IOFactory::load($tmp);
     @unlink($tmp);
 
-    $ids = collect($loaded->getActiveSheet()->toArray())
+    // The workbook has TWO sheets and deliberately OPENS on the invoices one
+    // (exportBatches() inserts it at index 0 so users stop asking "وين الفواتير").
+    // Read the batch-log sheet BY NAME — getActiveSheet() silently became the
+    // invoices sheet when that was introduced, which is why this test was
+    // asserting against an empty column A.
+    expect($loaded->getSheetNames())->toBe(['الفواتير المستخرجة', 'سجل عمليات الاستخراج']);
+
+    $logSheet = $loaded->getSheetByName('سجل عمليات الاستخراج');
+    expect($logSheet)->not->toBeNull();
+
+    $ids = collect($logSheet->toArray())
         ->map(fn ($r) => $r[0] ?? null)
         ->filter(fn ($v) => is_numeric($v))
         ->map(fn ($v) => (int) $v)

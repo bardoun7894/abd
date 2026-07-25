@@ -233,8 +233,12 @@ class InvoicePurchaseMapper
      * @param  array<int>|bool  $dupOverride  Invoice IDs the human confirmed as
      *         NOT duplicates (per-invoice fuzzy-block override). `true` = override
      *         for the whole batch (explicit escape hatch, audited per invoice).
+     * @param  ?array<int>  $onlyInvoiceIds  Spec 024 — when non-null, restrict this
+     *         push to exactly these invoice ids within the batch (per-invoice
+     *         checkbox posting). All existing callers pass nothing/null, which keeps
+     *         the whole-batch behaviour identical to before this param existed.
      */
-    public function push(InvoiceBatch $batch, ?int $shopId, ?int $managerId, int $userId, array|bool $dupOverride = []): array
+    public function push(InvoiceBatch $batch, ?int $shopId, ?int $managerId, int $userId, array|bool $dupOverride = [], ?array $onlyInvoiceIds = null): array
     {
         $shopId = $shopId ?: null;
         $managerId = $managerId ?: null;
@@ -277,7 +281,10 @@ class InvoicePurchaseMapper
         // C2 — memory-bounded chunking for large batches; synchronous summary contract unchanged.
         // Row count of the matched set is invariant (we set purchase_id but never remove rows),
         // so plain offset chunk() is offset-stable here.
-        $batch->invoices()->orderBy('page_number')->chunk(100, function ($invoices) use ($shopId, $managerId, $userId, $dupOverride, $attachTableExists, $attachMap, &$summary) {
+        $batch->invoices()
+            ->when($onlyInvoiceIds !== null, fn ($q) => $q->whereIn('id', $onlyInvoiceIds))
+            ->orderBy('page_number')
+            ->chunk(100, function ($invoices) use ($shopId, $managerId, $userId, $dupOverride, $attachTableExists, $attachMap, &$summary) {
         foreach ($invoices as $inv) {
             $a = $inv->getAttributes(); // raw, uncast values — matches buildPurchaseRow's contract
 

@@ -65,6 +65,7 @@ class ReportController extends Controller
 
         $rowCount = 3;
         $i = 1;
+        $sumD = 0.0;
 
         foreach ($list as $x) {
             $purchase_no = $x->purchase_no;
@@ -73,9 +74,11 @@ class ReportController extends Controller
             $purchase_respon = $x->purchase_respon;
             $shop = Shop::find($x->shop_id);
             $manager_name= $x->manager_name ?? $shop->manager->manager_name;
-            $shop_name= isset($shop) ? ( $shop->shop_name ." - ". ($shop->municip->municip_no ?? "") ) : "";
+            $shop_code_prefix = isset($shop) && !empty($shop->shop_code) ? ($shop->shop_code.' - ') : '';
+            $shop_name= isset($shop) ? ( $shop_code_prefix.$shop->shop_name ." - ". ($shop->municip->municip_no ?? "") ) : "";
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
             $note = $x->note;
+            $sumD += (float) $purchase_price;
             $sheet->SetCellValue('A' . $rowCount, $i);
             $sheet->SetCellValue('B' . $rowCount, $purchase_no);
             $sheet->SetCellValue('C' . $rowCount, $purchase_dt);
@@ -89,7 +92,8 @@ class ReportController extends Controller
             $rowCount++;
         }
 
-        \App\Services\ExcelReportStyler::finalize($sheet, 'I', 3, $rowCount - 1, ['D']);
+        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', ['D' => $sumD]);
+        \App\Services\ExcelReportStyler::finalize($sheet, 'I', 3, $rowCount, ['D']);
         \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
@@ -185,6 +189,9 @@ class ReportController extends Controller
 
         $rowCount = 3;
         $i = 1;
+        $sumH = 0.0;
+        $sumI = 0.0;
+        $sumJ = 0.0;
 
         foreach ($list as $x) {
 
@@ -208,7 +215,9 @@ class ReportController extends Controller
                 $ssn_char='';
             }
             if ( $x->shop_name!='') {
-                $shop_name =  $x->shop_name.'-'.$x->shop_id ;
+                $shop_code = $x->shop_id ? optional(Shop::find($x->shop_id))->shop_code : null;
+                $shop_code_prefix = !empty($shop_code) ? ($shop_code.' - ') : '';
+                $shop_name =  $shop_code_prefix.$x->shop_name.'-'.$x->shop_id ;
             }
             else{
                 $shop_name='';
@@ -240,6 +249,10 @@ class ReportController extends Controller
 
 
 
+            $sumH += (float) $expense_price;
+            $sumI += (float) $sum_det_calculate_month_pay;
+            $sumJ += (float) $remain_db;
+
             $objPHPExcel->getActiveSheet()->SetCellValue('A' . $rowCount, $i);
             $objPHPExcel->getActiveSheet()->SetCellValue('B' . $rowCount, $x->type_desc.'-'.$expense_type_name);
             $objPHPExcel->getActiveSheet()->SetCellValue('C' . $rowCount, $expense_categoty_name);
@@ -259,7 +272,10 @@ class ReportController extends Controller
             $rowCount++;
         }
 
-        \App\Services\ExcelReportStyler::finalize($sheet, 'N', 3, $rowCount - 1, ['H', 'I', 'J']);
+        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', [
+            'H' => $sumH, 'I' => $sumI, 'J' => $sumJ,
+        ]);
+        \App\Services\ExcelReportStyler::finalize($sheet, 'N', 3, $rowCount, ['H', 'I', 'J']);
         \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
@@ -330,6 +346,9 @@ class ReportController extends Controller
 
         $rowCount = 3;
         $i = 1;
+        $sumE = 0.0;
+        $sumF = 0.0;
+        $sumG = 0.0;
 
         foreach ($list as $x) {
             $calculate_month_val = $x->calculate_month_val;
@@ -340,7 +359,8 @@ class ReportController extends Controller
             } else {
                 $calculate_desc = 'متبقي';
             }
-            $shop_name = $x->shop_name;
+            $shop_code = $x->shop_id ? optional(Shop::find($x->shop_id))->shop_code : null;
+            $shop_name = !empty($shop_code) ? ($shop_code.' - '.$x->shop_name) : $x->shop_name;
             $calculate_month_desc = $x->calculate_month_desc;
             $calculate_desc = $calculate_desc;
             $count_statement = $x->count_statement;
@@ -348,6 +368,9 @@ class ReportController extends Controller
             $name = $x->name;
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
 
+            $sumE += (float) $calculate_month_val;
+            $sumF += (float) $sum_det_calculate_month_pay;
+            $sumG += (float) $sum_det_calculate_month_remain;
 
             $objPHPExcel->getActiveSheet()->SetCellValue('A' . $rowCount, $i);
             $objPHPExcel->getActiveSheet()->SetCellValue('B' . $rowCount, $shop_name);
@@ -366,7 +389,10 @@ class ReportController extends Controller
             $rowCount++;
         }
 
-        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, ['E', 'F', 'G']);
+        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', [
+            'E' => $sumE, 'F' => $sumF, 'G' => $sumG,
+        ]);
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount, ['E', 'F', 'G']);
         \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
@@ -457,6 +483,9 @@ class ReportController extends Controller
 
         $rowCount = 3;
         $i = 1;
+        $sumE = 0.0;
+        $sumF = 0.0;
+        $sumG = 0.0;
 
         foreach ($list as $x) {
             $financial_month_val = $x->financial_month_val;
@@ -475,6 +504,9 @@ class ReportController extends Controller
             $name = $x->name;
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
 
+            $sumE += (float) $financial_month_val;
+            $sumF += (float) $sum_det_financial_month_pay;
+            $sumG += (float) $sum_det_financial_month_remain;
 
             $objPHPExcel->getActiveSheet()->SetCellValue('A' . $rowCount, $i);
             $objPHPExcel->getActiveSheet()->SetCellValue('B' . $rowCount, $worker_name);
@@ -493,7 +525,10 @@ class ReportController extends Controller
             $rowCount++;
         }
 
-        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, ['E', 'F', 'G']);
+        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', [
+            'E' => $sumE, 'F' => $sumF, 'G' => $sumG,
+        ]);
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount, ['E', 'F', 'G']);
         \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
@@ -944,6 +979,7 @@ class ReportController extends Controller
 
         $rowCount = 3;
         $i = 1;
+        $sumE = 0.0;
         foreach ($list as $x) {
 
             if ($x->violation_ispay == '1') {
@@ -951,7 +987,8 @@ class ReportController extends Controller
             } else {
                 $violation_desc = 'غير مدفوع';
             }
-            $shop_name = $x->shop_name;
+            $shop_code = $x->shop_id ? optional(Shop::find($x->shop_id))->shop_code : null;
+            $shop_name = !empty($shop_code) ? ($shop_code.' - '.$x->shop_name) : $x->shop_name;
             $manager_name = $x->manager_name;
             $violation_val = $x->violation_val;
             $violation_dt= Carbon::parse($x->violation_dt)->format('d-m-Y');
@@ -963,6 +1000,7 @@ class ReportController extends Controller
             $municip_no =  $x->municip_no;
             $created_at= $x->name.'-'.Carbon::parse($x->created_at)->format('d-m-Y');
 
+            $sumE += (float) $violation_val;
 
             $objPHPExcel->getActiveSheet()->SetCellValue('A' . $rowCount, $i);
             $objPHPExcel->getActiveSheet()->SetCellValue('B' . $rowCount, $shop_name);
@@ -980,7 +1018,8 @@ class ReportController extends Controller
             $rowCount++;
         }
 
-        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount - 1, ['E']);
+        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', ['E' => $sumE]);
+        \App\Services\ExcelReportStyler::finalize($sheet, 'L', 3, $rowCount, ['E']);
         \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 

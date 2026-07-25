@@ -35,11 +35,26 @@
             </div>
         </div>
         <div class="card-body pt-0">
+            {{-- Spec 024 F1 — per-invoice checkbox selection + "ترحيل إلى فرع" action bar,
+                 mirroring #bulkBar in invoices/index.blade.php. Distinct from the existing
+                 "ترحيل المُصحّحة" button above (which pushes ALL eligible invoices across
+                 $affectedBatchIds) — this lets the user push a specific hand-picked subset. --}}
+            <div id="fixInvBar" class="alert alert-primary d-none align-items-center justify-content-between flex-wrap gap-2 mb-4">
+                <span class="fw-bold"><span id="fixInvCount">0</span> فاتورة محددة</span>
+                <div class="d-flex gap-2">
+                    <button type="button" id="fixInvPushOpenBtn" class="btn btn-sm btn-success fw-bold">
+                        <i class="bi bi-send-check me-1"></i>ترحيل إلى فرع
+                    </button>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-row-dashed sn-thead align-middle gy-4" id="fixTable">
                     <thead>
                         <tr class="fw-bold fs-7 text-uppercase">
-                            <th class="ps-4">الدفعة / الملف</th>
+                            <th class="ps-4" style="width:36px">
+                                <input type="checkbox" class="form-check-input" id="fixInvSelAll" title="تحديد الكل">
+                            </th>
+                            <th>الدفعة / الملف</th>
                             <th>رقم الفاتورة</th>
                             <th>التاريخ</th>
                             <th class="text-end">الإجمالي</th>
@@ -55,6 +70,9 @@
                             @endphp
                             <tr class="sn-row" data-inv="{{ $inv->id }}">
                                 <td class="ps-4">
+                                    <input type="checkbox" class="form-check-input js-inv-chk" value="{{ $inv->id }}">
+                                </td>
+                                <td>
                                     <div class="d-flex align-items-center gap-3">
                                         <span class="badge badge-light-primary">#{{ $inv->batch_id }}</span>
                                         <span class="fw-bold text-gray-800 text-truncate d-inline-block" style="max-width:240px"
@@ -94,7 +112,7 @@
                             </tr>
                         @empty
                             <tr id="fixEmptyRow">
-                                <td colspan="6">
+                                <td colspan="7">
                                     <div class="d-flex flex-column align-items-center text-center py-12">
                                         <span class="mb-4" style="width:72px;height:72px;border-radius:var(--sn-r-lg);font-size:30px;display:inline-flex;align-items:center;justify-content:center;background:var(--sn-emerald-tint,#e6f4ee);color:var(--sn-emerald-deep,#116149)">
                                             <i class="bi bi-check2-all"></i>
@@ -161,6 +179,50 @@
                     <div id="pushFixedResult" class="mt-3 fs-7"></div>
                     <div class="d-flex align-items-center gap-3 mt-4">
                         <button type="button" id="pushFixedSubmitBtn" class="btn btn-sm btn-success">ترحيل المُصحّحة</button>
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">إلغاء</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Spec 024 F1 — shop/manager picker for the hand-picked checkbox selection above,
+         mirroring index.blade.php's bulk-push modal. Posts invoice_ids[] (NOT
+         $affectedBatchIds) to pushInvoices() — a fixed invoice still ineligible is
+         reported back (not silently skipped) so the user knows to keep editing it. --}}
+    <div class="modal fade" id="fixInvPushModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header py-4">
+                    <h3 class="modal-title fs-5">ترحيل الفواتير المحددة إلى فرع</h3>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted fs-7">سيتم ترحيل الفواتير المحددة (<span id="fixInvPushCount">0</span>) إلى الفرع المختار. اختر <strong>المحل</strong> أو <strong>قائد مجموعة</strong> — وليس كليهما.</p>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label fs-7 fw-bold">المحل <span class="text-muted fw-normal">(مصاريف شراء محلات)</span></label>
+                            <select id="fixInvShopId" class="form-select form-select-sm">
+                                <option value="">— اختر محلاً —</option>
+                                @foreach ($shops as $x)
+                                    <option value="{{ $x->shop_id }}">{{ $x->shop_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-1 text-center text-muted fs-7">أو</div>
+                        <div class="col-md-6">
+                            <label class="form-label fs-7">قائد المجموعة</label>
+                            <select id="fixInvManagerId" class="form-select form-select-sm">
+                                <option value="">— اختر قائد مجموعة —</option>
+                                @foreach ($managers as $x)
+                                    <option value="{{ $x->manager_id }}">{{ $x->manager_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div id="fixInvPushResult" class="mt-3 fs-7"></div>
+                    <div class="d-flex align-items-center gap-3 mt-4">
+                        <button type="button" id="fixInvPushSubmitBtn" class="btn btn-sm btn-success">ترحيل</button>
                         <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">إلغاء</button>
                     </div>
                 </div>
@@ -246,8 +308,9 @@
             $row.fadeOut(200, function () {
                 $(this).remove();
                 if (!$('#fixTable tbody tr[data-inv]').length) {
-                    $('#fixTable tbody').html('<tr><td colspan="6"><div class="text-center text-muted py-10">تم تصحيح كل الفواتير المعروضة. اضغط <strong>ترحيل المُصحّحة</strong> لترحيلها.</div></td></tr>');
+                    $('#fixTable tbody').html('<tr><td colspan="7"><div class="text-center text-muted py-10">تم تصحيح كل الفواتير المعروضة. اضغط <strong>ترحيل المُصحّحة</strong> لترحيلها.</div></td></tr>');
                 }
+                syncFixInvBar();
             });
         }
 
@@ -284,6 +347,67 @@
                     $('#pushFixedResult').html('<span class="text-danger">' + $('<div>').text(m).html() + '</span>');
                 })
                 .always(function () { $btn.prop('disabled', false).text('ترحيل المُصحّحة'); });
+        });
+
+        // Spec 024 F1 — hand-picked per-invoice checkbox selection + "ترحيل إلى فرع"
+        // (separate from "ترحيل المُصحّحة" above, which always targets the full
+        // $affectedBatchIds set). Posts invoice_ids[] to the SAME pushInvoices()
+        // endpoint show.blade.php uses.
+        var pushInvoicesUrl = "{{ route('dashboard.invoices.push-invoices') }}";
+
+        function fixSelectedInvIds() {
+            return $('.js-inv-chk:checked').map(function () { return $(this).val(); }).get();
+        }
+
+        function syncFixInvBar() {
+            var ids = fixSelectedInvIds();
+            $('#fixInvCount, #fixInvPushCount').text(ids.length);
+            $('#fixInvBar').toggleClass('d-none', ids.length === 0).toggleClass('d-flex', ids.length > 0);
+            $('#fixInvSelAll').prop('checked', ids.length > 0 && ids.length === $('.js-inv-chk').length);
+        }
+
+        $(document).on('change', '#fixInvSelAll', function () {
+            $('.js-inv-chk').prop('checked', $(this).is(':checked'));
+            syncFixInvBar();
+        });
+        $(document).on('change', '.js-inv-chk', function () { syncFixInvBar(); });
+
+        if ($.fn.select2) { $('#fixInvShopId, #fixInvManagerId').select2({ dir: 'rtl', width: '100%', dropdownParent: $('#fixInvPushModal') }); }
+        $('#fixInvManagerId').on('change', function () { if ($(this).val()) $('#fixInvShopId').val('').trigger('change.select2'); });
+        $('#fixInvShopId').on('change', function () { if ($(this).val()) $('#fixInvManagerId').val('').trigger('change.select2'); });
+
+        $('#fixInvPushOpenBtn').on('click', function () {
+            var ids = fixSelectedInvIds();
+            if (!ids.length) { return; }
+            $('#fixInvPushResult').text('');
+            $('#fixInvPushCount').text(ids.length);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('fixInvPushModal')).show();
+        });
+
+        $('#fixInvPushSubmitBtn').on('click', function () {
+            var ids = fixSelectedInvIds();
+            var shopId = $('#fixInvShopId').val(), managerId = $('#fixInvManagerId').val();
+            if (!ids.length) {
+                $('#fixInvPushResult').html('<span class="text-danger">لم يتم تحديد أي فاتورة.</span>');
+                return;
+            }
+            if (!shopId && !managerId) {
+                $('#fixInvPushResult').html('<span class="text-danger">الرجاء اختيار قائد مجموعة أو محل.</span>');
+                return;
+            }
+            var $btn = $(this).prop('disabled', true).text('جارٍ الترحيل…');
+            $('#fixInvPushResult').html('<span class="text-muted">جارٍ الترحيل…</span>');
+            $.post(pushInvoicesUrl, { invoice_ids: ids, shop_id: shopId, manager_id: managerId })
+                .done(function (r) {
+                    var cls = r.status ? 'text-success' : 'text-danger';
+                    $('#fixInvPushResult').html('<span class="' + cls + '">' + $('<div>').text(r.message_out).html() + '</span>');
+                    if (r.status) { setTimeout(function () { location.reload(); }, 2500); }
+                })
+                .fail(function (xhr) {
+                    var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الترحيل';
+                    $('#fixInvPushResult').html('<span class="text-danger">' + $('<div>').text(m).html() + '</span>');
+                })
+                .always(function () { $btn.prop('disabled', false).text('ترحيل'); });
         });
     </script>
 @endsection

@@ -71,7 +71,7 @@ class Shop extends Model
         $resultCount = 50;
         $end = ($page - 1) * $resultCount;
         $start = $end + $resultCount;
-        $sql = "SELECT shop.shop_name as name, shop.shop_id as id_no,shop.shop_id as id,shop.shop_respon,shop_municip.municip_no as municip_no
+        $sql = "SELECT shop.shop_name as name, shop.shop_code as shop_code, shop.shop_id as id_no,shop.shop_id as id,shop.shop_respon,shop_municip.municip_no as municip_no
         from  shop
 
         left join shop_municip  on shop.shop_id=shop_municip.shop_id
@@ -81,7 +81,8 @@ class Shop extends Model
         }
         $sql = $sql . " where  1=1 ";
         if ($string != "") {
-            $sql = $sql . " and ( shop.shop_name LIKE '%$string%' or  shop_municip.municip_no LIKE '%$string%')    ";
+            // Spec 024 F3 — also match on the manual shop code (A1, B2, ...).
+            $sql = $sql . " and ( shop.shop_name LIKE '%$string%' or  shop_municip.municip_no LIKE '%$string%' or shop.shop_code LIKE '%$string%')    ";
         }
         $sql = $sql . "group by shop.shop_id  order by shop.shop_id  desc LIMIT {$end}, {$start} ";
         $results = DB::select($sql);
@@ -95,9 +96,13 @@ class Shop extends Model
             } else {
                 $muni_no = '';
             }
+            // Spec 024 F3 — show the code beside the name in every picker: "A1 - فوال نور الصباح".
+            $itemName = (isset($user['shop_code']) && trim((string) $user['shop_code']) !== '')
+                ? trim((string) $user['shop_code']) . ' - ' . $user['name']
+                : $user['name'];
             $data[] = array(
                 "id" => $user['id'],
-                "ItemName" => $user['name'], "item_code" => $muni_no, "total_count" => $count_rs_chk
+                "ItemName" => $itemName, "item_code" => $muni_no, "total_count" => $count_rs_chk
             );
         }
         return $data;
@@ -262,7 +267,7 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
             $rs_stmt1 = $rs_stmt1 . " and  sh.shop_id = '$shop_id ' ";
         }
         if ($shop_name  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  sh.shop_name like '%$shop_name%' ";
+            $rs_stmt1 = $rs_stmt1 . " and  ( sh.shop_name like '%$shop_name%' or sh.shop_code like '%$shop_name%' ) "; // Spec 024 F3 — same box matches shop code
         }
         if ($shop_mobile  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  sh.shop_mobile like '%$shop_mobile%' ";
@@ -356,7 +361,7 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
         }
 
         if ($shop_name  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  sh.shop_name like '%$shop_name%' ";
+            $rs_stmt1 = $rs_stmt1 . " and  ( sh.shop_name like '%$shop_name%' or sh.shop_code like '%$shop_name%' ) "; // Spec 024 F3 — same box matches shop code
         }
         if ($shop_mobile  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  sh.shop_mobile like '%$shop_mobile%' ";
@@ -515,7 +520,7 @@ CASE
             }
         }
         if ($shop_name  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  sh.shop_name like '%$shop_name%' ";
+            $rs_stmt1 = $rs_stmt1 . " and  ( sh.shop_name like '%$shop_name%' or sh.shop_code like '%$shop_name%' ) "; // Spec 024 F3 — same box matches shop code
         }
         if ($shop_mobile  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  sh.shop_mobile like '%$shop_mobile%' ";
@@ -644,7 +649,7 @@ CASE
             }
         }
         if ($shop_name  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  sh.shop_name like '%$shop_name%' ";
+            $rs_stmt1 = $rs_stmt1 . " and  ( sh.shop_name like '%$shop_name%' or sh.shop_code like '%$shop_name%' ) "; // Spec 024 F3 — same box matches shop code
         }
         if ($shop_mobile  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  sh.shop_mobile like '%$shop_mobile%' ";
