@@ -3,9 +3,11 @@
 @section('sub', 'سندات القبض')
 @section('title', 'الصندوق وسندات القبض')
 
-@section('content')
+@section('styles')
 <link href="{{ asset('assets/plugins/custom/datatables/datatables.bundle.css') }}" rel="stylesheet" type="text/css" />
-<script src="{{ asset('assets/plugins/custom/datatables/datatables.bundle.js') }}"></script>
+@endsection
+
+@section('content')
 
 <div class="d-flex flex-column flex-column-fluid">
     <div class="post d-flex flex-column-fluid">
@@ -69,6 +71,26 @@
     </div>
 </div>
 
+@endsection
+
+{{-- SCRIPTS MUST LIVE HERE, NOT IN @section('content').
+     layouts/app.blade.php yields 'content' at line ~165 but only loads
+     scripts.bundle.js (which carries jQuery) at ~190, and yields 'scripts'
+     at ~243. Both the DataTables bundle and the init below used to sit inside
+     the content section, so they executed BEFORE jQuery existed and the page
+     died on "ReferenceError: jQuery is not defined" — DataTables never
+     initialised and the الصندوق table rendered permanently EMPTY even though
+     ajax_search was returning every row correctly.
+
+     The other DataTables screens are not affected because their tables live in
+     partials fetched over AJAX after the page (and jQuery) are already up. --}}
+@section('scripts')
+<script src="{{ asset('assets/plugins/custom/datatables/datatables.bundle.js') }}"></script>
+
+{{-- The void modal moves here WHOLESALE (markup + script), not just its script:
+     it defines openCashboxVoidModal() and binds handlers inside $(function(){}),
+     so it hit the same "jQuery is not defined" wall from inside content. The
+     layout yields 'scripts' inside <body>, so the modal markup still renders. --}}
 @include('dashboard.cashbox.void_modal')
 
 <script type="text/javascript">
