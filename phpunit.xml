@@ -21,9 +21,19 @@
         <env name="APP_ENV" value="testing"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_DRIVER" value="array"/>
-        <!-- SAFETY: tests run against an isolated DB so they can NEVER wipe the real
-             local `laravel` copy (a RefreshDatabase/migrate:fresh once did). -->
-        <env name="DB_DATABASE" value="laravel_testing"/>
+        <!-- SAFETY: tests run against an isolated in-memory DB so they can NEVER
+             wipe the real local `laravel` copy (a RefreshDatabase/migrate:fresh
+             once did) — and so they need no running MySQL at all.
+
+             DB_CONNECTION was previously left at whatever .env said (mysql) while
+             only DB_DATABASE was overridden, so every test that did not switch to
+             sqlite in its own beforeEach() died on
+             "SQLSTATE[HY000] [2002] Connection refused ... laravel_testing".
+             Twelve suites were permanently red for that reason alone. The many
+             tests that DO set sqlite :memory: themselves are unaffected — they
+             overwrite these values at runtime. -->
+        <env name="DB_CONNECTION" value="sqlite"/>
+        <env name="DB_DATABASE" value=":memory:"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
