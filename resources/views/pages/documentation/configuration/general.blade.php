@@ -57,7 +57,7 @@ return array(
         'main'       => array(
             'base'              => 'default', // Set base layout: default|docs
             'type'              => 'default', // Set layout type: default|blank|none
-            'primary-color'     => '#0E6B4F',
+            'primary-color'     => 'var(--sn-emerald)',
         ),
 
         // Docs

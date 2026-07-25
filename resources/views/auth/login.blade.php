@@ -4,8 +4,8 @@
     <div class="sn-auth__brandmark sn-anim">
         <svg class="sn-mark"><use href="#sn-logo-mark"/></svg>
         <div>
-            <b>شركة صباح النور</b>
-            <span>Sabah Alnoor Co.</span>
+            <b>{{ config('brand.name_ar') }}</b>
+            <span>{{ config('brand.name_en') }}</span>
         </div>
     </div>
 
@@ -102,6 +102,6 @@
     </div>
 
     <div class="sn-auth__version">
-        © {{ date('Y') }} شركة صباح النور — الإصدار {{ config('global.ver.version_all') }}
+        © {{ date('Y') }} {{ config('brand.name_ar') }} — الإصدار {{ config('global.ver.version_all') }}
     </div>
 </x-guest-layout>

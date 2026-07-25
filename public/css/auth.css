@@ -102,11 +102,11 @@
   background: linear-gradient(135deg, var(--sn-emerald) 0%, var(--sn-emerald-deep) 100%);
   color: #fff; font-family: inherit; font-weight: 700; font-size: 15px;
   cursor: pointer;
-  box-shadow: 0 10px 24px -10px rgba(14, 107, 79, .7);
+  box-shadow: 0 10px 24px -10px rgba(20, 119, 174, .7);
   transition: transform var(--sn-dur-fast) var(--sn-ease-out),
               box-shadow var(--sn-dur-base) var(--sn-ease-out), filter var(--sn-dur-base) var(--sn-ease-out);
 }
-.sn-btn:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -12px rgba(14, 107, 79, .8); filter: saturate(1.08); }
+.sn-btn:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -12px rgba(20, 119, 174, .8); filter: saturate(1.08); }
 .sn-btn:active { transform: translateY(0); }
 .sn-btn .sn-btn__arrow { transition: transform var(--sn-dur-base) var(--sn-ease-out); }
 .sn-btn:hover .sn-btn__arrow { transform: translateX(-4px); }   /* RTL: arrow points/moves start-ward */
@@ -217,14 +217,53 @@
    RESPONSIVE — collapse to single column with a compact brand band on top
    ------------------------------------------------------------------------ */
 @media (max-width: 991.98px) {
-  .sn-auth { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .sn-auth__art { min-height: 210px; justify-content: center; order: -1; }
-  .sn-auth__art-content { padding: 34px 32px; }
-  .sn-auth__art h2 { font-size: 24px; }
+  /* Rows are auto/auto — NOT auto/1fr. With 1fr the form column was stretched to
+     fill 100dvh and left a large empty band under the last element on tall
+     phones. Content height + the min-height on .sn-auth keeps the page filled
+     without inventing dead space. */
+  .sn-auth { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+  .sn-auth__art { min-height: 190px; justify-content: center; order: -1; }
+
+  /* The base rule sets margin-top:84px to push the copy down the tall desktop
+     art column. On a ~190px mobile band that shoved the heading straight onto
+     the artwork — the text was unreadable. Reset both margins here. */
+  .sn-auth__art-content {
+    padding: 26px 28px;
+    margin-top: 0;
+    margin-bottom: 0;
+    text-align: center;
+  }
+  .sn-auth__art h2 { font-size: 22px; line-height: 1.35; }
   .sn-auth__art p { display: none; }
   .sn-wheat--2, .sn-wheat--3 { display: none; }
-  .sn-auth__form { justify-content: flex-start; padding: 34px 24px 44px; box-shadow: none; }
+  .sn-auth__form { justify-content: flex-start; padding: 30px 22px 40px; box-shadow: none; }
   .sn-features { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+  /* نور scene on a phone: the sun and growth arc are drawn for a full-height
+     column. Scaled into a ~190px band they collide with the heading and get
+     clipped at the edges — decoration actively fighting the one line of copy
+     that matters. Drop them and keep the band as gradient + water, which still
+     reads unmistakably as the brand. */
+  .sn-auth__art--noor .sn-dawn,
+  .sn-auth__art--noor .sn-growth {
+    display: none;
+  }
+  .sn-auth__art--noor .sn-wave--back  { height: 66px; }
+  .sn-auth__art--noor .sn-wave--mid   { height: 52px; }
+  .sn-auth__art--noor .sn-wave--front { height: 38px; }
+  /* heading sits clear of the water line, and stays legible over it */
+  .sn-auth__art--noor .sn-auth__art-content {
+    padding-bottom: 58px;
+  }
+  .sn-auth__art--noor .sn-auth__art-content h2 {
+    text-shadow: 0 2px 14px rgba(12, 30, 46, 0.7);
+  }
+}
+
+/* Short landscape phones — drop the art band entirely rather than eat the
+   viewport with decoration the user has to scroll past to reach the form. */
+@media (max-width: 991.98px) and (max-height: 520px) {
+  .sn-auth__art { display: none; }
 }
 @media (max-width: 400px) {
   .sn-features { grid-template-columns: 1fr; }
@@ -242,4 +281,137 @@
     opacity: 1 !important;
     transform: none !important;
   }
+}
+
+/* =============================================================================
+   نور الصباح auth art — "dawn over water"
+   -----------------------------------------------------------------------------
+   A deliberately different scene from the صباح النور wheat-field panel: this
+   brand's logo is a rayed sun, a green growth arc and water, not wheat. Shapes
+   are traced from the mark itself so the login reads as the same identity that
+   prints on the vouchers.
+
+   Motion is restrained on purpose — this is the front door of a financial system,
+   not a landing page: one slow sun breath, one slow tide. All of it is disabled
+   under prefers-reduced-motion at the foot of this file.
+   ========================================================================== */
+.sn-auth__art--noor {
+	/* dawn over open water: navy zenith easing down into logo blue */
+	background: linear-gradient(
+		180deg,
+		#1b3247 0%,
+		#25435d 38%,
+		#1a5c85 72%,
+		#1477ae 100%
+	);
+}
+/* warm light thrown from the sun across the water */
+.sn-auth__art--noor::after {
+	background: radial-gradient(
+		85% 58% at 32% 62%,
+		rgba(247, 143, 19, 0.26),
+		transparent 62%
+	);
+}
+
+.sn-auth__art--noor .sn-dawn {
+	position: absolute;
+	left: 26%;
+	top: 30%;
+	width: 190px;
+	height: 190px;
+	z-index: 2;
+	animation: sn-sun-breathe 8s ease-in-out infinite;
+}
+.sn-auth__art--noor .sn-disc {
+	position: absolute;
+	inset: 33%;
+	border-radius: 50%;
+	background: radial-gradient(circle at 38% 34%, #ffc46b, #f78f13 62%, #e07c05);
+	box-shadow:
+		0 0 34px rgba(247, 143, 19, 0.55),
+		0 0 96px rgba(247, 143, 19, 0.3);
+}
+.sn-auth__art--noor .sn-rays {
+	position: absolute;
+	inset: 0;
+	fill: #f9a23a;
+	opacity: 0.9;
+	animation: sn-rays-turn 64s linear infinite;
+}
+
+/* the green growth arc — the logo's leaf/arrow, drawing itself once on load */
+.sn-auth__art--noor .sn-growth {
+	position: absolute;
+	left: 12%;
+	top: 24%;
+	width: 300px;
+	height: 300px;
+	z-index: 3;
+	color: #60ba49;
+	opacity: 0.92;
+	filter: drop-shadow(0 6px 18px rgba(24, 60, 40, 0.45));
+	stroke-dasharray: 460;
+	stroke-dashoffset: 460;
+	animation: sn-growth-draw 1600ms var(--sn-ease-out) 320ms forwards;
+}
+
+/* water — three layers drifting at different speeds for parallax */
+.sn-auth__art--noor .sn-wave {
+	position: absolute;
+	left: -8%;
+	right: -8%;
+	bottom: 0;
+	z-index: 2;
+	width: 116%;
+}
+.sn-auth__art--noor .sn-wave--back {
+	height: 150px;
+	color: #0f5f8c;
+	opacity: 0.85;
+	animation: sn-tide 13s ease-in-out infinite;
+}
+.sn-auth__art--noor .sn-wave--mid {
+	height: 120px;
+	color: #0d4f74;
+	opacity: 0.92;
+	animation: sn-tide 9s ease-in-out infinite reverse;
+}
+.sn-auth__art--noor .sn-wave--front {
+	height: 90px;
+	color: #25435d;
+	z-index: 3;
+	animation: sn-tide 17s ease-in-out 0.6s infinite;
+}
+
+@keyframes sn-rays-turn {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@keyframes sn-growth-draw {
+	to {
+		stroke-dashoffset: 0;
+	}
+}
+@keyframes sn-tide {
+	0%,
+	100% {
+		transform: translateX(0);
+	}
+	50% {
+		transform: translateX(-3.5%);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sn-auth__art--noor .sn-dawn,
+	.sn-auth__art--noor .sn-rays,
+	.sn-auth__art--noor .sn-wave {
+		animation: none;
+	}
+	.sn-auth__art--noor .sn-growth {
+		animation: none;
+		stroke-dashoffset: 0;
+	}
 }

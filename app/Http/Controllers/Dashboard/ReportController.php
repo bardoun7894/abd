@@ -1367,8 +1367,8 @@ class ReportController extends Controller
         }
 
         PDF::setHeaderCallback(function ($pdf) {
-            $comp_name_ar = 'شركة صباح النور  ';
-            $comp_name_en = 'Sabah Alnoor CO.';
+            $comp_name_ar = config('brand.name_ar').'  ';
+            $comp_name_en = config('brand.name_en');
             $tax_no_ar = 'برنامج المحوسب';
             $tax_no_en = 'Report System';
             $comp_det_ar = 'الرقم الضريبي :1111111';

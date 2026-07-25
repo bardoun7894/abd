@@ -1,0 +1,103 @@
+/* =============================================================================
+   brand/sabah-emerald.css — شركة صباح النور (emerald) theme override
+   -----------------------------------------------------------------------------
+   The shared app-ui.css now ships the نور الصباح blue identity as its baseline.
+   This file restores the ORIGINAL صباح النور emerald + warm-paper identity for
+   instances that are still that company.
+
+   Load order matters: this MUST come AFTER app-ui.css so it wins on cascade.
+   The layout emits it only when config('brand.theme') === 'sabah-emerald'.
+
+   Values below are the verbatim pre-rebrand tokens taken from git, so this is a
+   faithful restore rather than an approximation.
+   ============================================================================= */
+:root {
+	/* brand */
+	--sn-emerald: #0e6b4f;
+	--sn-emerald-deep: #0a4f3a;
+	--sn-emerald-soft: #1a7a4c;
+	--sn-emerald-tint: #e4efe9;
+	--sn-gold: #c19a45;
+	--sn-amber: #b5780a;
+	--sn-amber-tint: #f6ecd4;
+	--sn-rust: #a93b2c;
+	--sn-rust-tint: #f4e2dc;
+	--sn-sky: #1f6fa8;
+
+	/* surface / ink */
+	--sn-paper: #f4eee1;
+	--sn-paper-2: #fbf7ee;
+	--sn-card: #fffdf8;
+	--sn-ink: #23201a;
+	--sn-ink-soft: #6e6557;
+	--sn-line: #e4dbc8;
+
+	/* radii */
+	--sn-r-sm: 8px;
+	--sn-r-md: 12px;
+	--sn-r-lg: 18px;
+	--sn-r-pill: 50rem;
+
+	/* elevation */
+	--sn-shadow-sm: 0 1px 2px rgba(35, 32, 26, 0.04);
+	--sn-shadow-md:
+		0 1px 2px rgba(35, 32, 26, 0.04), 0 12px 30px -12px rgba(35, 32, 26, 0.18);
+	--sn-shadow-lg: 0 20px 60px -20px rgba(35, 32, 26, 0.28);
+
+	/* motion — --sn-ease-out is the easing the existing .ai-* layer ALREADY uses.
+     Adopting it as a token makes deduping that layer a rename, not a redesign. */
+	--sn-dur-fast: 120ms;
+	--sn-dur-base: 220ms;
+	--sn-dur-slow: 420ms;
+	--sn-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+	/* type */
+	--sn-font:
+		"IBM Plex Sans Arabic", "DIN Next LT Arabic", system-ui, -apple-system,
+		"Segoe UI", sans-serif;
+
+	/* Metronic drives its typography off this. Redefining it here — later in the
+     cascade, equal specificity — retires Poppins app-wide with no !important. */
+	--bs-font-sans-serif:
+		"IBM Plex Sans Arabic", "DIN Next LT Arabic", system-ui, -apple-system,
+		sans-serif;
+}
+
+/* --bs-primary-rgb is consumed by rgba(var(--bs-primary-rgb), …) and must track
+   --sn-emerald, or translucent primary surfaces render the wrong hue. */
+:root {
+	--bs-primary-rgb: 14, 107, 79; /* #0e6b4f */
+}
+
+/* Restore Metronic's stock semantic palette. app-ui.css section 5b retunes
+   success/warning/danger/info to the نور logo accents; the emerald brand keeps
+   the original behaviour, so those overrides are reverted here. */
+:root {
+	--bs-success: #50cd89;
+	--bs-success-rgb: 80, 205, 137;
+	--bs-warning: #ffc700;
+	--bs-warning-rgb: 255, 199, 0;
+	--bs-danger: #f1416c;
+	--bs-danger-rgb: 241, 65, 108;
+	--bs-info: #7239ea;
+	--bs-info-rgb: 114, 57, 234;
+}
+.text-success { color: #50cd89 !important; }
+.text-warning { color: #ffc700 !important; }
+.text-danger  { color: #f1416c !important; }
+.badge-light-success { color: #47be7d; background-color: #e8fff3; }
+.badge-light-warning { color: #f1bc00; background-color: #fff8dd; }
+.badge-light-danger  { color: #f1416c; background-color: #fff5f8; }
+.badge-light-info    { color: #7239ea; background-color: #f8f5ff; }
+.badge-success { background-color: #50cd89; }
+.badge-warning { background-color: #ffc700; }
+.badge-danger  { background-color: #f1416c; }
+.bg-light-success { background-color: #e8fff3 !important; }
+.bg-light-warning { background-color: #fff8dd !important; }
+.bg-light-danger  { background-color: #fff5f8 !important; }
+.btn.btn-success { border-color: #50cd89 !important; background-color: #50cd89 !important; }
+.btn.btn-warning { border-color: #ffc700 !important; background-color: #ffc700 !important; }
+.btn.btn-danger  { border-color: #f1416c !important; background-color: #f1416c !important; }
+.border-success { border-color: #50cd89 !important; }
+.border-warning { border-color: #ffc700 !important; }
+.border-danger  { border-color: #f1416c !important; }

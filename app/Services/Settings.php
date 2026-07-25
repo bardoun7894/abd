@@ -142,6 +142,14 @@ class Settings
             'gemini_retries' => 'services.gemini.retries',
             'zatca_seller_name' => 'zatca.seller_name',
             'zatca_vat_number' => 'zatca.vat_number',
+            'company_name_ar' => 'brand.name_ar',
+            'company_name_en' => 'brand.name_en',
+            'brand_theme' => 'brand.theme',
+            'brand_logo' => 'brand.logo',
+            'brand_pdf_primary' => 'brand.pdf.primary',
+            'brand_pdf_deep' => 'brand.pdf.deep',
+            'brand_pdf_tint' => 'brand.pdf.tint',
+            'brand_pdf_line' => 'brand.pdf.line',
         ];
         $all = self::all();
         foreach ($map as $settingKey => $configKey) {

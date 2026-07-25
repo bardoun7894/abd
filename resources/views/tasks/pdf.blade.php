@@ -16,7 +16,7 @@
         .print-header {
             text-align: center;
             margin-bottom: 30px;
-            border-bottom: 2px solid #0E6B4F;
+            border-bottom: 2px solid #1477AE;
             padding-bottom: 20px;
         }
 
@@ -28,7 +28,7 @@
         .print-title {
             font-size: 24px;
             margin: 20px 0;
-            color: #0E6B4F;
+            color: #1477AE;
         }
 
         .info-section {
@@ -55,7 +55,7 @@
         }
 
         th {
-            background-color: #0E6B4F;
+            background-color: #1477AE;
             color: white;
             font-weight: bold;
         }
@@ -100,7 +100,7 @@
 <body>
     <div class="print-header">
         <img src="{{ public_path('assets/media/logos/logo.jpg') }}" alt="شعار الشركة" class="print-logo">
-        <h1 class="print-title">شركة صباح النور</h1>
+        <h1 class="print-title">{{ config('brand.name_ar') }}</h1>
         <h2>{{ $schedule->title }}</h2>
     </div>
 
@@ -152,7 +152,7 @@
 
     <div class="footer">
         <p>تم إنشاء هذا التقرير بتاريخ: {{ now()->format('Y-m-d H:i') }}</p>
-        <p>شركة صباح النور - جميع الحقوق محفوظة &copy; {{ date('Y') }}</p>
+        <p>{{ config('brand.name_ar') }} - جميع الحقوق محفوظة &copy; {{ date('Y') }}</p>
     </div>
 </body>
 </html>

@@ -33,6 +33,14 @@ class SettingsController extends Controller
     public static function registry(): array
     {
         return [
+            // Per-instance company identity. The same codebase is deployed for more
+            // than one company, so these drive every printed/exported header via
+            // config('brand.*') — see config/brand.php. The logo itself is a file
+            // swap under public/assets/media/logos/, not a setting.
+            'هوية الشركة' => [
+                ['key' => 'company_name_ar', 'label' => 'اسم الشركة (عربي)', 'secret' => false, 'placeholder' => config('brand.name_ar')],
+                ['key' => 'company_name_en', 'label' => 'اسم الشركة (إنجليزي)', 'secret' => false, 'placeholder' => config('brand.name_en')],
+            ],
             'الذكاء الاصطناعي (Gemini)' => [
                 ['key' => 'gemini_api_key', 'label' => 'مفتاح Gemini API', 'secret' => true],
                 ['key' => 'gemini_model', 'label' => 'موديل Gemini', 'secret' => false, 'placeholder' => 'gemini-flash-lite-latest'],
@@ -50,7 +58,7 @@ class SettingsController extends Controller
                 ['key' => 'sms_base_url', 'label' => 'رابط API (اختياري)', 'secret' => false],
             ],
             'الفوترة الإلكترونية (ZATCA)' => [
-                ['key' => 'zatca_seller_name', 'label' => 'اسم البائع', 'secret' => false, 'placeholder' => 'شركة صباح النور'],
+                ['key' => 'zatca_seller_name', 'label' => 'اسم البائع', 'secret' => false, 'placeholder' => config('brand.name_ar')],
                 ['key' => 'zatca_vat_number', 'label' => 'الرقم الضريبي (VAT)', 'secret' => false, 'placeholder' => '15 رقم'],
             ],
         ];

@@ -166,17 +166,17 @@ class InvoiceController extends Controller
         // Brand palette (صباح النور emerald). Taken from ExcelReportStyler rather
         // than re-declared: this block used to carry its own copy of the hexes,
         // which silently drifted from both the styler and the CSS brand tokens.
-        $EMERALD = ExcelReportStyler::EMERALD;
-        $EMERALD_DEEP = ExcelReportStyler::EMERALD_DEEP;
-        $ZEBRA = ExcelReportStyler::ZEBRA;
-        $BORDER = ExcelReportStyler::BORDER;
+        $EMERALD = ExcelReportStyler::brand();
+        $EMERALD_DEEP = ExcelReportStyler::brandDeep();
+        $ZEBRA = ExcelReportStyler::zebra();
+        $BORDER = ExcelReportStyler::border();
         $FILL = \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID;
         $CENTER = \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER;
         $VCENTER = \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER;
 
         // Row 1 — merged brand title.
         $sheet->mergeCells('A1:F1');
-        $sheet->setCellValue('A1', 'شركة صباح النور — سجل عمليات الاستخراج');
+        $sheet->setCellValue('A1', config('brand.name_ar').' — سجل عمليات الاستخراج');
         $sheet->getRowDimension(1)->setRowHeight(30);
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(15)->getColor()->setARGB('FFFFFFFF');
         $sheet->getStyle('A1')->getFill()->setFillType($FILL)->getStartColor()->setARGB($EMERALD_DEEP);
@@ -252,7 +252,7 @@ class InvoiceController extends Controller
         $inv->setTitle('الفواتير المستخرجة');
 
         $inv->mergeCells('A1:M1');
-        $inv->setCellValue('A1', 'شركة صباح النور — الفواتير المستخرجة');
+        $inv->setCellValue('A1', config('brand.name_ar').' — الفواتير المستخرجة');
         $inv->getRowDimension(1)->setRowHeight(30);
         $inv->getStyle('A1')->getFont()->setBold(true)->setSize(15)->getColor()->setARGB('FFFFFFFF');
         $inv->getStyle('A1')->getFill()->setFillType($FILL)->getStartColor()->setARGB($EMERALD_DEEP);

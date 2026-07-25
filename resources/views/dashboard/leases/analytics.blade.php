@@ -209,8 +209,8 @@
         data: {
             labels: [@foreach ($forecast as $f)'{{ $f['month'] }}',@endforeach],
             datasets: [
-                { label: 'المستحق المجدوَل', data: [@foreach ($forecast as $f){{ (float) $f['scheduled'] }},@endforeach], borderColor: emeraldDeep, backgroundColor: 'rgba(10,79,58,0.1)', tension: 0.3 },
-                { label: 'الإيراد المتوقَّع (مرجّح بمعدل التحصيل)', data: [@foreach ($forecast as $f){{ (float) $f['projected'] }},@endforeach], borderColor: emeraldColor, backgroundColor: 'rgba(14,107,79,0.12)', tension: 0.3 }
+                { label: 'المستحق المجدوَل', data: [@foreach ($forecast as $f){{ (float) $f['scheduled'] }},@endforeach], borderColor: emeraldDeep, backgroundColor: 'rgba(37,67,93,0.1)', tension: 0.3 },
+                { label: 'الإيراد المتوقَّع (مرجّح بمعدل التحصيل)', data: [@foreach ($forecast as $f){{ (float) $f['projected'] }},@endforeach], borderColor: emeraldColor, backgroundColor: 'rgba(20,119,174,0.12)', tension: 0.3 }
             ]
         },
         options: { plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }

@@ -11,7 +11,7 @@
         :root{
             --paper:#F4EEE1; --paper-2:#FBF7EE; --card:#FFFDF8;
             --ink:#23201A; --ink-soft:#6E6557; --line:#E4DBC8;
-            --emerald:#0E6B4F; --emerald-deep:#0A4F3A; --emerald-tint:#E4EFE9;
+            --emerald:var(--sn-emerald); --emerald-deep:var(--sn-emerald-deep); --emerald-tint:var(--sn-emerald-tint);
             --amber:#B5780A; --amber-tint:#F6ECD4;
             --rust:#A93B2C; --rust-tint:#F4E2DC;
             --gold:#C19A45;
@@ -61,8 +61,8 @@
         .scan img{width:100%; height:100%; object-fit:cover; display:block; min-height:240px; max-height:340px}
         .scan .noimg{display:grid; place-items:center; height:100%; color:var(--ink-soft); font-size:13px; padding:20px; text-align:center}
         .scan::after{content:""; position:absolute; left:0; right:0; height:46px; top:-46px;
-            background:linear-gradient(180deg,transparent,rgba(14,107,79,.4),transparent);
-            box-shadow:0 0 22px 6px rgba(14,107,79,.35); animation:sweep 1.4s ease-out 1 forwards}
+            background:linear-gradient(180deg,transparent,rgba(20,119,174,.4),transparent);
+            box-shadow:0 0 22px 6px rgba(20,119,174,.35); animation:sweep 1.4s ease-out 1 forwards}
         @keyframes sweep{0%{top:-12%}100%{top:112%; opacity:0}}
         .scan .pageno{position:absolute; top:10px; right:10px; background:rgba(35,32,26,.78); color:#fff;
             font-family:'Reem Kufi'; font-size:12px; padding:3px 10px; border-radius:8px}

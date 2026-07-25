@@ -1,5 +1,5 @@
 /* =============================================================================
-   app-ui.css — Sabah Alnoor (شركة صباح النور) design layer
+   app-ui.css — Noor Al-Sabah (شركة نور الصباح) design layer
    -----------------------------------------------------------------------------
    Loaded AFTER the Metronic bundle and after assets/fonts/dinnext/styles.rtl.css,
    so it wins on cascade ORDER rather than on !important sprawl.
@@ -159,31 +159,40 @@
 }
 
 /* -----------------------------------------------------------------------------
-   2. Tokens.
-      Palette harvested from resources/views/invoices_local/show.blade.php:9-25 —
-      already the best design work in the repo. #0E6B4F is the brand emerald; the
-      warm paper/ink/gold set matches the agricultural identity of the logo.
+   2. Tokens — نور الصباح.
+      Palette sampled directly from the company logo
+      (public/assets/media/logos/logo.jpg): navy #25435D wordmark, blue #1477AE
+      on "نور" and the triangles, green #60BA49 leaf/arrow, orange #F78F13 sun
+      rays. The surface set is a cool neutral to sit under that cool mark.
+
+      These were previously صباح النور's emerald + warm cream "paper" set, which
+      belonged to a different company's agricultural/wheat identity. The token
+      NAMES are deliberately unchanged (--sn-emerald etc.): they are referenced
+      from dozens of blade files, and renaming them would be a huge cosmetic diff
+      with real regression risk for zero visual gain. Only the values moved.
    -------------------------------------------------------------------------- */
 :root {
-	/* brand */
-	--sn-emerald: #0e6b4f;
-	--sn-emerald-deep: #0a4f3a;
-	--sn-emerald-soft: #1a7a4c;
-	--sn-emerald-tint: #e4efe9;
-	--sn-gold: #c19a45;
-	--sn-amber: #b5780a;
-	--sn-amber-tint: #f6ecd4;
+	/* brand — logo-derived */
+	--sn-emerald: #1477ae; /* logo blue   — primary */
+	--sn-emerald-deep: #25435d; /* logo navy   — headers, table head */
+	--sn-emerald-soft: #2e90cc; /* lighter blue — hover */
+	--sn-emerald-tint: #e8f1f7; /* pale blue   — zebra rows, fills */
+	--sn-green: #60ba49; /* logo green  — success / positive */
+	--sn-green-tint: #e6f4e2;
+	--sn-gold: #c8891f;
+	--sn-amber: #f78f13; /* logo orange — sun rays, warnings */
+	--sn-amber-tint: #fef0dc;
 	--sn-rust: #a93b2c;
 	--sn-rust-tint: #f4e2dc;
-	--sn-sky: #1f6fa8;
+	--sn-sky: #1477ae;
 
-	/* surface / ink */
-	--sn-paper: #f4eee1;
-	--sn-paper-2: #fbf7ee;
-	--sn-card: #fffdf8;
-	--sn-ink: #23201a;
-	--sn-ink-soft: #6e6557;
-	--sn-line: #e4dbc8;
+	/* surface / ink — cool neutral */
+	--sn-paper: #eef2f6;
+	--sn-paper-2: #f7fafc;
+	--sn-card: #ffffff;
+	--sn-ink: #1b2c3a;
+	--sn-ink-soft: #5a6b7a;
+	--sn-line: #d8e2ea;
 
 	/* radii */
 	--sn-r-sm: 8px;
@@ -192,10 +201,10 @@
 	--sn-r-pill: 50rem;
 
 	/* elevation */
-	--sn-shadow-sm: 0 1px 2px rgba(35, 32, 26, 0.04);
+	--sn-shadow-sm: 0 1px 2px rgba(27, 44, 58, 0.04);
 	--sn-shadow-md:
-		0 1px 2px rgba(35, 32, 26, 0.04), 0 12px 30px -12px rgba(35, 32, 26, 0.18);
-	--sn-shadow-lg: 0 20px 60px -20px rgba(35, 32, 26, 0.28);
+		0 1px 2px rgba(27, 44, 58, 0.04), 0 12px 30px -12px rgba(27, 44, 58, 0.18);
+	--sn-shadow-lg: 0 20px 60px -20px rgba(27, 44, 58, 0.28);
 
 	/* motion — --sn-ease-out is the easing the existing .ai-* layer ALREADY uses.
      Adopting it as a token makes deduping that layer a rename, not a redesign. */
@@ -251,8 +260,8 @@ body {
 }
 
 /* -----------------------------------------------------------------------------
-   5. Brand recolor — retire Metronic's stock blue (#009EF7) for Sabah Alnoor
-      emerald across all 74 views at once.
+   5. Brand recolor — retire Metronic's stock blue (#009EF7) for the نور الصباح
+      logo blue across all 74 views at once.
 
       Metronic 8 hardcodes #009EF7 into its compiled component classes instead of
       routing them through --bs-primary, so overriding the var alone isn't enough.
@@ -260,12 +269,13 @@ body {
       the specific high-traffic component classes, matching Metronic's own selector
       specificity + !important exactly so these win on cascade order.
 
-      Semantic colors (success/danger/warning/info) are deliberately untouched —
-      only the brand/primary identity changes.
+      Semantic colors are retuned in section 5b below — they are NOT left at
+      Metronic's stock values, because those (purple info #7239EA, pink danger
+      #F1416C, mint success #50CD89) visibly clash with a navy/blue identity.
    -------------------------------------------------------------------------- */
 :root {
 	--bs-primary: var(--sn-emerald);
-	--bs-primary-rgb: 14, 107, 79; /* #0E6B4F */
+	--bs-primary-rgb: 20, 119, 174; /* #1477AE — MUST track --sn-emerald; rgba(var(--bs-primary-rgb),…) reads this */
 	--bs-primary-active: var(--sn-emerald-deep);
 	--bs-link-color: var(--sn-emerald);
 	--bs-link-hover-color: var(--sn-emerald-deep);
@@ -346,6 +356,109 @@ a.text-hover-primary:hover,
 .form-select:focus {
 	border-color: var(--sn-emerald);
 	box-shadow: 0 0 0 0.2rem var(--sn-emerald-tint);
+}
+
+/* -----------------------------------------------------------------------------
+   5b. Semantic palette — make colour carry MEANING, not decoration.
+
+   Metronic ships success #50CD89 (mint), danger #F1416C (hot pink), warning
+   #FFC700 (school-bus yellow) and info #7239EA (PURPLE). Against a navy/blue
+   logo those read as four unrelated brands fighting on one screen — and because
+   the home dashboard uses badge-light-danger for every expired-residency row,
+   the busiest widget was mostly hot pink.
+
+   Retuned to the logo's own accents so the palette is closed (navy/blue/green/
+   orange) and each hue means exactly one thing:
+     success  #60BA49  logo green   — confirmed, paid, active, inside-KSA
+     warning  #F78F13  logo orange  — needs attention, expiring soon
+     danger   #B3382B  brick red    — genuine failure/expired ONLY. Deeper and
+                                      less saturated than #F1416C so it reads as
+                                      serious rather than loud, and sits with navy.
+     info     #25435D  logo navy    — structural/neutral emphasis (was purple)
+   -------------------------------------------------------------------------- */
+:root {
+	--bs-success: var(--sn-green);
+	--bs-success-rgb: 96, 186, 73;
+	--bs-warning: var(--sn-amber);
+	--bs-warning-rgb: 247, 143, 19;
+	--bs-danger: #b3382b;
+	--bs-danger-rgb: 179, 56, 43;
+	--bs-info: var(--sn-emerald-deep);
+	--bs-info-rgb: 37, 67, 93;
+}
+
+/* text */
+.text-success {
+	color: var(--sn-green) !important;
+}
+.text-warning {
+	color: var(--sn-amber) !important;
+}
+.text-danger {
+	color: #b3382b !important;
+}
+
+/* badges — the highest-traffic semantic surface on the dashboard */
+.badge-light-success {
+	color: #3f8a2f;
+	background-color: var(--sn-green-tint);
+}
+.badge-light-warning {
+	color: #9c5a06;
+	background-color: var(--sn-amber-tint);
+}
+.badge-light-danger {
+	color: #8f2b20;
+	background-color: var(--sn-rust-tint);
+}
+.badge-light-info {
+	color: var(--sn-emerald-deep);
+	background-color: var(--sn-emerald-tint);
+}
+.badge-success {
+	background-color: var(--sn-green);
+}
+.badge-warning {
+	background-color: var(--sn-amber);
+}
+.badge-danger {
+	background-color: #b3382b;
+}
+
+/* soft surfaces */
+.bg-light-success {
+	background-color: var(--sn-green-tint) !important;
+}
+.bg-light-warning {
+	background-color: var(--sn-amber-tint) !important;
+}
+.bg-light-danger {
+	background-color: var(--sn-rust-tint) !important;
+}
+
+/* solid buttons */
+.btn.btn-success {
+	border-color: var(--sn-green) !important;
+	background-color: var(--sn-green) !important;
+}
+.btn.btn-warning {
+	border-color: var(--sn-amber) !important;
+	background-color: var(--sn-amber) !important;
+}
+.btn.btn-danger {
+	border-color: #b3382b !important;
+	background-color: #b3382b !important;
+}
+
+/* accent borders used on the home widget cards */
+.border-success {
+	border-color: var(--sn-green) !important;
+}
+.border-warning {
+	border-color: var(--sn-amber) !important;
+}
+.border-danger {
+	border-color: #b3382b !important;
 }
 
 /* -----------------------------------------------------------------------------

@@ -19,7 +19,7 @@
         .print-header {
             text-align: center;
             margin-bottom: 30px;
-            border-bottom: 2px solid #0E6B4F;
+            border-bottom: 2px solid var(--sn-emerald);
             padding-bottom: 20px;
         }
         .print-logo {
@@ -29,7 +29,7 @@
         .print-title {
             font-size: 24px;
             margin: 20px 0;
-            color: #0E6B4F;
+            color: var(--sn-emerald);
         }
         .info-card {
             background-color: #f8f9fa;
@@ -45,15 +45,15 @@
             font-size: 15px;
         }
         .info-card strong {
-            color: #0E6B4F;
+            color: var(--sn-emerald);
         }
         .table {
             margin-bottom: 30px;
         }
         .table th {
-            background-color: #0E6B4F;
+            background-color: var(--sn-emerald);
             color: white;
-            border: 1px solid #0E6B4F;
+            border: 1px solid var(--sn-emerald);
         }
         .table td {
             padding: 12px 8px;
@@ -105,7 +105,7 @@
 
         <div class="print-header">
             <img src="{{asset('assets/media/logos/logo.jpg')}}" alt="شعار الشركة" class="print-logo">
-            <h1 class="print-title">شركة صباح النور</h1>
+            <h1 class="print-title">{{ config('brand.name_ar') }}</h1>
             <h2>{{ $schedule->title }}</h2>
         </div>
 
@@ -165,7 +165,7 @@
 
         <div class="footer">
             <p>تم إنشاء هذا التقرير بتاريخ: {{ now()->format('Y-m-d H:i') }}</p>
-            <p>شركة صباح النور - جميع الحقوق محفوظة &copy; {{ date('Y') }}</p>
+            <p>{{ config('brand.name_ar') }} - جميع الحقوق محفوظة &copy; {{ date('Y') }}</p>
         </div>
     </div>
 </body>

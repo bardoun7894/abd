@@ -2,8 +2,8 @@
     <div class="sn-auth__brandmark sn-anim">
         <svg class="sn-mark"><use href="#sn-logo-mark"/></svg>
         <div>
-            <b>شركة صباح النور</b>
-            <span>Sabah Alnoor Co.</span>
+            <b>{{ config('brand.name_ar') }}</b>
+            <span>{{ config('brand.name_en') }}</span>
         </div>
     </div>
 

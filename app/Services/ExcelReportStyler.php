@@ -12,11 +12,13 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 /**
- * Shared "professional emerald" Excel styler for every print_*_xlsx export.
+ * Shared, brand-aware Excel styler for every print_*_xlsx export.
  *
- * Single source of truth for the صباح النور branded look first shipped on the
- * invoices extraction-log export (InvoiceController::exportBatches). Any report
- * export applies the identical style with three calls:
+ * Single source of truth for the branded workbook look first shipped on the
+ * invoices extraction-log export (InvoiceController::exportBatches). Colours are
+ * resolved per instance from config('brand.pdf.*') — see brand()/brandDeep()
+ * below — so one file renders emerald for صباح النور and blue for نور الصباح.
+ * Any report export applies the identical style with three calls:
  *
  *     $ss    = ExcelReportStyler::newBook('تقرير مصاريف شراء sheet-title');
  *     $sheet = $ss->getActiveSheet();
@@ -33,27 +35,61 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  */
 class ExcelReportStyler
 {
-    /**
-     * Brand palette — صباح النور emerald. THE single source of truth for every
-     * exported workbook; do not re-declare these hexes at a call site.
-     *
-     * Kept in lock-step with the CSS brand tokens in public/css/app-ui.css so an
-     * exported file and the screen it was exported from are the same green:
-     *   EMERALD      = --sn-emerald      (#0e6b4f)
-     *   EMERALD_DEEP = --sn-emerald-deep (#0a4f3a)
-     *   ZEBRA        = --sn-emerald-tint (#e4efe9)
-     * Previously these were 1B8A5A / 116149 / EAF6F0 — a lighter, unrelated
-     * green that made every export visibly off-brand.
-     */
-    public const EMERALD = '0E6B4F';       // header row fill
-
-    public const EMERALD_DEEP = '0A4F3A';  // title row fill
-
-    public const ZEBRA = 'E4EFE9';         // even data-row fill
-
-    public const BORDER = 'CBD5D1';        // thin data borders
-
     public const WHITE = 'FFFFFFFF';
+
+    /** Fallbacks when no theme is configured — the نور الصباح logo palette. */
+    private const FALLBACK_BRAND = '1477AE';      // logo blue
+    private const FALLBACK_DEEP = '25435D';       // logo navy
+    private const FALLBACK_ZEBRA = 'E8F1F7';      // pale blue row fill
+    private const FALLBACK_BORDER = 'C6D4DF';     // blue-grey borders
+
+    /**
+     * These are METHODS, not constants, on purpose: the same codebase is
+     * deployed for more than one company, and a `const` is resolved at compile
+     * time so it cannot read config. Making them methods lets a single file
+     * serve every instance — MyContabo renders emerald and noor-alsabah.com
+     * renders blue from identical code, driven by config('brand.pdf.*') (which
+     * Settings::applyToConfig fills from the app_settings table).
+     *
+     * Previously each server carried a hand-edited copy of this file with its
+     * own hexes baked in, which meant production ran code that did not match
+     * the repository.
+     */
+    public static function brand(): string
+    {
+        return self::argb(config('brand.pdf.primary'), self::FALLBACK_BRAND);
+    }
+
+    public static function brandDeep(): string
+    {
+        return self::argb(config('brand.pdf.deep'), self::FALLBACK_DEEP);
+    }
+
+    public static function zebra(): string
+    {
+        return self::argb(config('brand.pdf.tint'), self::FALLBACK_ZEBRA);
+    }
+
+    public static function border(): string
+    {
+        return self::argb(config('brand.pdf.line'), self::FALLBACK_BORDER);
+    }
+
+    /**
+     * Normalise a configured colour to the bare RRGGBB PhpSpreadsheet expects.
+     * Accepts '#1477AE', '1477ae' or 'FF1477AE'; anything unparseable falls back
+     * rather than throwing — a bad settings value must never break an export.
+     */
+    private static function argb(?string $value, string $fallback): string
+    {
+        $hex = strtoupper(ltrim(trim((string) $value), '#'));
+
+        if (strlen($hex) === 8) {
+            $hex = substr($hex, 2); // drop a leading alpha pair
+        }
+
+        return preg_match('/^[0-9A-F]{6}$/', $hex) === 1 ? $hex : $fallback;
+    }
 
     /**
      * A branded, RTL workbook with the Calibri default font and NourSabah
@@ -94,7 +130,7 @@ class ExcelReportStyler
         $sheet->getStyle($range)->getFont()->setBold(true)->setSize(15)
             ->getColor()->setARGB(self::WHITE);
         $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)
-            ->getStartColor()->setARGB(self::EMERALD_DEEP);
+            ->getStartColor()->setARGB(self::brandDeep());
         $sheet->getStyle($range)->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_CENTER)
             ->setVertical(Alignment::VERTICAL_CENTER);
@@ -121,7 +157,7 @@ class ExcelReportStyler
         $sheet->getStyle($range)->getFont()->setBold(true)->setSize(11)
             ->getColor()->setARGB(self::WHITE);
         $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)
-            ->getStartColor()->setARGB(self::EMERALD);
+            ->getStartColor()->setARGB(self::brand());
         $sheet->getStyle($range)->getAlignment()
             ->setHorizontal(Alignment::HORIZONTAL_CENTER)
             ->setVertical(Alignment::VERTICAL_CENTER);
@@ -158,14 +194,14 @@ class ExcelReportStyler
             for ($r = $firstDataRow; $r <= $lastRow; $r++) {
                 if ($r % 2 === 0) {
                     $sheet->getStyle("A{$r}:{$lastCol}{$r}")->getFill()
-                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::ZEBRA);
+                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::zebra());
                 }
             }
 
             // Thin borders across the data block.
             $sheet->getStyle("A{$firstDataRow}:{$lastCol}{$lastRow}")->getBorders()
                 ->getAllBorders()->setBorderStyle(Border::BORDER_THIN)
-                ->getColor()->setARGB(self::BORDER);
+                ->getColor()->setARGB(self::border());
 
             // Money formatting on requested columns.
             foreach ($amountCols as $col) {
@@ -178,7 +214,7 @@ class ExcelReportStyler
         $outlineLast = $hasData ? $lastRow : $headerRow;
         $sheet->getStyle("A{$headerRow}:{$lastCol}{$outlineLast}")->getBorders()
             ->getOutline()->setBorderStyle(Border::BORDER_MEDIUM)
-            ->getColor()->setARGB(self::EMERALD);
+            ->getColor()->setARGB(self::brand());
 
         // Autosize every column in the span.
         $lastColIdx = Coordinate::columnIndexFromString($lastCol);
@@ -233,9 +269,9 @@ class ExcelReportStyler
 
         $sheet->getStyle($range)->getFont()->setBold(true);
         $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)
-            ->getStartColor()->setARGB(self::ZEBRA);
+            ->getStartColor()->setARGB(self::zebra());
         $sheet->getStyle($range)->getBorders()->getAllBorders()
-            ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB(self::BORDER);
+            ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB(self::border());
     }
 
     /**

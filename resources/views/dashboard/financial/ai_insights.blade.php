@@ -122,7 +122,7 @@
         data: {
             labels: [@foreach ($history as $h)'{{ $h['month'] }}',@endforeach],
             datasets: [
-                { label: 'المستحق', data: [@foreach ($history as $h){{ (float) $h['due'] }},@endforeach], backgroundColor: '#0A4F3A' },
+                { label: 'المستحق', data: [@foreach ($history as $h){{ (float) $h['due'] }},@endforeach], backgroundColor: 'var(--sn-emerald-deep)' },
                 { label: 'المحصّل', data: [@foreach ($history as $h){{ (float) $h['paid'] }},@endforeach], backgroundColor: '#50cd89' }
             ]
         },
@@ -133,7 +133,7 @@
         data: {
             labels: [@foreach ($forecast as $f)'{{ $f['month'] }}',@endforeach],
             datasets: [
-                { label: 'المستحق المتوقَّع', data: [@foreach ($forecast as $f){{ (float) $f['due'] }},@endforeach], borderColor: '#0A4F3A', backgroundColor: 'rgba(10,79,58,0.1)', tension: 0.3 },
+                { label: 'المستحق المتوقَّع', data: [@foreach ($forecast as $f){{ (float) $f['due'] }},@endforeach], borderColor: 'var(--sn-emerald-deep)', backgroundColor: 'rgba(37,67,93,0.1)', tension: 0.3 },
                 { label: 'التحصيل المتوقَّع (مرجّح بمعدل التحصيل التاريخي)', data: [@foreach ($forecast as $f){{ (float) $f['expected'] }},@endforeach], borderColor: '#50cd89', backgroundColor: 'rgba(80,205,137,0.1)', tension: 0.3 }
             ]
         },

@@ -32,13 +32,22 @@ use App\Support\ArabicNumberToWords;
  */
 
 /* ---- brand tokens ------------------------------------------------------- */
-$EMERALD      = '#0e6b4f';   // --sn-emerald
-$EMERALD_DEEP = '#0a4f3a';   // --sn-emerald-deep
-$TINT         = '#e4efe9';   // --sn-emerald-tint
-$LINE         = '#cbd5d1';
-$INK          = '#1a2b25';
-$MUTED        = '#5b6b64';
-$AMBER        = '#e0a020';   // logo — wheat / sunrise accent
+/*
+ * نور الصباح palette, sampled from the company logo so the voucher, the Excel
+ * exports (App\Services\ExcelReportStyler) and the screen all match. The
+ * variable names are kept ($EMERALD etc.) because they are referenced ~40 times
+ * below; only the values changed — from صباح النور's emerald to نور الصباح's
+ * blue/navy. Renaming them here would be a large, purely cosmetic diff on a
+ * document that prints money amounts.
+ */
+$EMERALD      = '#1477AE';   // logo blue   — headers, labels
+$EMERALD_DEEP = '#25435D';   // logo navy   — masthead, title bar
+$TINT         = '#e8f1f7';   // pale blue   — row fills
+$LINE         = '#c6d4df';   // blue-grey   — borders
+$INK          = '#1b2c3a';   // dark navy   — body text
+$MUTED        = '#5a6b7a';   // slate       — secondary text
+$AMBER        = '#f78f13';   // logo orange — sun-ray accent
+$GREEN        = '#60ba49';   // logo green  — leaf/arrow accent
 $DANGER       = '#a01515';
 
 $isVoid = (int) ($receipt->is_void ?? 0) === 1;
@@ -79,7 +88,7 @@ $fmtDate = function ($v) {
 };
 
 $pdf = new TCPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
-$pdf::SetAuthor('شركة صباح النور');
+$pdf::SetAuthor(config('brand.name_ar'));
 $pdf::SetTitle($docTitle . ' ' . ($receipt->receipt_no ?? ''));
 $pdf::SetPrintHeader(false);
 $pdf::SetPrintFooter(false);
@@ -118,7 +127,7 @@ $html = '<table cellpadding="0" style="width:100%;">'
     . ($hasLogo ? '<img src="' . $logo . '" width="62" height="62" />' : '')
     . '</td>'
     . '<td width="46%" style="vertical-align:middle;">'
-    . '<span style="font-size:15px;font-weight:bold;color:' . $EMERALD_DEEP . ';">شركة صباح النور</span><br />'
+    . '<span style="font-size:15px;font-weight:bold;color:' . $EMERALD_DEEP . ';">' . e(config('brand.name_ar')) . '</span><br />'
     . '<span style="font-size:8px;color:' . $MUTED . ';">SABAH ALNOOR CO.</span>'
     . '</td>'
     . '<td width="40%" style="vertical-align:middle;text-align:left;">'
@@ -219,7 +228,7 @@ $html .= '<br /><table cellpadding="0" style="width:100%;"><tr>'
     . '<td style="background-color:' . $LINE . ';height:1px;line-height:1px;font-size:1px;">&nbsp;</td>'
     . '</tr></table>'
     . '<table cellpadding="4" style="width:100%;"><tr>'
-    . '<td width="58%" style="font-size:8px;color:' . $MUTED . ';">شركة صباح النور — Sabah Alnoor CO. · سند صادر إلكترونياً من النظام المالي</td>'
+    . '<td width="58%" style="font-size:8px;color:' . $MUTED . ';">' . e(config('brand.name_ar')) . ' — ' . e(config('brand.name_en')) . ' · سند صادر إلكترونياً من النظام المالي</td>'
     . '<td width="42%" style="font-size:8px;color:' . $MUTED . ';text-align:left;">تاريخ الطباعة: ' . \Carbon\Carbon::now()->format('d-m-Y H:i') . '</td>'
     . '</tr></table>';
 

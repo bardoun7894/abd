@@ -11,7 +11,7 @@
         :root{
             --paper:#F4EEE1; --paper-2:#FBF7EE; --card:#FFFDF8;
             --ink:#23201A; --ink-soft:#6E6557; --line:#E4DBC8;
-            --emerald:#0E6B4F; --emerald-deep:#0A4F3A; --emerald-tint:#E4EFE9;
+            --emerald:var(--sn-emerald); --emerald-deep:var(--sn-emerald-deep); --emerald-tint:var(--sn-emerald-tint);
             --amber:#B5780A; --amber-tint:#F6ECD4;
             --rust:#A93B2C; --rust-tint:#F4E2DC;
             --gold:#C19A45;
@@ -142,8 +142,8 @@
         .scanner .ln{height:6px; border-radius:3px; background:var(--line); margin-bottom:12px}
         .scanner .ln:nth-child(2){width:70%}.scanner .ln:nth-child(4){width:85%}.scanner .ln:nth-child(5){width:60%}
         .scanner .beam{position:absolute; left:0; right:0; height:38px; top:-38px;
-            background:linear-gradient(180deg,transparent,rgba(14,107,79,.35),transparent);
-            box-shadow:0 0 18px 4px rgba(14,107,79,.4); animation:scan 1.5s ease-in-out infinite}
+            background:linear-gradient(180deg,transparent,rgba(20,119,174,.35),transparent);
+            box-shadow:0 0 18px 4px rgba(20,119,174,.4); animation:scan 1.5s ease-in-out infinite}
         @keyframes scan{0%{top:-10%}100%{top:100%}}
         .overlay .label{color:#fff; font-family:'Reem Kufi'; font-size:18px; margin-top:24px; text-align:center}
         .overlay .label small{display:block; opacity:.8; font-size:13px; font-family:'IBM Plex Sans Arabic'; margin-top:6px}

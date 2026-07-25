@@ -21,8 +21,8 @@
         .inv-scan .ln{height:6px;border-radius:3px;background:var(--sn-line);margin-bottom:11px}
         .inv-scan .ln:nth-child(2){width:72%}.inv-scan .ln:nth-child(4){width:86%}.inv-scan .ln:nth-child(5){width:55%}
         .inv-scan .beam{position:absolute;left:0;right:0;height:34px;top:-34px;
-            background:linear-gradient(180deg,transparent,rgba(14,107,79,.55),transparent);
-            box-shadow:0 0 18px 4px rgba(14,107,79,.45);animation:invscan 1.4s ease-in-out infinite}
+            background:linear-gradient(180deg,transparent,rgba(20,119,174,.55),transparent);
+            box-shadow:0 0 18px 4px rgba(20,119,174,.45);animation:invscan 1.4s ease-in-out infinite}
         @keyframes invscan{0%{top:-12%}100%{top:104%}}
         .inv-ov .lbl{color:#fff;text-align:center;margin-top:22px;font-weight:700;font-size:17px}
         .inv-ov .lbl small{display:block;opacity:.8;font-weight:400;font-size:13px;margin-top:5px}

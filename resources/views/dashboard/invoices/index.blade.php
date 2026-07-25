@@ -365,7 +365,7 @@
         .inv-log .badge-light-success {
             color: var(--sn-emerald-deep) !important;
             background-color: var(--sn-emerald-tint) !important;
-            border-color: rgba(10, 79, 58, .15);
+            border-color: rgba(37, 67, 93, .15);
         }
         .inv-log .badge-light-warning {
             /* darkened amber (mixed with black) — plain --sn-amber on

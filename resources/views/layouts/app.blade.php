@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head><base href="../../">
-<title>شركة صباح النور || النظام المالي - @yield('title','لوحة التحكم')</title>
-<meta name="description" content="شركة صباح النور || النظام المالي" />
+<title>{{ config('brand.name_ar') }} || النظام المالي - @yield('title','لوحة التحكم')</title>
+<meta name="description" content="{{ config('brand.name_ar') }} || النظام المالي" />
 <meta name="keywords" content="" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <meta charset="utf-8" />
 <meta property="og:locale:alternate" content="ar_SA" />
-<meta property="og:type" content="شركة صباح النور || النظام المالي" />
-<meta property="og:title" content="شركة صباح النور || النظام المالي" />
+<meta property="og:type" content="{{ config('brand.name_ar') }} || النظام المالي" />
+<meta property="og:title" content="{{ config('brand.name_ar') }} || النظام المالي" />
 <meta property="og:url" content="{{ url('/') }}" />
 <meta property="og:site_name" content="" />
 <link rel="canonical" href="" />
@@ -21,6 +21,12 @@
      Metronic bundle + dinnext so it wins on cascade order. Poppins link removed:
      it was Latin-only and never touched Arabic content. --}}
 <link href="{{asset('css/app-ui.css')}}?v={{ config('global.ver.version_css') }}" rel="stylesheet" type="text/css" />
+{{-- Per-instance brand theme. app-ui.css is the نور الصباح blue baseline; an
+     override file loads AFTER it (cascade order is load-bearing) to restore a
+     different company identity. Emitted only when a non-default theme is set. --}}
+@if (config('brand.theme') && config('brand.theme') !== 'noor-blue')
+<link href="{{asset('css/brand/'.config('brand.theme').'.css')}}?v={{ config('global.ver.version_css') }}" rel="stylesheet" type="text/css" />
+@endif
 <link href="{{asset('assets/flatpickr/dist/flatpickr.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/flatpickr/dist/ie.css')}}" rel="stylesheet" type="text/css" />
 <link href="{{asset('assets/flatpickr/dist/plugins/confirmDate/confirmDate.css')}}" rel="stylesheet" type="text/css" />
@@ -150,7 +156,12 @@
                         <div data-kt-swapper="true" data-kt-swapper-mode="prepend" data-kt-swapper-parent="{default: '#kt_content_container', 'lg': '#kt_toolbar_container'}" class="flex-wrap mb-5 page-title d-flex align-items-center me-3 mb-lg-0">
                                <h1 class="my-1 d-flex align-items-center fs-6 fw-bolder" style="color: #ffb822;">@yield('module','المحوسب')</h1>
                             <span class="mx-2 h-20px border-start border-white border-opacity-25 ms-3"></span>
-                            <h1 class="my-1 d-flex align-items-center text-white fs-7 fw-bold">@yield('sub',"شركة صباح النور || النظام المالي")</h1>
+                            {{-- NOTE: a @yield default is a PHP expression, NOT a Blade region.
+                                 Writing "{{ config(...) }}" here compiles to a literal
+                                 "<?php echo ... ?>" INSIDE a double-quoted string, which PHP
+                                 then prints verbatim on the 13 views that don't define
+                                 @section('sub'). Concatenate in PHP instead. --}}
+                            <h1 class="my-1 d-flex align-items-center text-white fs-7 fw-bold">@yield('sub', config('brand.name_ar').' || النظام المالي')</h1>
                             <span class="mx-2 h-20px border-start border-white border-opacity-25 ms-3"></span>
                             <ul class="my-1 breadcrumb breadcrumb-separatorless fs-7">
                                 <li class="breadcrumb-item">
@@ -169,7 +180,7 @@
             <div class="py-4 footer d-flex flex-lg-column" id="kt_footer">
                 <div class="container-fluid d-flex flex-column flex-md-row align-items-center justify-content-between">
                     <div class="order-2 text-dark order-md-1">
-                        <a href="#" target="_blank" class="text-hover-primary fw-bolder text-dark">تم التطوير لدى شركة صباح النور</a>
+                        <a href="#" target="_blank" class="text-hover-primary fw-bolder text-dark">تم التطوير لدى {{ config('brand.name_ar') }}</a>
                         <span class="me-1 fw-bolder text-dark">© {{date("Y")}}</span>
                     </div>
                 </div>
