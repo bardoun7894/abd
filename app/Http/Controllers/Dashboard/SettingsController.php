@@ -9,6 +9,7 @@ use App\Services\Settings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Perm;
 
 /**
@@ -329,17 +330,23 @@ class SettingsController extends Controller
                 ->leftJoin('users as u', 'u.id', '=', 'l.user_id')
                 ->where('l.created_at', '>=', $since)
                 ->select('l.user_id',
-                    DB::raw("COALESCE(NULLIF(u.name, ''), NULLIF(u.emp_name, ''), '') as uname"),
+                    // `users` has no emp_name column (that's on `workers`) — referencing it
+                    // made this whole query throw, and the blanket catch below turned that
+                    // into a permanently empty "حسب المستخدم" card with no error anywhere.
+                    DB::raw("COALESCE(NULLIF(u.name, ''), '') as uname"),
                     DB::raw("SUM(CASE WHEN l.outcome = 'success' THEN 1 ELSE 0 END) as calls"),
                     DB::raw('SUM(CASE WHEN l.cache_hit = 1 THEN 1 ELSE 0 END) as hits'),
                     DB::raw('SUM(l.input_tokens) as in_tok'),
                     DB::raw('SUM(l.output_tokens) as out_tok'),
                     DB::raw('SUM(CASE WHEN l.cache_hit = 0 THEN l.est_cost_usd ELSE 0 END) as cost'),
                     DB::raw("SUM(CASE WHEN l.outcome = 'failure' THEN 1 ELSE 0 END) as failures"))
-                ->groupBy('l.user_id', 'u.name', 'u.emp_name')
+                ->groupBy('l.user_id', 'u.name')
                 ->orderByDesc('cost')->limit(50)->get();
         } catch (\Throwable $e) {
-            // tables not migrated yet → empty state
+            // Fail-open: tables not migrated yet → empty state. Log it, though —
+            // a swallowed schema error here is indistinguishable from "no data yet",
+            // which is exactly how the u.emp_name bug above went unnoticed.
+            Log::warning('aiUsage query failed, showing empty state: '.$e->getMessage());
         }
 
         return view('dashboard.settings.ai_usage', compact('page_title', 'stats', 'byModule', 'byDay', 'byUser', 'days'));
