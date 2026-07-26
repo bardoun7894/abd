@@ -179,7 +179,13 @@ it('prints the voucher elements a Gulf سند is expected to carry', function ()
     expect($src)->toContain('تفقيط');            // figures AND words
     expect($src)->toContain('ArabicNumberToWords');
     expect($src)->toContain('أمين الصندوق');      // signature block
-    expect($src)->toContain('صادر إلكترونياً');    // footer provenance
+    expect($src)->toContain('تاريخ الطباعة');      // footer
+
+    // The سند must NOT announce its own machine origin. The footer used to end
+    // with "سند صادر إلكترونياً من النظام المالي"; the client's objection is the
+    // same one raised about the «ملاحظة» row — it should read as a document the
+    // company issued, not one a system emitted (2026-07-26).
+    expect($src)->not->toContain('صادر إلكترونياً');
 
     // Direction-aware wording — a صرف voucher must not say "المبلغ المستلم".
     expect($src)->toContain('سند صرف');

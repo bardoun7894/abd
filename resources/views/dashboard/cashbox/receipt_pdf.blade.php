@@ -271,11 +271,28 @@ $html .= '<br /><br /><table cellpadding="4" style="width:100%;"><tr>'
     . '</tr></table>';
 
 /* ---- 7. footer ------------------------------------------------------------ */
+/*
+ * The footer carries the company's name and nothing else about where the
+ * document came from.
+ *
+ * It used to end with a line stating the سند had been issued electronically by
+ * the financial system. That is the same
+ * objection the client raised about the «ملاحظة» row (2026-07-26): the سند
+ * should read as a document the company issued, not one a system emitted. A
+ * printed voucher that announces its own machine origin invites the recipient
+ * to treat it as a computer print-out rather than a signed company instrument —
+ * and it is redundant besides, since the three signature lines above are what
+ * actually give the سند its standing.
+ *
+ * "تاريخ الطباعة" stays: a print timestamp is ordinary on any paper financial
+ * document, says nothing about how the document was produced, and is genuinely
+ * useful when two copies of the same سند are in circulation.
+ */
 $html .= '<br /><table cellpadding="0" style="width:100%;"><tr>'
     . '<td style="background-color:' . $LINE . ';height:1px;line-height:1px;font-size:1px;">&nbsp;</td>'
     . '</tr></table>'
     . '<table cellpadding="4" style="width:100%;"><tr>'
-    . '<td width="58%" style="font-size:8px;color:' . $MUTED . ';">' . e(config('brand.name_ar')) . ' — ' . e(config('brand.name_en')) . ' · سند صادر إلكترونياً من النظام المالي</td>'
+    . '<td width="58%" style="font-size:8px;color:' . $MUTED . ';">' . e(config('brand.name_ar')) . ' — ' . e(config('brand.name_en')) . '</td>'
     . '<td width="42%" style="font-size:8px;color:' . $MUTED . ';text-align:left;">تاريخ الطباعة: ' . \Carbon\Carbon::now()->format('d-m-Y H:i') . '</td>'
     . '</tr></table>';
 
