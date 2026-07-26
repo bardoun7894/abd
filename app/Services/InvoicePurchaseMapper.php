@@ -38,6 +38,21 @@ class InvoicePurchaseMapper
         $date = $a['invoice_date'] ?? null;
         $date = $date ? substr((string) $date, 0, 10) : null; // normalise date / datetime -> Y-m-d
 
+        /*
+         * purchase.note carries the VAT breakdown and NOTHING about where the row
+         * came from.
+         *
+         * It used to end with a part naming the extraction batch and page. The
+         * client's standing instruction (2026-07-26, the third time they raised
+         * it — after the دفعات note and the سند footer) is that a record must not
+         * advertise that a machine produced it: "اجعلها حالها من حال مدخلات
+         * الموظف". This note is shown verbatim on the المشتريات screen, so that
+         * part announced the automatic posting to everyone who opened the list.
+         *
+         * The link back to the extraction is NOT lost — AuditLogger records the
+         * invoice→purchase approval with the batch id, and the invoice row itself
+         * keeps its own mapping columns. Only the human-facing note changed.
+         */
         $noteParts = [];
         if (filled($a['amount_before_vat'] ?? null)) {
             $noteParts[] = 'قبل الضريبة: '.$a['amount_before_vat'];
@@ -45,7 +60,6 @@ class InvoicePurchaseMapper
         if (filled($a['vat_amount'] ?? null)) {
             $noteParts[] = 'ضريبة: '.$a['vat_amount'];
         }
-        $noteParts[] = 'مُرحّل آلياً من استخراج الفواتير (دفعة #'.($a['batch_id'] ?? '?').' صفحة '.($a['page_number'] ?? '?').')';
 
         $dueDate = ($a['due_date'] ?? null) ? substr((string) $a['due_date'], 0, 10) : null;
 
