@@ -49,5 +49,16 @@ return [
         'deep' => env('BRAND_PDF_DEEP', '#25435D'),
         'tint' => env('BRAND_PDF_TINT', '#E8F1F7'),
         'line' => env('BRAND_PDF_LINE', '#C6D4DF'),
+
+        /*
+         * Text and accent tokens. Only the four above are exposed in Settings →
+         * هوية الشركة (App\Services\Settings::applyToConfig) because they are the
+         * ones that visibly carry the brand; these are env-only so an instance
+         * CAN retune them without adding four more admin fields nobody uses.
+         */
+        'ink' => env('BRAND_PDF_INK', '#1B2C3A'),
+        'muted' => env('BRAND_PDF_MUTED', '#5A6B7A'),
+        'accent' => env('BRAND_PDF_ACCENT', '#F78F13'),
+        'accent_alt' => env('BRAND_PDF_ACCENT_ALT', '#60BA49'),
     ],
 ];

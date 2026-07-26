@@ -33,22 +33,26 @@ use App\Support\ArabicNumberToWords;
 
 /* ---- brand tokens ------------------------------------------------------- */
 /*
- * نور الصباح palette, sampled from the company logo so the voucher, the Excel
- * exports (App\Services\ExcelReportStyler) and the screen all match. The
- * variable names are kept ($EMERALD etc.) because they are referenced ~40 times
- * below; only the values changed — from صباح النور's emerald to نور الصباح's
- * blue/navy. Renaming them here would be a large, purely cosmetic diff on a
+ * Palette read from config('brand.pdf.*') so the voucher follows the instance's
+ * identity instead of hardcoding one company's colours. config/brand.php has
+ * carried these keys since branding was made per-instance, but this file never
+ * used them — so BOTH deployments printed نور الصباح's blue, including the one
+ * running the صباح النور emerald theme. The defaults below keep noor-alsabah
+ * rendering exactly as before when nothing is configured.
+ *
+ * The variable names are kept ($EMERALD etc.) because they are referenced ~40
+ * times below; renaming them would be a large, purely cosmetic diff on a
  * document that prints money amounts.
  */
-$EMERALD      = '#1477AE';   // logo blue   — headers, labels
-$EMERALD_DEEP = '#25435D';   // logo navy   — masthead, title bar
-$TINT         = '#e8f1f7';   // pale blue   — row fills
-$LINE         = '#c6d4df';   // blue-grey   — borders
-$INK          = '#1b2c3a';   // dark navy   — body text
-$MUTED        = '#5a6b7a';   // slate       — secondary text
-$AMBER        = '#f78f13';   // logo orange — sun-ray accent
-$GREEN        = '#60ba49';   // logo green  — leaf/arrow accent
-$DANGER       = '#a01515';
+$EMERALD      = config('brand.pdf.primary', '#1477AE');  // headers, labels
+$EMERALD_DEEP = config('brand.pdf.deep', '#25435D');     // masthead, title bar
+$TINT         = config('brand.pdf.tint', '#e8f1f7');     // row fills
+$LINE         = config('brand.pdf.line', '#c6d4df');     // borders
+$INK          = config('brand.pdf.ink', '#1b2c3a');      // body text
+$MUTED        = config('brand.pdf.muted', '#5a6b7a');    // secondary text
+$AMBER        = config('brand.pdf.accent', '#f78f13');   // sun-ray accent
+$GREEN        = config('brand.pdf.accent_alt', '#60ba49'); // leaf/arrow accent
+$DANGER       = '#a01515';                               // void banner — never branded
 
 $isVoid = (int) ($receipt->is_void ?? 0) === 1;
 $isIn = ($receipt->direction ?? 'in') === 'in';
@@ -128,7 +132,12 @@ $html = '<table cellpadding="0" style="width:100%;">'
     . '</td>'
     . '<td width="46%" style="vertical-align:middle;">'
     . '<span style="font-size:15px;font-weight:bold;color:' . $EMERALD_DEEP . ';">' . e(config('brand.name_ar')) . '</span><br />'
-    . '<span style="font-size:8px;color:' . $MUTED . ';">SABAH ALNOOR CO.</span>'
+    // The English name must come from config too. It was left hardcoded when the
+    // Arabic one beside it was parameterised, so this instance printed its own
+    // Arabic name next to the OTHER company's English name — on a financial
+    // document. mb_strtoupper (not strtoupper) so a non-ASCII name is not
+    // mangled byte-wise.
+    . '<span style="font-size:8px;color:' . $MUTED . ';">' . e(mb_strtoupper(config('brand.name_en'), 'UTF-8')) . '</span>'
     . '</td>'
     . '<td width="40%" style="vertical-align:middle;text-align:left;">'
     . '<span style="font-size:21px;font-weight:bold;color:' . $EMERALD . ';">' . $docTitle . '</span><br />'

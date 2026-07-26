@@ -145,20 +145,29 @@ it('carries the brand identity: logo, palette tokens and the logo accent', funct
     expect($src)->toContain('assets/media/logos/logo.jpg');
     expect($src)->toContain('$hasLogo');
 
-    // The company name is NO LONGER a literal here. Since the brand was made
-    // per-instance it is read from config, because one codebase now prints
-    // vouchers for more than one company — hardcoding a name would put the
-    // wrong company on the other instance's سند.
+    // NEITHER company name may be a literal. One codebase prints vouchers for
+    // more than one company, so a hardcoded name puts the WRONG company on a
+    // financial document — which is exactly what happened: the Arabic name was
+    // parameterised and the English one was left as 'SABAH ALNOOR CO.', so the
+    // نور الصباح instance printed its own Arabic name beside the other
+    // company's English one.
     expect($src)->toContain("config('brand.name_ar')");
+    expect($src)->toContain("config('brand.name_en')");
+    expect($src)->not->toContain('SABAH ALNOOR CO.');
 
-    // Palette matches the active theme's tokens (نور الصباح blue/navy, sampled
-    // from the logo) so a printed سند matches the screen it came from.
-    expect($src)->toContain('#1477AE');
-    expect($src)->toContain('#25435D');
-    expect($src)->toContain('#e8f1f7');
+    // Palette comes from config('brand.pdf.*') — hardcoding it made BOTH
+    // instances print نور الصباح's blue, including the one on the emerald theme.
+    expect($src)->toContain("config('brand.pdf.primary'");
+    expect($src)->toContain("config('brand.pdf.deep'");
+    expect($src)->toContain("config('brand.pdf.tint'");
+    expect($src)->toContain("config('brand.pdf.accent'");
 
-    // Single accent sampled from the logo's sunrise.
-    expect($src)->toContain('#f78f13');
+    // Every key the blade reads must exist in config, so the fallback in the
+    // view is a safety net and not the only thing keeping the voucher readable.
+    foreach (['primary', 'deep', 'tint', 'line', 'ink', 'muted', 'accent', 'accent_alt'] as $key) {
+        expect(config("brand.pdf.$key"))->toBeString()
+            ->and(config("brand.pdf.$key"))->toMatch('/^#[0-9A-Fa-f]{6}$/');
+    }
 });
 
 it('prints the voucher elements a Gulf سند is expected to carry', function () {
