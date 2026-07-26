@@ -78,6 +78,19 @@ That is why the worker lives in `deploy/queue-cron.sh` (must be `chmod +x`) —
 a single executable path with nothing for hPanel's argv splitting to mangle.
 Read that file's header before changing it.
 
+**How long is that `timeout <n>`?** Measured 2026-07-26 with a throwaway cron
+pointing at a script that appended a timestamp every 5s: it ran the **full 1000
+seconds and exited on its own, never killed**. So `n > 1000s` — not a constraint
+for realistic batches (34 pages ≈ 130s; the 100+ pages the upload page promises
+≈ 350s). The binding limits are the job's own `$timeout` (1800s) and
+`--max-time=290`, and `--max-time` only stops a worker picking up *new* jobs — it
+never interrupts a job already running, so a single 350s batch completes fine.
+
+Same probe showed Hostinger **skips a scheduled run while the previous one is
+still active** (a `*/5` probe that ran 1000s produced exactly one process, not
+three). So `flock` in the scripts is belt-and-braces, not the only guard — keep
+it anyway, don't rely on undocumented host behaviour.
+
 Verify end to end (a no-op job — batch 999999 does not exist, so zero AI calls):
 ```bash
 php -r '...ProcessInvoiceBatch::dispatch(999999);'   # jobs count must go 0 -> 1
