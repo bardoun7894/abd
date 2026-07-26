@@ -131,7 +131,7 @@ it('renders a valid PDF for a lease receipt carrying contract/payment/period fie
     expect(strlen($out))->toBeGreaterThan(500);
 });
 
-it('carries the brand identity: logo, app emerald tokens and the logo amber accent', function () {
+it('carries the brand identity: logo, palette tokens and the logo accent', function () {
     $src = receiptPdfBladeSource();
 
     // The company logo, not just a typed company name. logo-voucher.png is
@@ -144,20 +144,21 @@ it('carries the brand identity: logo, app emerald tokens and the logo amber acce
     // missing asset can never blank the masthead.
     expect($src)->toContain('assets/media/logos/logo.jpg');
     expect($src)->toContain('$hasLogo');
-    expect($src)->toContain('شركة صباح النور');
 
-    // Structure uses the SAME emerald tokens as the UI (public/css/app-ui.css),
-    // so a printed سند matches the screen it came from.
-    expect($src)->toContain('#0e6b4f');
-    expect($src)->toContain('#0a4f3a');
-    expect($src)->toContain('#e4efe9');
+    // The company name is NO LONGER a literal here. Since the brand was made
+    // per-instance it is read from config, because one codebase now prints
+    // vouchers for more than one company — hardcoding a name would put the
+    // wrong company on the other instance's سند.
+    expect($src)->toContain("config('brand.name_ar')");
 
-    // Single accent sampled from the logo's wheat/sunrise.
-    expect($src)->toContain('#e0a020');
+    // Palette matches the active theme's tokens (نور الصباح blue/navy, sampled
+    // from the logo) so a printed سند matches the screen it came from.
+    expect($src)->toContain('#1477AE');
+    expect($src)->toContain('#25435D');
+    expect($src)->toContain('#e8f1f7');
 
-    $css = file_get_contents(base_path('public/css/app-ui.css'));
-    expect($css)->toContain('--sn-emerald: #0e6b4f');
-    expect($css)->toContain('--sn-emerald-deep: #0a4f3a');
+    // Single accent sampled from the logo's sunrise.
+    expect($src)->toContain('#f78f13');
 });
 
 it('prints the voucher elements a Gulf سند is expected to carry', function () {
@@ -174,6 +175,31 @@ it('prints the voucher elements a Gulf سند is expected to carry', function ()
     // Direction-aware wording — a صرف voucher must not say "المبلغ المستلم".
     expect($src)->toContain('سند صرف');
     expect($src)->toContain('المبلغ المصروف');
+});
+
+it('labels the received_by name «محرر السند», not «استلمه»/«صرفه»', function () {
+    $src = receiptPdfBladeSource();
+
+    // cash_receipt.received_by is stamped with Auth::id() wherever a سند is
+    // minted, so it is the employee who WROTE the voucher — never a captured
+    // recipient. «استلمه» claimed this person received the money and «صرفه»
+    // that they paid it out; the app stores neither fact (client report
+    // 2026-07-26). The counterparty is the row above: اسم الدافع / المستفيد.
+    expect($src)->toContain("\$row('محرر السند', \$receivedByName");
+
+    // The retired labels must not come back as live output. They survive only
+    // inside the explanatory comment, so count the code lines specifically.
+    $codeLines = array_filter(
+        explode("\n", $src),
+        fn ($line) => ! str_starts_with(ltrim($line), '*') && ! str_starts_with(ltrim($line), '/*')
+    );
+    $code = implode("\n", $codeLines);
+    expect($code)->not->toContain("'استلمه'");
+    expect($code)->not->toContain("'صرفه'");
+
+    // The counterparty row is still printed and still direction-aware.
+    expect($src)->toContain('اسم الدافع');
+    expect($src)->toContain('المستفيد');
 });
 
 it('renders a valid PDF for a VOID receipt, with the reason banner and watermark', function () {
