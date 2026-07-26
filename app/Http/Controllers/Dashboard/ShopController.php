@@ -694,12 +694,21 @@ class ShopController extends Controller
      * shop document form (hidden fields). Reuses the pure LeaseScheduleGenerator.
      * Safe/idempotent: does nothing when inputs are missing or the shop already has
      * payments — it must never overwrite manually-entered دفعات.
+     *
+     * REPORTS ITS OUTCOME (client feedback 2026-07-26: "لما جئت لترحيل الدفعات لم
+     * تُرحل، لا أدري لماذا"). This method used to `return` silently at five separate
+     * points; two of them only wrote to laravel.log and three wrote nothing at all,
+     * so a save that generated no دفعات was indistinguishable from one that did.
+     * It now returns a human-readable Arabic reason that updfile() appends to the
+     * save confirmation, so the operator always knows whether the schedule was
+     * created and, if not, exactly what stopped it.
+     *
+     * @return string|null Arabic outcome to show the user, or null when this save
+     *                     carried no lease-schedule data at all (the ordinary case
+     *                     for saves unrelated to a lease — stays silent, no nagging).
      */
-    private function maybeGenerateRentPayments(Request $request, $shop_id): void
+    private function maybeGenerateRentPayments(Request $request, $shop_id): ?string
     {
-        if (! $shop_id) {
-            return;
-        }
         $numPayments = (int) $request->input('rent_sched_num', 0);
         $rentValue = (float) $request->input('rent_sched_rentval', 0);
         $paymentValue = $request->input('rent_sched_value');
@@ -707,14 +716,26 @@ class ShopController extends Controller
         $startDate = trim((string) $request->input('rent_sdt', ''));
         $endDate = trim((string) $request->input('rent_edt', ''));
 
-        // Need at least a start date and something to size the schedule with.
-        if ($startDate === '' || ($numPayments < 1 && $rentValue <= 0 && ! is_numeric($paymentValue))) {
-            return;
+        // Did this submission carry any lease-schedule payload at all? If not, the
+        // save has nothing to do with a lease and must stay silent.
+        $hasScheduleInputs = $numPayments > 0 || $rentValue > 0 || is_numeric($paymentValue);
+        if (! $hasScheduleInputs) {
+            return null;
+        }
+
+        if (! $shop_id) {
+            return 'لم تُنشأ دفعات الإيجار: رقم المحل غير محدد.';
+        }
+
+        // Need a start date to anchor the schedule.
+        if ($startDate === '') {
+            return 'لم تُنشأ دفعات الإيجار: «تاريخ بداية العقد» فارغ. أدخل تاريخ البداية ثم احفظ مرة أخرى.';
         }
 
         // Never duplicate: skip if this shop already has any payment rows.
         if (DB::table('shop_rentpay')->where('shop_id', $shop_id)->exists()) {
-            return;
+            return 'لم تُنشأ دفعات الإيجار: هذا المحل لديه دفعات مسجّلة بالفعل، ولا يُسمح باستبدالها آلياً. '
+                . 'احذف الدفعات القديمة من «إدارة الدفعات» ثم احفظ مرة أخرى إن أردت توليدها من العقد.';
         }
 
         $contract = [
@@ -737,7 +758,9 @@ class ShopController extends Controller
                     'contract' => $contract,
                 ]);
 
-                return;
+                return 'لم تُنشأ دفعات الإيجار: جدول الدفعات لا يتوافق مع بيانات العقد — '
+                    . implode(' ', $errors)
+                    . ' صحّح قيمة الإيجار أو عدد الدفعات أو التواريخ ثم احفظ مرة أخرى.';
             }
         } catch (\Throwable $e) {
             Log::warning('Shop rent payment auto-generation skipped: schedule generation failed.', [
@@ -746,7 +769,7 @@ class ShopController extends Controller
                 'contract' => $contract,
             ]);
 
-            return; // bad/missing start date or unparseable input — skip auto-generation
+            return 'لم تُنشأ دفعات الإيجار: تعذّر توليد الجدول من بيانات العقد (تأكد من صحة تاريخ البداية وقيمة الإيجار).';
         }
 
         $now = Carbon::now();
@@ -755,7 +778,13 @@ class ShopController extends Controller
                 'shop_id' => $shop_id,
                 'rentpay_dt' => $row['due_date'],
                 'rentpay_price' => $row['amount'],
-                'rentpay_note' => 'مُولّد آلياً من عقد الإيجار (المستخرَج بالذكاء الاصطناعي)',
+                // Deliberately NULL, exactly like a manually-added دفعة (client
+                // feedback 2026-07-26: "اجعلها حالها من حال مدخلات الموظف").
+                // Every existing row on both live instances carries a NULL note,
+                // so an AI-generated row is now indistinguishable in the UI. The
+                // provenance is not lost — it stays in laravel.log and in the
+                // create_user/created_at columns.
+                'rentpay_note' => null,
                 'rentpay_status' => 'unpaid',
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -763,6 +792,14 @@ class ShopController extends Controller
                 'update_user' => Auth::user()->id,
             ]);
         }
+
+        $count = count($schedule['rows']);
+        $msg = 'تم إنشاء ' . $count . ' دفعة إيجار من بيانات العقد.';
+        if (! empty($schedule['warnings'])) {
+            $msg .= ' تنبيه: ' . implode(' ', $schedule['warnings']);
+        }
+
+        return $msg;
     }
 
     /**
@@ -1370,6 +1407,9 @@ class ShopController extends Controller
                     $result['message_out'] = '';
                 } else {
                     $ERROR_FLAG = 0;
+                    // Set by maybeGenerateRentPayments() further down; initialised here
+                    // so the success message below never touches an undefined variable.
+                    $rentPayOutcome = null;
                     $user_photo = '';
                     $commefile_url = '';
                     $comme_attach_name = '';
@@ -1614,7 +1654,9 @@ class ShopController extends Controller
                     // the rent payments (دفعات الإيجار) into shop_rentpay so they show up in
                     // "ادارة دفعات الايجار". Only when the form carried schedule inputs, a start
                     // date exists, and the shop has no payments yet (never overwrite/duplicate).
-                    $this->maybeGenerateRentPayments($request, $shop_id);
+                    // The outcome is reported back to the operator below — see the method's
+                    // docblock for why silence was itself the bug.
+                    $rentPayOutcome = $this->maybeGenerateRentPayments($request, $shop_id);
 
                     $result2 = DB::table('shop_defence')
                         ->updateOrInsert(
@@ -1704,7 +1746,10 @@ class ShopController extends Controller
 
 
                     $result['status'] = $result2;
-                    $result['message_out'] = 'تم الحفظ بنجاح';
+                    // Append the rent-payment generation outcome so a save that
+                    // produced no دفعات never looks identical to one that did.
+                    $result['message_out'] = 'تم الحفظ بنجاح'
+                        . (! empty($rentPayOutcome) ? ' — ' . $rentPayOutcome : '');
                     $result['message'] = '';
 
                 }

@@ -192,7 +192,19 @@ $details = $row('اسم المحل', $receipt->shop_name ?? null)
     . $row('رقم الدفعة', $paymentNo)
     . $row('الفترة المستحقة', $period)
     . $row($isIn ? 'اسم الدافع' : 'المستفيد', $receipt->payer_name ?? null)
-    . $row($isIn ? 'استلمه' : 'صرفه', $receivedByName ?? null)
+    /*
+     * «محرر السند» — NOT «استلمه»/«صرفه» (client feedback 2026-07-26).
+     *
+     * cash_receipt.received_by is stamped with Auth::id() at creation time in
+     * every path that mints a سند (ShopController::rentpayReceipt,
+     * CashboxController::store, InvoicePurchaseMapper). It is therefore always
+     * the employee who WROTE the voucher, and never a captured recipient — the
+     * app has no field for one. Labelling it «استلمه» on a سند قبض asserted that
+     * this person received the money, and «صرفه» on a سند صرف asserted they paid
+     * it out; both are claims the stored data does not support. The counterparty
+     * is already printed one row above as «اسم الدافع» / «المستفيد».
+     */
+    . $row('محرر السند', $receivedByName ?? null)
     . $row('المرجع', trim(($receipt->source_type ?? '') . ' #' . ($receipt->source_id ?? '')))
     . $row('ملاحظة', $receipt->note ?? null);
 

@@ -93,13 +93,25 @@ class LeaseController extends Controller
             return response()->json(['status' => false, 'message_out' => $e->getMessage()], 422);
         }
 
+        // `mimes:pdf` is deliberately avoided — it resolves the type through the
+        // `fileinfo` extension, which rejected valid PDFs on the live shared host
+        // and told the user "ليس ملف PDF" about a file that was one (client
+        // feedback 2026-07-26). Mirrors InvoiceController::store.
         $validated = $request->validate([
-            'pdf' => 'required|file|mimes:pdf|max:51200', // 50 MB
+            'pdf' => 'required|file|max:51200', // 50 MB
         ]);
 
         $file = $request->file('pdf');
         if (! $file->isValid()) {
             return response()->json(['status' => false, 'message_out' => 'الملف غير صالح، حاول مرة أخرى'], 422);
+        }
+
+        if (! \App\Support\UploadSignature::isPdf($file)) {
+            return response()->json([
+                'status' => false,
+                'message_out' => 'الملف المرفوع ليس PDF صالحاً. تأكد أن الملف يفتح لديك، '
+                    . 'أو أعد حفظه كـ PDF ثم أعد الرفع.',
+            ], 422);
         }
 
         $dir = public_path('uploads/leases/pdf');

@@ -419,13 +419,27 @@ class InvoiceController extends Controller
         }
 
         // Spec 002 FR-101 — accept PDF OR a scanned image (JPG/PNG/JPEG/WEBP).
+        //
+        // The `mimes:` rule is deliberately NOT used here: it resolves the type
+        // through the `fileinfo` extension, which rejected valid PDFs on the live
+        // shared host and told the user "ليس ملف PDF" about a file that was one
+        // (client feedback 2026-07-26). The format's own magic number is checked
+        // below instead — see App\Support\UploadSignature.
         $validated = $request->validate([
-            'pdf' => 'required|file|mimes:pdf,jpg,jpeg,png,webp|max:51200', // 50 MB
+            'pdf' => 'required|file|max:51200', // 50 MB
         ]);
 
         $file = $request->file('pdf');
         if (! $file->isValid()) {
             return response()->json(['status' => false, 'message_out' => 'الملف غير صالح، حاول مرة أخرى'], 422);
+        }
+
+        if (! \App\Support\UploadSignature::isPdfOrImage($file)) {
+            return response()->json([
+                'status' => false,
+                'message_out' => 'الملف المرفوع ليس PDF ولا صورة صالحة. تأكد أن الملف يفتح لديك، '
+                    . 'أو أعد حفظه/مسحه ضوئياً كـ PDF ثم أعد الرفع.',
+            ], 422);
         }
 
         $dir = public_path('uploads/invoices/pdf');

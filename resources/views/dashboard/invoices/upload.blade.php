@@ -67,6 +67,7 @@
     @include('dashboard.partials.ai-page-styles')
 @endsection
 @section('scripts')
+    @include('dashboard.partials.ai-upload-error')
     <script>
         $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') } });
         var drop = document.getElementById('drop'), pdf = document.getElementById('pdf'), fname = document.getElementById('fname');
@@ -78,18 +79,28 @@
         $('#up_form').on('submit', function (e) {
             e.preventDefault();
             if (!pdf.files.length) { showErr('اختر ملف PDF أولاً'); return; }
-            var fd = new FormData(this);
+            var form = this;
+            // Only claim "this is not a PDF" when the bytes actually say so.
+            // true = this endpoint also accepts scanned images (Spec 002 FR-101).
+            aiAssertUploadType(pdf.files[0], true, function (pdfErr) {
+                if (pdfErr) { showErr(pdfErr); return; }
+                aiSubmitUpload(form);
+            });
+        });
+
+        function aiSubmitUpload(form) {
+            var fd = new FormData(form);
             $('#btn').prop('disabled', true).text('جارٍ الرفع...');
             $('#err').addClass('d-none');
             document.getElementById('ov').classList.add('on');
-            $.ajax({ url: $(this).attr('action'), method: 'POST', data: fd, processData: false, contentType: false })
+            $.ajax({ url: $(form).attr('action'), method: 'POST', data: fd, processData: false, contentType: false })
                 .done(function (r) {
                     if (r.status) { window.location = r.redirect; }
                     else { document.getElementById('ov').classList.remove('on'); showErr(r.message_out || 'حدث خطأ'); }
                 })
-                .fail(function (x) { document.getElementById('ov').classList.remove('on'); showErr((x.responseJSON && x.responseJSON.message_out) || 'فشل الرفع، تأكد أن الملف PDF'); })
+                .fail(function (x) { document.getElementById('ov').classList.remove('on'); showErr(aiUploadError(x)); })
                 .always(function () { $('#btn').prop('disabled', false).text('استخراج الآن ←'); });
-        });
+        }
         function showErr(m) { $('#err').removeClass('d-none').text(m); }
     </script>
 @endsection
