@@ -110,7 +110,34 @@ class InvoicePipeline
         $total = count($pages);
         $batch->update(['total_pages' => $total, 'status' => 'processing']);
 
+        // Split mode persists each page the moment it is read. A later page
+        // failing — or the whole request being hard-killed at the host's request
+        // wall (~121s on the Hostinger box, unmovable from PHP) — must never
+        // discard pages already read and paid for. Before this, `persist()` ran
+        // only after the loop, so a kill on page 34 of 34 threw away all 33
+        // pages of Gemini calls AND left `reprocessMissing()` with no rows to
+        // resume from. `persist()` is updateOrCreate on (batch_id, page_number),
+        // so writing per page stays idempotent under an onlyMissing re-run.
+        // Grouped mode still accumulates: it cannot merge an invoice spanning
+        // several pages until every row is in hand.
         $rows = [];
+        $made = 0;
+        $persistRow = function (array $inv) use ($batch, &$made): void {
+            if ($this->skipExactDuplicate($batch, $inv)) {
+                return;
+            }
+            $this->persist($batch, $inv['page_number'] ?? 1, $inv, $inv['_image'] ?? null);
+            $made++;
+        };
+        $collect = function (array $inv) use ($group, &$rows, $persistRow): void {
+            if ($group) {
+                $rows[] = $inv;
+
+                return;
+            }
+            $persistRow($inv);
+        };
+
         foreach ($pages as $i => $pagePath) {
             $pageNo = $i + 1;
             $rel = str_replace(public_path().'/', '', $pagePath);
@@ -128,7 +155,7 @@ class InvoicePipeline
                         continue;
                     }
                     $remainingRel = str_replace(public_path().'/', '', $pages[$j]);
-                    $rows[] = ['page_number' => $remPageNo, 'invoice_number' => null, '_image' => $remainingRel, '_error' => 'Job deadline exceeded before AI call'];
+                    $collect(['page_number' => $remPageNo, 'invoice_number' => null, '_image' => $remainingRel, '_error' => 'Job deadline exceeded before AI call']);
                 }
                 break;
             }
@@ -157,23 +184,22 @@ class InvoicePipeline
                 $data['page_number'] = $pageNo;
                 $data['_image'] = $rel;
                 $data['processing_ms'] = (int) round((microtime(true) - $t0) * 1000); // Spec 001 FR-009 avg-time metric
-                $rows[] = $data;
+                $collect($data);
             } catch (\Throwable $e) {
-                $rows[] = ['page_number' => $pageNo, 'invoice_number' => null, '_image' => $rel, '_error' => $e->getMessage()];
+                // One page's failure is recorded against that page only; the rest
+                // of the batch keeps going and keeps what it already extracted.
+                $collect(['page_number' => $pageNo, 'invoice_number' => null, '_image' => $rel, '_error' => $e->getMessage()]);
             }
             if ($onProgress) {
                 $onProgress($pageNo, $total);
             }
         }
 
-        $invoices = $group ? $this->service->groupByInvoiceNumber($rows) : $rows;
-        $made = 0;
-        foreach ($invoices as $inv) {
-            if ($this->skipExactDuplicate($batch, $inv)) {
-                continue;
+        // Split mode already persisted every page inside the loop above.
+        if ($group) {
+            foreach ($this->service->groupByInvoiceNumber($rows) as $inv) {
+                $persistRow($inv);
             }
-            $this->persist($batch, $inv['page_number'] ?? 1, $inv, $inv['_image'] ?? null);
-            $made++;
         }
 
         return $made;
