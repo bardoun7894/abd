@@ -178,6 +178,32 @@ if (! empty($receipt->period_from) || ! empty($receipt->period_to)) {
     $period = ($fmtDate($receipt->period_from ?? null) ?? '—') . '  إلى  ' . ($fmtDate($receipt->period_to ?? null) ?? '—');
 }
 
+/*
+ * «ملاحظة» prints only a note a HUMAN wrote (client feedback 2026-07-26:
+ * "يمكنك حذفها حتى لا تظهر كأنها مرحلة آلياً — اجعلها حالها من حال مدخلات
+ * الموظف").
+ *
+ * App\Services\InvoicePurchaseMapper stamps every سند it mints with
+ * "ترحيل فاتورة مشتريات — رقم X (مشترى #N)". That is bookkeeping, not a remark:
+ * on the live instance all 114 non-empty notes are this one machine string, and
+ * printing it on the voucher advertises that the entry was posted automatically.
+ * Every other writer of cash_receipt.note (CashboxController::store,
+ * ShopController::rentpayReceipt) passes text the employee typed, which must
+ * still print.
+ *
+ * The row is hidden from the PRINTED سند only — the column is left untouched,
+ * because it is the link from the سند back to its فاتورة/مشترى and deleting it
+ * would break that trail irreversibly.
+ */
+$machineNotePrefixes = ['ترحيل فاتورة مشتريات', 'مُرحّلة إلى المشتريات', 'تم تجاوز التحقق من التكرار'];
+$noteText = trim((string) ($receipt->note ?? ''));
+foreach ($machineNotePrefixes as $prefix) {
+    if ($noteText !== '' && str_starts_with($noteText, $prefix)) {
+        $noteText = '';
+        break;
+    }
+}
+
 $paymentNo = null;
 if (! empty($receipt->payment_no)) {
     // payment_no is stored as a bare ordinal so it stays sortable/queryable —
@@ -206,7 +232,7 @@ $details = $row('اسم المحل', $receipt->shop_name ?? null)
      */
     . $row('محرر السند', $receivedByName ?? null)
     . $row('المرجع', trim(($receipt->source_type ?? '') . ' #' . ($receipt->source_id ?? '')))
-    . $row('ملاحظة', $receipt->note ?? null);
+    . $row('ملاحظة', $noteText !== '' ? $noteText : null);
 
 $html .= '<br /><table cellpadding="7" style="width:100%;">'
     . '<tr><td colspan="2" style="background-color:' . $EMERALD_DEEP . ';color:#ffffff;font-weight:bold;font-size:11px;">البيان</td></tr>'

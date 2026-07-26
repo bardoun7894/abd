@@ -177,6 +177,27 @@ it('prints the voucher elements a Gulf سند is expected to carry', function ()
     expect($src)->toContain('المبلغ المصروف');
 });
 
+it('hides the machine-generated «ملاحظة» but keeps a note the employee typed', function () {
+    $src = receiptPdfBladeSource();
+
+    // InvoicePurchaseMapper stamps "ترحيل فاتورة مشتريات — ..." on every سند it
+    // mints; printing it advertises the entry as auto-posted (client 2026-07-26).
+    expect($src)->toContain('ترحيل فاتورة مشتريات');
+    expect($src)->toContain('$machineNotePrefixes');
+    expect($src)->toContain('$noteText');
+    // The raw column must no longer be piped straight onto the voucher.
+    expect($src)->not->toContain("\$row('ملاحظة', \$receipt->note");
+
+    // A سند carrying the machine note must still render a valid voucher — it
+    // simply omits the row. Only one render per test: the TCPDF facade holds
+    // static document state and a second Output() in the same test blows up.
+    $receipt = makeLeaseReceiptRow();
+    $receipt->note = 'ترحيل فاتورة مشتريات — رقم NHD252290649 (مشترى #6994)';
+
+    view('dashboard.cashbox.receipt_pdf', ['receipt' => $receipt, 'receivedByName' => 'موظف'])->render();
+    expect(PDF::Output('m.pdf', 'S'))->toStartWith('%PDF');
+});
+
 it('labels the received_by name «محرر السند», not «استلمه»/«صرفه»', function () {
     $src = receiptPdfBladeSource();
 
