@@ -102,15 +102,21 @@ class ReportController extends Controller
         $objPHPExcel = \App\Services\ExcelReportStyler::newBook('تقرير مصاريف شراء');
         $sheet = $objPHPExcel->getActiveSheet();
 
-        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير مصاريف شراء', 'I');
+        // Client feedback 2026-07-27: "يكون المبلغ غير شامل الضريبة أول، بعدين
+        // الضريبة، وبعدين المبلغ شامل الضريبة" — the VAT breakdown split across
+        // three columns in that order, instead of only the tax-inclusive total.
+        \App\Services\ExcelReportStyler::titleRow($sheet, 'تقرير مصاريف شراء', 'K');
         \App\Services\ExcelReportStyler::headerRow($sheet, [
-            '#', 'رقم الفاتورة', 'تاريخ الفاتورة', ' قيمة الفاتورة شامل الضريبة',
+            '#', 'رقم الفاتورة', 'تاريخ الفاتورة',
+            'المبلغ غير شامل الضريبة', 'الضريبة', 'المبلغ شامل الضريبة',
             'اسم المورد', 'المجموعة', 'تاريح الادخال', 'الملاحظة', 'اسم المحل',
         ]);
 
         $rowCount = 3;
         $i = 1;
-        $sumD = 0.0;
+        $sumBeforeVat = 0.0;
+        $sumVat = 0.0;
+        $sumTotal = 0.0;
 
         // In شراء المحلات mode every row has manager_id NULL (see
         // Purchase::scopeserachspenddatarep), so the joined manager_name is always
@@ -128,22 +134,43 @@ class ReportController extends Controller
             $shop_name = $this->shopLabel($shop);
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
             $note = $x->note;
-            $sumD += (float) $purchase_price;
+
+            // Only AI-extracted invoices carry a real VAT breakdown (~3% of rows
+            // today); the rest were keyed in as a single figure. Leave the two VAT
+            // cells EMPTY rather than back-computing them from an assumed rate —
+            // this is a tax document, and a plausible-looking invented number is
+            // worse than a blank one. Fall back to vat_rate only when the invoice
+            // actually states a rate.
+            $beforeVat = $x->amount_before_vat ?? null;
+            $vat = $x->vat_amount ?? null;
+            if ($beforeVat === null && $vat === null && ! empty($x->vat_rate) && (float) $x->vat_rate > 0) {
+                $beforeVat = round((float) $purchase_price / (1 + ((float) $x->vat_rate / 100)), 2);
+                $vat = round((float) $purchase_price - $beforeVat, 2);
+            }
+
+            $sumBeforeVat += (float) ($beforeVat ?? 0);
+            $sumVat += (float) ($vat ?? 0);
+            $sumTotal += (float) $purchase_price;
+
             $sheet->SetCellValue('A' . $rowCount, $i);
             $sheet->SetCellValue('B' . $rowCount, $purchase_no);
             $sheet->SetCellValue('C' . $rowCount, $purchase_dt);
-            $sheet->SetCellValue('D' . $rowCount, $purchase_price);
-            $sheet->SetCellValue('E' . $rowCount, $purchase_respon);
-            $sheet->SetCellValue('F' . $rowCount, $manager_name);
-            $sheet->SetCellValue('G' . $rowCount, $created_at);
-            $sheet->SetCellValue('H' . $rowCount, $note);
-            $sheet->SetCellValue('I' . $rowCount, $shop_name);
+            $sheet->SetCellValue('D' . $rowCount, $beforeVat);
+            $sheet->SetCellValue('E' . $rowCount, $vat);
+            $sheet->SetCellValue('F' . $rowCount, $purchase_price);
+            $sheet->SetCellValue('G' . $rowCount, $purchase_respon);
+            $sheet->SetCellValue('H' . $rowCount, $manager_name);
+            $sheet->SetCellValue('I' . $rowCount, $created_at);
+            $sheet->SetCellValue('J' . $rowCount, $note);
+            $sheet->SetCellValue('K' . $rowCount, $shop_name);
             $i++;
             $rowCount++;
         }
 
-        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', ['D' => $sumD]);
-        \App\Services\ExcelReportStyler::finalize($sheet, 'I', 3, $rowCount, ['D']);
+        \App\Services\ExcelReportStyler::totalsRow($sheet, $rowCount, 'A', 'الإجمالي', [
+            'D' => $sumBeforeVat, 'E' => $sumVat, 'F' => $sumTotal,
+        ]);
+        \App\Services\ExcelReportStyler::finalize($sheet, 'K', 3, $rowCount, ['D', 'E', 'F']);
         \App\Services\ExcelReportStyler::downloadJson($objPHPExcel);
     }
 
