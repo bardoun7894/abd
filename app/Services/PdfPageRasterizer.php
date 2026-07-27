@@ -12,10 +12,38 @@ namespace App\Services;
  */
 class PdfPageRasterizer
 {
+    /**
+     * Is PHP's exec() actually callable here?
+     *
+     * Shared hosts routinely put exec in disable_functions. PHP then treats it as
+     * undefined, and because this class is namespaced the fatal reads
+     * "Call to undefined function App\Services\exec()" — which is exactly what
+     * the sabah-alnoor.com instance showed the client in red on the shop screen
+     * when they pressed «استخراج بالذكاء الاصطناعي». Note @ does NOT help: a
+     * disabled function raises an Error in PHP 8, and @ only suppresses
+     * diagnostics, not thrown Errors.
+     */
+    private function execAvailable(): bool
+    {
+        if (! function_exists('exec')) {
+            return false;
+        }
+
+        $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+
+        return ! in_array('exec', $disabled, true);
+    }
+
     /** Is pdftoppm (poppler) on the PATH? */
     public function available(): bool
     {
-        exec('command -v pdftoppm 2>/dev/null', $out, $code);
+        if (! $this->execAvailable()) {
+            return false;
+        }
+
+        $out = [];
+        $code = 0;
+        $this->exec('command -v pdftoppm 2>/dev/null', $out, $code);
 
         return $code === 0 && ! empty($out);
     }
@@ -94,9 +122,13 @@ class PdfPageRasterizer
     /** Page count via poppler's pdfinfo; 0 when unavailable (caller uses fallback). */
     private function pageCount(string $pdfPath): int
     {
+        if (! $this->execAvailable()) {
+            return 0;
+        }
+
         $out = [];
         $code = 0;
-        exec('pdfinfo '.escapeshellarg($pdfPath).' 2>/dev/null', $out, $code);
+        $this->exec('pdfinfo '.escapeshellarg($pdfPath).' 2>/dev/null', $out, $code);
         if ($code !== 0) {
             return 0;
         }
@@ -112,6 +144,17 @@ class PdfPageRasterizer
     /** Wrapper around PHP exec so tests can intercept the shell call. */
     protected function exec(string $cmd, array &$output, int &$code): void
     {
+        // Last line of defence: every caller already checks execAvailable(), but
+        // a disabled exec() is a fatal Error, not a warning, so never reach it
+        // unguarded. Reporting a non-zero code makes callers take their existing
+        // "poppler unavailable" fallback path.
+        if (! $this->execAvailable()) {
+            $output = [];
+            $code = 127;
+
+            return;
+        }
+
         exec($cmd, $output, $code);
     }
 }
