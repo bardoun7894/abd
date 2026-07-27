@@ -723,29 +723,51 @@ class ShopController extends Controller
             return null;
         }
 
-        if (! $shop_id) {
-            return 'لم تُنشأ دفعات الإيجار: رقم المحل غير محدد.';
-        }
-
-        // Need a start date to anchor the schedule.
-        if ($startDate === '') {
-            return 'لم تُنشأ دفعات الإيجار: «تاريخ بداية العقد» فارغ. أدخل تاريخ البداية ثم احفظ مرة أخرى.';
-        }
-
-        // Never duplicate: skip if this shop already has any payment rows.
-        if (DB::table('shop_rentpay')->where('shop_id', $shop_id)->exists()) {
-            return 'لم تُنشأ دفعات الإيجار: هذا المحل لديه دفعات مسجّلة بالفعل، ولا يُسمح باستبدالها آلياً. '
-                . 'احذف الدفعات القديمة من «إدارة الدفعات» ثم احفظ مرة أخرى إن أردت توليدها من العقد.';
-        }
-
-        $contract = [
+        // shop_id / start-date / already-has-payments guards now live in
+        // generateRentPaymentsFor(), so the file-driven path gets them too.
+        return $this->generateRentPaymentsFor($shop_id, [
             'start_date' => $startDate,
             'end_date' => $endDate !== '' ? $endDate : null,
             'num_payments' => $numPayments > 0 ? $numPayments : 1,
             'rent_value' => $rentValue,
             'payment_value' => $paymentValue,
             'payment_frequency' => $frequency,
-        ];
+        ]);
+    }
+
+    /**
+     * The actual generation, independent of where the schedule came from.
+     *
+     * Split out of maybeGenerateRentPayments() so that BOTH ways a lease can
+     * arrive end up in shop_rentpay through one code path:
+     *   1. the hidden rent_sched_* fields the AI widget writes into the shop form
+     *   2. a contract PDF attached to «تحميل صورة العقد», read by the extractor
+     * Previously only (1) existed, and only if the operator happened to use the
+     * separate AI widget — so simply attaching the contract, which is what the
+     * screen invites you to do, generated nothing and said nothing.
+     *
+     * @param array $contract start_date, end_date, num_payments, rent_value,
+     *                        payment_value, payment_frequency
+     */
+    private function generateRentPaymentsFor($shop_id, array $contract): ?string
+    {
+        $startDate = trim((string) ($contract['start_date'] ?? ''));
+
+        if (! $shop_id) {
+            return 'لم تُنشأ دفعات الإيجار: رقم المحل غير محدد.';
+        }
+
+        if ($startDate === '') {
+            return 'لم تُنشأ دفعات الإيجار: «تاريخ بداية العقد» فارغ. أدخل تاريخ البداية ثم احفظ مرة أخرى.';
+        }
+
+        $writer = app(\App\Services\ShopRentPaymentWriter::class);
+
+        // Never duplicate: skip if this shop already has any payment rows.
+        if ($writer->shopHasPayments($shop_id)) {
+            return 'لم تُنشأ دفعات الإيجار: هذا المحل لديه دفعات مسجّلة بالفعل، ولا يُسمح باستبدالها آلياً. '
+                . 'احذف الدفعات القديمة من «إدارة الدفعات» ثم احفظ مرة أخرى إن أردت توليدها من العقد.';
+        }
 
         try {
             $generator = new \App\Services\LeaseScheduleGenerator();
@@ -772,34 +794,78 @@ class ShopController extends Controller
             return 'لم تُنشأ دفعات الإيجار: تعذّر توليد الجدول من بيانات العقد (تأكد من صحة تاريخ البداية وقيمة الإيجار).';
         }
 
-        $now = Carbon::now();
-        foreach ($schedule['rows'] as $row) {
-            DB::table('shop_rentpay')->insert([
-                'shop_id' => $shop_id,
-                'rentpay_dt' => $row['due_date'],
-                'rentpay_price' => $row['amount'],
-                // Deliberately NULL, exactly like a manually-added دفعة (client
-                // feedback 2026-07-26: "اجعلها حالها من حال مدخلات الموظف").
-                // Every existing row on both live instances carries a NULL note,
-                // so an AI-generated row is now indistinguishable in the UI. The
-                // provenance is not lost — it stays in laravel.log and in the
-                // create_user/created_at columns.
-                'rentpay_note' => null,
-                'rentpay_status' => 'unpaid',
-                'created_at' => $now,
-                'updated_at' => $now,
-                'create_user' => Auth::user()->id,
-                'update_user' => Auth::user()->id,
-            ]);
-        }
-
-        $count = count($schedule['rows']);
+        $count = $writer->write($shop_id, $schedule['rows'], Auth::user()->id);
         $msg = 'تم إنشاء ' . $count . ' دفعة إيجار من بيانات العقد.';
         if (! empty($schedule['warnings'])) {
             $msg .= ' تنبيه: ' . implode(' ', $schedule['warnings']);
         }
 
         return $msg;
+    }
+
+    /**
+     * Read a lease contract that was just attached to «تحميل صورة العقد» and
+     * generate the دفعات from it.
+     *
+     * This is the path the client actually describes: "من نفس المحل لما يرفع
+     * العقد بتطلع الدفعات تلقائياً". Before this, attaching the contract stored
+     * the file and nothing else — extraction only ever happened if the operator
+     * separately used the «استخراج بالذكاء الاصطناعي» widget, which is a
+     * different control on the same screen and easy to miss entirely.
+     *
+     * Best-effort by design: extraction is bounded by the interactive Gemini
+     * budget (~40s) and every failure returns an explanatory Arabic string
+     * rather than throwing, because the shop save itself has already succeeded
+     * by the time we get here and must not be rolled back over a failed read.
+     *
+     * @param string $absPath   absolute path of the stored contract file
+     * @param string $startDate rent_sdt from the form, used when the document
+     *                          has no readable start date of its own
+     */
+    private function rentPaymentsFromContractFile($shop_id, string $absPath, string $startDate, string $endDate): ?string
+    {
+        if (! is_file($absPath)) {
+            return null;
+        }
+
+        try {
+            $data = app(\App\Services\ShopAiExtractor::class)->extract($absPath);
+        } catch (\Throwable $e) {
+            Log::warning('Lease contract read failed; دفعات not generated.', [
+                'shop_id' => $shop_id, 'file' => $absPath, 'error' => $e->getMessage(),
+            ]);
+
+            return 'تم حفظ العقد، لكن تعذّرت قراءته آلياً لتوليد الدفعات. '
+                . 'استخدم «استخراج بالذكاء الاصطناعي» أعلى الصفحة، أو أدخل الدفعات يدوياً.';
+        }
+
+        // Only a lease carries a payment schedule. A commercial registration or a
+        // municipal licence attached to this same field must not generate دفعات.
+        if (($data['document_type'] ?? null) !== 'lease') {
+            return null;
+        }
+
+        $numPayments = (int) ($data['num_payments'] ?? 0);
+        $paymentValue = $data['payment_value'] ?? null;
+        $rentValue = (float) ($data['rent_amount'] ?? 0);
+
+        if ($numPayments <= 0 && $rentValue <= 0 && ! is_numeric($paymentValue)) {
+            return 'تم حفظ العقد، لكن لم يُعثر فيه على جدول دفعات (عدد الدفعات أو قيمة الإيجار). '
+                . 'أدخل الدفعات يدوياً من «إدارة دفعات الايجار».';
+        }
+
+        // Prefer the dates the operator typed; fall back to the document's own.
+        $start = $startDate !== '' ? $startDate : (string) ($data['issue_date'] ?? '');
+        $end = $endDate !== '' ? $endDate : (string) ($data['expiry_date'] ?? '');
+
+        return $this->generateRentPaymentsFor($shop_id, [
+            'start_date' => $start,
+            'end_date' => $end !== '' ? $end : null,
+            'num_payments' => $numPayments > 0 ? $numPayments : 1,
+            'rent_value' => $rentValue,
+            'payment_value' => $paymentValue,
+            'payment_frequency' => $data['payment_frequency'] ?? null,
+        ]);
     }
 
     /**
@@ -1566,6 +1632,10 @@ class ShopController extends Controller
                     $rentfile_url = '';
                     $rent_attach_name = '';
                     $rent_attach_extension = '';
+                    // Remember whether a contract was attached on THIS save — the
+                    // file-driven دفعات generation below must only fire for a newly
+                    // uploaded contract, never on every subsequent save of the shop.
+                    $rentfileJustUploaded = $request->hasFile('rentfile');
                     if ($request->hasFile('rentfile')) {
                         $rent_attach_name = $request->rentfile->getClientOriginalName();
                         $rent_attach_extension = $request->rentfile->extension();
@@ -1657,6 +1727,19 @@ class ShopController extends Controller
                     // The outcome is reported back to the operator below — see the method's
                     // docblock for why silence was itself the bug.
                     $rentPayOutcome = $this->maybeGenerateRentPayments($request, $shop_id);
+
+                    // Nothing in the form carried a schedule (null = this save had no
+                    // lease payload at all), but a contract file was just attached —
+                    // read the contract itself. This is the client's expected flow:
+                    // upload the contract from inside the shop, get the دفعات.
+                    if ($rentPayOutcome === null && $rentfileJustUploaded && $rentfile_url !== '') {
+                        $rentPayOutcome = $this->rentPaymentsFromContractFile(
+                            $shop_id,
+                            public_path($rentfile_url),
+                            trim((string) $request->rent_sdt),
+                            trim((string) $request->rent_edt),
+                        );
+                    }
 
                     $result2 = DB::table('shop_defence')
                         ->updateOrInsert(

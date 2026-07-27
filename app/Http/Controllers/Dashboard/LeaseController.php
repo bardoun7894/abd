@@ -276,8 +276,25 @@ class LeaseController extends Controller
             ], 422);
         }
 
-        $contract = DB::transaction(function () use ($extraction, $data, $schedule) {
+        // Optional bridge to a real shop. lease_contracts/lease_payments are NOT
+        // read by «ادارة دفعات الايجار» — that screen reads the legacy
+        // shop_rent/shop_rentpay tables. So approving a lease here used to
+        // produce a contract the client could never see as دفعات. When the
+        // operator says which shop this lease belongs to, mirror the same
+        // schedule into shop_rentpay as well.
+        $shopId = $request->input('shop_id') ?: null;
+        $writer = app(\App\Services\ShopRentPaymentWriter::class);
+        $mirrorBlocked = null;
+
+        if ($shopId && $writer->shopHasPayments($shopId)) {
+            // Refuse rather than duplicate — same rule as the shop screen.
+            $mirrorBlocked = ' (لم تُضف الدفعات إلى المحل: لديه دفعات مسجّلة بالفعل)';
+            $shopId = null;
+        }
+
+        $contract = DB::transaction(function () use ($extraction, $data, $schedule, $shopId, $writer) {
             $contract = LeaseContract::create($data + [
+                'shop_id' => $shopId,
                 'attach_url' => $extraction->image_path,
                 'extracted_text' => $extraction->extracted_text,
                 'status' => 'active',
@@ -287,6 +304,10 @@ class LeaseController extends Controller
 
             foreach ($schedule['rows'] as $row) {
                 LeasePayment::create($row + ['contract_id' => $contract->id]);
+            }
+
+            if ($shopId) {
+                $writer->write($shopId, $schedule['rows'], Auth::id());
             }
 
             $extraction->forceFill(['contract_id' => $contract->id, 'mapped_at' => now()])->save();
@@ -300,7 +321,13 @@ class LeaseController extends Controller
             'note' => 'تمت الموافقة، أُنشئ العقد #'.$contract->id,
         ]);
 
-        return response()->json(['status' => true, 'contract_id' => $contract->id, 'message_out' => 'تم إنشاء العقد وجدول الدفعات']);
+        $msg = 'تم إنشاء العقد وجدول الدفعات';
+        if ($shopId) {
+            $msg .= ' وأُضيفت '.count($schedule['rows']).' دفعة إلى المحل';
+        }
+        $msg .= $mirrorBlocked ?? '';
+
+        return response()->json(['status' => true, 'contract_id' => $contract->id, 'message_out' => $msg]);
     }
 
     /**

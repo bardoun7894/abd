@@ -48,6 +48,35 @@
     <div id="lseLb" style="position:fixed;inset:0;z-index:1090;display:none;place-items:center;background:rgba(0,0,0,.85);padding:30px" onclick="this.style.display='none'">
         <img id="lseLbImg" src="" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 30px 80px -20px #000">
     </div>
+
+    {{-- Approving a lease writes lease_contracts/lease_payments, which the
+         «ادارة دفعات الايجار» screen never reads. Naming the shop here mirrors the
+         same schedule into shop_rentpay so the دفعات actually appear. Optional:
+         leaving it empty keeps the previous behaviour. --}}
+    <div class="modal fade" id="lseApproveModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-4">
+                    <h5 class="modal-title fw-bold">اعتماد العقد</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="lseApproveId">
+                    <input type="hidden" id="lseApproveForce" value="0">
+                    <label class="form-label fw-semibold">المحل التابع له العقد</label>
+                    <select id="lseApproveShop" class="form-select"></select>
+                    <div class="text-muted fs-8 mt-2">
+                        اختر المحل لإضافة دفعات الإيجار إليه مباشرة في «ادارة دفعات الايجار».
+                        إن تركته فارغاً سيُنشأ العقد بدون إضافة دفعات للمحل.
+                    </div>
+                </div>
+                <div class="modal-footer py-4">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-success" id="lseApproveGo">اعتماد</button>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 @section('scripts')
     <script>
@@ -106,25 +135,63 @@
             });
         });
 
+        /* Approving only ever wrote to lease_contracts/lease_payments, which the
+           «ادارة دفعات الايجار» screen does not read. Ask which shop the lease
+           belongs to so the same schedule is also written as real دفعات. The
+           shop is optional — approving without one behaves exactly as before. */
         $(document).on('click', '.approveBtn', function () {
-            var $btn = $(this).prop('disabled', true).text('جارٍ الموافقة…');
-            var id = $btn.data('id');
+            var $btn = $(this);
             var needsReview = String($btn.data('needs-review')) === '1';
-            var postData = {};
-            if (needsReview) {
-                if (!confirm('هذا العقد محدد للمراجعة. هل تريد الموافقة عليه بالقوة؟')) {
-                    $btn.prop('disabled', false).text('موافقة');
-                    return;
-                }
-                postData.force = 1;
+            if (needsReview && !confirm('هذا العقد محدد للمراجعة. هل تريد الموافقة عليه بالقوة؟')) {
+                return;
             }
+            $('#lseApproveId').val($btn.data('id'));
+            $('#lseApproveForce').val(needsReview ? 1 : 0);
+            $('#lseApproveShop').val(null).trigger('change');
+            $('#lseApproveModal').modal('show');
+        });
+
+        $(document).on('click', '#lseApproveGo', function () {
+            var $go = $(this).prop('disabled', true).text('جارٍ الموافقة…');
+            var id = $('#lseApproveId').val();
+            var postData = { shop_id: $('#lseApproveShop').val() || '' };
+            if ($('#lseApproveForce').val() === '1') { postData.force = 1; }
+
             $.post(correctBase + '/' + id + '/approve', postData).done(function (r) {
-                if (r.status) { poll(); } else { alert(r.message_out || 'تعذّرت الموافقة'); $btn.prop('disabled', false).text('موافقة'); }
+                $('#lseApproveModal').modal('hide');
+                if (r.status) { if (r.message_out) { alert(r.message_out); } poll(); }
+                else { alert(r.message_out || 'تعذّرت الموافقة'); }
             }).fail(function (xhr) {
-                var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّرت الموافقة';
-                alert(m);
-                $btn.prop('disabled', false).text('موافقة');
+                alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّرت الموافقة');
+            }).always(function () {
+                $go.prop('disabled', false).text('اعتماد');
             });
+        });
+
+        $('#lseApproveShop').select2({
+            dir: 'rtl',
+            width: '100%',
+            dropdownParent: $('#lseApproveModal'),
+            placeholder: 'اختر المحل (اختياري)',
+            allowClear: true,
+            ajax: {
+                url: "{{ route('dashboard.general.sel_shop_list') }}",
+                dataType: 'json',
+                type: 'POST',
+                delay: 250,
+                headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
+                data: function (params) { return { q: params.term, page: params.page || 1 }; },
+                processResults: function (data, params) {
+                    var page = params.page || 1;
+                    return {
+                        results: $.map(data, function (item) {
+                            return { text: item.ItemName + ' - ' + item.item_code, id: item.id };
+                        }),
+                        pagination: { more: data.length ? (page * 50) <= data[0].total_count : false }
+                    };
+                },
+                cache: true
+            }
         });
 
         $(document).on('click', '.rejectBtn', function () {
@@ -148,7 +215,7 @@
                 .fail(function (xhr) { alert((xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر الحذف'); });
         });
 
-        // Image lightbox (rows render dynamically → delegated handler)
+        /* Image lightbox (rows render dynamically → delegated handler) */
         $(document).on('click', '.lse-thumb', function () {
             document.getElementById('lseLbImg').src = this.dataset.full;
             document.getElementById('lseLb').style.display = 'grid';

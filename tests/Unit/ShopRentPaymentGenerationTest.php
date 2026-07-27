@@ -205,3 +205,111 @@ it('leaves rentpay_note NULL so generated دفعات look like employee entries'
         expect($note)->toBeNull();
     }
 });
+
+/*
+ * Spec: attaching a contract to «تحميل صورة العقد» must itself generate the
+ * دفعات. Before this, only the separate AI widget's hidden rent_sched_* fields
+ * could do it, so the client's actual flow ("من نفس المحل لما يرفع العقد")
+ * silently produced nothing.
+ */
+
+/** @return string|null */
+function callRentPaymentsFromContractFile($shop_id, string $absPath, string $start = '', string $end = ''): ?string
+{
+    $controller = new ShopController();
+    $method = new ReflectionMethod($controller, 'rentPaymentsFromContractFile');
+
+    return $method->invoke($controller, $shop_id, $absPath, $start, $end);
+}
+
+/** Bind a fake extractor returning $payload, and a throwaway file to "read". */
+function fakeContractFile(array $payload, ?Throwable $throw = null): string
+{
+    $path = tempnam(sys_get_temp_dir(), 'lease') . '.pdf';
+    file_put_contents($path, '%PDF-1.5 fake');
+
+    app()->bind(App\Services\ShopAiExtractor::class, function () use ($payload, $throw) {
+        return new class($payload, $throw) extends App\Services\ShopAiExtractor {
+            public function __construct(private array $payload, private ?Throwable $throw) {}
+            public function extract(string $filePath, ?string $model = null): array
+            {
+                if ($this->throw) { throw $this->throw; }
+                return $this->payload;
+            }
+        };
+    });
+
+    return $path;
+}
+
+it('generates دفعات from a lease contract that was just attached', function () {
+    $path = fakeContractFile([
+        'document_type' => 'lease',
+        'issue_date' => '2020-01-01',
+        'expiry_date' => '2025-01-01',
+        'num_payments' => 10,
+        'payment_value' => 20000.0,
+        'rent_amount' => 40000.0,
+        'payment_frequency' => 'semi-annual',
+    ]);
+
+    $outcome = callRentPaymentsFromContractFile(77, $path);
+
+    expect(DB::table('shop_rentpay')->where('shop_id', 77)->count())->toBe(10)
+        ->and($outcome)->toContain('تم إنشاء');
+    @unlink($path);
+});
+
+it('does not generate دفعات when the attached document is not a lease', function () {
+    $path = fakeContractFile([
+        'document_type' => 'commercial_registration',
+        'num_payments' => 4, 'payment_value' => 100.0, 'rent_amount' => 400.0,
+    ]);
+
+    $outcome = callRentPaymentsFromContractFile(78, $path);
+
+    expect(DB::table('shop_rentpay')->where('shop_id', 78)->count())->toBe(0)
+        ->and($outcome)->toBeNull();
+    @unlink($path);
+});
+
+it('explains itself when the contract carries no readable schedule', function () {
+    $path = fakeContractFile([
+        'document_type' => 'lease',
+        'issue_date' => '2020-01-01',
+        'num_payments' => 0, 'payment_value' => null, 'rent_amount' => 0,
+    ]);
+
+    $outcome = callRentPaymentsFromContractFile(79, $path);
+
+    expect(DB::table('shop_rentpay')->where('shop_id', 79)->count())->toBe(0)
+        ->and($outcome)->toContain('لم يُعثر');
+    @unlink($path);
+});
+
+it('survives an extraction failure without losing the shop save', function () {
+    $path = fakeContractFile([], new RuntimeException('gemini timeout'));
+
+    $outcome = callRentPaymentsFromContractFile(80, $path);
+
+    expect(DB::table('shop_rentpay')->where('shop_id', 80)->count())->toBe(0)
+        ->and($outcome)->toContain('تعذّرت قراءته');
+    @unlink($path);
+});
+
+it('still refuses to duplicate when the shop already has دفعات', function () {
+    DB::table('shop_rentpay')->insert([
+        'shop_id' => 81, 'rentpay_dt' => '2024-01-01', 'rentpay_price' => 500,
+        'rentpay_status' => 'unpaid',
+    ]);
+    $path = fakeContractFile([
+        'document_type' => 'lease', 'issue_date' => '2020-01-01', 'expiry_date' => '2025-01-01',
+        'num_payments' => 10, 'payment_value' => 20000.0, 'rent_amount' => 40000.0,
+    ]);
+
+    $outcome = callRentPaymentsFromContractFile(81, $path);
+
+    expect(DB::table('shop_rentpay')->where('shop_id', 81)->count())->toBe(1)
+        ->and($outcome)->toContain('لديه دفعات مسجّلة بالفعل');
+    @unlink($path);
+});
