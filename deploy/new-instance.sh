@@ -114,6 +114,12 @@ $set = [
   "DB_DATABASE" => $argv[3],
   "DB_USERNAME" => $argv[4],
   "DB_PASSWORD" => $argv[5],
+  // The invoices connection is a SEPARATE sqlite file addressed by ABSOLUTE
+  // path. Copying the source .env verbatim therefore pointed the brand-new
+  // instance straight at the live instance's real invoice database — it would
+  // have read and written the client's actual invoices. Always re-anchor it.
+  "INVOICES_DB_DRIVER"   => "sqlite",
+  "INVOICES_DB_DATABASE" => $argv[6],
   "APP_ENV"     => "production",
   "APP_DEBUG"   => "false",
   // Must stay false: the HTML minifier strips newlines inside inline <script>
@@ -127,7 +133,7 @@ foreach ($set as $k => $v) {
      : rtrim($s)."\n".$line."\n";
 }
 file_put_contents($f, $s);
-' "$DOCROOT/.env" "$APP_URL" "$DB_NAME" "$DB_USER" "$DB_PASS"
+' "$DOCROOT/.env" "$APP_URL" "$DB_NAME" "$DB_USER" "$DB_PASS" "$DOCROOT/database/invoices.sqlite"
 
 cd "$DOCROOT"
 php artisan key:generate --force >/dev/null   # its OWN APP_KEY — never share one across instances
@@ -179,8 +185,12 @@ $brand = [
     "brand_pdf_deep"    => "#0A4F3A",
     "brand_pdf_tint"    => "#E4EFE9",
     "brand_pdf_line"    => "#CBD5D1",
-    "company_name_ar"   => "شركة نور الصباح",
-    "company_name_en"   => "Noor Al-Sabah CO.",
+    // NOTE: two similarly-named companies share this codebase and they are easy
+    // to swap by accident — شركة صباح النور (Sabah Alnoor) is NOT
+    // شركة نور الصباح (Noor Al-Sabah). Override per instance.
+    "company_name_ar"   => env("NEW_INSTANCE_NAME_AR", "شركة صباح النور"),
+    "company_name_en"   => env("NEW_INSTANCE_NAME_EN", "Sabah Alnoor CO."),
+    "zatca_seller_name" => env("NEW_INSTANCE_NAME_AR", "شركة صباح النور"),
 ];
 foreach ($brand as $k => $v) {
     DB::table("app_settings")->updateOrInsert(
@@ -193,6 +203,11 @@ echo "    branding applied (sabah-emerald)\n";
 
 php artisan config:clear >/dev/null 2>&1 || true
 php artisan view:clear   >/dev/null 2>&1 || true
+# Settings::applyToConfig() serves the brand from a 5-minute Cache::remember,
+# and config:clear does NOT touch the application cache. Without this the new
+# instance renders with the DEFAULT (noor-blue) identity until the cache lapses,
+# which looks exactly like the branding step having silently failed.
+php artisan cache:clear  >/dev/null 2>&1 || true
 
 cat <<EOF
 
