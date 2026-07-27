@@ -31,9 +31,54 @@ use PDF;
 
 class ReportController extends Controller
 {
+    /**
+     * Preload every shop a report needs, with its manager and municipal licence,
+     * keyed by shop_id.
+     *
+     * These exports used to call Shop::find() inside the row loop and then walk
+     * ->manager and ->municip on each result. On the شراء المحلات report that is
+     * 5,923 rows x 3 queries = 17,769 queries and ~11 seconds for one file. The
+     * whole set is three queries instead.
+     *
+     * @param iterable $rows report rows carrying a shop_id
+     * @return \Illuminate\Support\Collection shop_id => Shop
+     */
+    private function shopsById($rows)
+    {
+        $ids = [];
+        foreach ($rows as $r) {
+            if (! empty($r->shop_id)) {
+                $ids[$r->shop_id] = true;
+            }
+        }
 
+        if (! $ids) {
+            return collect();
+        }
 
+        return Shop::with(['manager', 'municip'])
+            ->whereIn('shop_id', array_keys($ids))
+            ->get()
+            ->keyBy('shop_id');
+    }
 
+    /**
+     * "CODE - name - licence" exactly as the reports have always rendered it,
+     * but null-safe. A purchase can outlive the shop it points at (there are no
+     * foreign keys on purchase.shop_id), and the old inline version dereferenced
+     * ->manager on a possibly-null shop, which PHP 8 turns into a fatal
+     * ErrorException and a 500 for the whole export.
+     */
+    private function shopLabel($shop): string
+    {
+        if (! $shop) {
+            return '';
+        }
+
+        $prefix = ! empty($shop->shop_code) ? $shop->shop_code.' - ' : '';
+
+        return $prefix.$shop->shop_name.' - '.(optional($shop->municip)->municip_no ?? '');
+    }
 
 
 
@@ -67,15 +112,20 @@ class ReportController extends Controller
         $i = 1;
         $sumD = 0.0;
 
+        // In شراء المحلات mode every row has manager_id NULL (see
+        // Purchase::scopeserachspenddatarep), so the joined manager_name is always
+        // NULL and the fallback below runs for EVERY row — which is precisely why
+        // this report, and not the manager-mode one, was unusably slow.
+        $shops = $this->shopsById($list);
+
         foreach ($list as $x) {
             $purchase_no = $x->purchase_no;
             $purchase_dt= Carbon::parse($x->purchase_dt)->format('d-m-Y');
             $purchase_price = $x->purchase_price;
             $purchase_respon = $x->purchase_respon;
-            $shop = Shop::find($x->shop_id);
-            $manager_name= $x->manager_name ?? $shop->manager->manager_name;
-            $shop_code_prefix = isset($shop) && !empty($shop->shop_code) ? ($shop->shop_code.' - ') : '';
-            $shop_name= isset($shop) ? ( $shop_code_prefix.$shop->shop_name ." - ". ($shop->municip->municip_no ?? "") ) : "";
+            $shop = $shops[$x->shop_id] ?? null;
+            $manager_name = $x->manager_name ?? optional(optional($shop)->manager)->manager_name;
+            $shop_name = $this->shopLabel($shop);
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
             $note = $x->note;
             $sumD += (float) $purchase_price;
