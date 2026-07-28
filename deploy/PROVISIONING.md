@@ -30,6 +30,36 @@ systemctl status abd-queue          # should be active (running)
 ```
 After deploying code that changes jobs, restart the worker: `systemctl restart abd-queue`.
 
+### 1a. The crons are PER-INSTALL, not per-server
+
+The Hostinger account hosts **two** installs of this app:
+
+| Install | Path | Site |
+|---|---|---|
+| نور الصباح | `~/domains/noor-alsabah.com/public_html/` | noor-alsabah.com |
+| صباح النور | `~/domains/noor-alsabah.com/public_html/sabah/` | sabah.noor-alsabah.com |
+
+Each has its own `.env`, its own database, and its own `database/invoices.sqlite`
+holding its own `jobs` table. **A cron pointed at one install never drains the
+other's queue.** Every hPanel entry in §1b and §3 must be registered **twice**,
+once per path.
+
+Cost of missing this (2026-07-28): صباح النور was provisioned without either cron.
+Uploads dispatched fine and the UI reported success, so nothing looked broken —
+but 10 jobs (3 lease + 7 invoice extractions) sat at `attempts=0` for seven hours
+and the client reported "لا يعمل الذكاء". Nothing was in the error log, because
+nothing errored; no worker ever picked the jobs up.
+
+Fastest check that a given install has a live worker:
+
+```bash
+sqlite3 <install>/database/invoices.sqlite "SELECT COUNT(*) FROM jobs;"   # should hover at 0
+ls <install>/storage/logs/queue.log                                        # missing = never ran
+```
+
+A `jobs` count that only grows, or an absent `queue.log`, means that install has
+no cron — regardless of what the other install is doing.
+
 ### 1b. Same fix on noor-alsabah.com (Hostinger shared — no systemd)
 
 This step was **missed** during the 2026-07-25 Hostinger migration and cost a day
