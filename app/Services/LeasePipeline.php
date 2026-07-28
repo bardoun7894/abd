@@ -135,6 +135,17 @@ class LeasePipeline
             return $rows->first();
         }
 
+        // Never re-shape a batch a contract has already been minted from. The
+        // approved row keeps contract_id and is protected from superseding, so
+        // merging around it would leave BOTH it and a fresh merged row visible —
+        // and approving that second one bills the same lease twice.
+        // Real shape on نور الصباح batch 2: page 4 approved (contract #1), page 1
+        // would have become the anchor.
+        $approved = $rows->firstWhere('contract_id', '!=', null);
+        if ($approved) {
+            return $approved;
+        }
+
         $merger = new LeaseFieldMerger();
         $pageRows = $rows->map(function (LeaseExtraction $e) {
             $row = ['page_number' => $e->page_number];
