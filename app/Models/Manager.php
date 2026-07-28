@@ -250,7 +250,7 @@ class Manager extends Model
 
     public function scopexxx()
     {
-        $results = DB::select(DB::raw("SELECT * FROM categories WHERE 1=1"));
+        $results = DB::select("SELECT * FROM categories WHERE 1=1");
         return $results;
         //dd($results);
         // DB::table("categories")->get();
