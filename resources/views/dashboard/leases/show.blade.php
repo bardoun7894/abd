@@ -152,9 +152,13 @@
         });
 
         $(document).on('click', '#lseApproveGo', function () {
+            var shopSel = $('#lseApproveShop').val() || '';
+            if (!shopSel && !confirm('لم تختر المحل. سيُنشأ العقد لكن لن تُرحّل الدفعات إلى «ادارة دفعات الايجار» ولن تظهر هناك. هل تريد المتابعة بدون محل؟')) {
+                return;
+            }
             var $go = $(this).prop('disabled', true).text('جارٍ الموافقة…');
             var id = $('#lseApproveId').val();
-            var postData = { shop_id: $('#lseApproveShop').val() || '' };
+            var postData = { shop_id: shopSel };
             if ($('#lseApproveForce').val() === '1') { postData.force = 1; }
 
             $.post(correctBase + '/' + id + '/approve', postData).done(function (r) {
@@ -172,7 +176,7 @@
             dir: 'rtl',
             width: '100%',
             dropdownParent: $('#lseApproveModal'),
-            placeholder: 'اختر المحل (اختياري)',
+            placeholder: 'اختر المحل لترحيل الدفعات إليه',
             allowClear: true,
             ajax: {
                 url: "{{ route('dashboard.general.sel_shop_list') }}",

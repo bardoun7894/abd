@@ -327,9 +327,17 @@ class LeaseController extends Controller
             'note' => 'تمت الموافقة، أُنشئ العقد #'.$contract->id,
         ]);
 
+        // Say plainly whether the دفعات actually landed where the client looks for
+        // them. «ادارة دفعات الايجار» reads shop_rentpay, so an approval with no
+        // shop creates a contract whose schedule is invisible there — and the old
+        // message ("تم إنشاء العقد وجدول الدفعات") described that as success.
+        // Client, 2026-07-28: "موضوع ترحيل الدفعات للايجار لا يعمل في النظامين".
         $msg = 'تم إنشاء العقد وجدول الدفعات';
         if ($shopId) {
             $msg .= ' وأُضيفت '.count($schedule['rows']).' دفعة إلى المحل';
+        } elseif ($mirrorBlocked === null) {
+            $msg .= ' — لكن لم تُرحّل الدفعات إلى أي محل، لذلك لن تظهر في «ادارة دفعات الايجار». '
+                . 'اختر المحل عند الاعتماد لترحيلها.';
         }
         $msg .= $mirrorBlocked ?? '';
 
