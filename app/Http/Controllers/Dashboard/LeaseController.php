@@ -152,7 +152,13 @@ class LeaseController extends Controller
         $batch = $this->findOwned($id);
         $total = max(1, (int) $batch->total_pages);
 
-        $extractions = $batch->extractions()->orderBy('page_number')->get()->map(fn (LeaseExtraction $e) => [
+        // Only the merged contract row, not the page fragments it was folded from
+        // (LeasePipeline::consolidate). Batches processed before that existed have
+        // superseded_by null on every row and still list page-by-page.
+        $extractions = $batch->extractions()
+            ->whereNull('superseded_by')
+            ->orderBy('page_number')
+            ->get()->map(fn (LeaseExtraction $e) => [
             'id' => $e->id,
             'page_number' => $e->page_number,
             'contract_no' => $e->contract_no,

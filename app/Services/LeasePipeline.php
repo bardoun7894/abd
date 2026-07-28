@@ -8,9 +8,14 @@ use App\Models\LeaseExtraction;
 /**
  * The single, shared extraction pipeline used by BOTH the CLI and the web
  * background job. Mirrors InvoicePipeline: rasterize each page → one AI read
- * per page → persist rows to lease_extractions. Leases are one-contract-per-batch
- * (no invoice-style grouping/dedup — each page is its own extraction row and the
- * user picks which page/version to approve into a LeaseContract).
+ * per page → persist rows to lease_extractions.
+ *
+ * Leases are one-contract-per-batch. The per-page rows are an artefact of how we
+ * read the PDF, not a model of the domain, so after the read the pages are folded
+ * back into a single contract row by consolidate() and the fragments are marked
+ * superseded. Before that existed, a Saudi EJAR document left its contract number
+ * on page 1 and its rent block on page 3 — and approve() needs both at once, so
+ * every row was individually unapprovable and no دفعات were ever produced.
  */
 class LeasePipeline
 {
@@ -91,6 +96,11 @@ class LeasePipeline
             }
         }
 
+        // A batch is ONE contract, but we just wrote one row per page. Fold them
+        // together so the operator gets a single approvable contract instead of
+        // 8-9 fragments, none of which carries both a start date and a rent value.
+        $this->consolidate($batch);
+
         $successful = $batch->extractions()->where('status', '!=', 'failed')->count();
         $failed = $batch->extractions()->where('status', 'failed')->count();
         $batchStatus = ($successful === 0 && $failed > 0) ? 'failed' : 'done';
@@ -104,6 +114,65 @@ class LeasePipeline
         ]);
 
         return $made;
+    }
+
+    /**
+     * Fold every page row of $batch into the first one and mark the rest as
+     * superseded, so the batch presents as the single contract it actually is.
+     *
+     * Idempotent: re-running a batch re-merges from the live page rows rather
+     * than from a previous merge, because the anchor row is excluded from its
+     * own inputs via the untouched per-page copy in $pageRows.
+     */
+    public function consolidate(LeaseBatch $batch): ?LeaseExtraction
+    {
+        $rows = $batch->extractions()
+            ->where('status', '!=', 'failed')
+            ->orderBy('page_number')
+            ->get();
+
+        if ($rows->count() < 2) {
+            return $rows->first();
+        }
+
+        $merger = new LeaseFieldMerger();
+        $pageRows = $rows->map(function (LeaseExtraction $e) {
+            $row = ['page_number' => $e->page_number];
+            foreach (LeaseFieldMerger::FIELDS as $field) {
+                $value = $e->getAttribute($field);
+                // Dates come back as Carbon; the merger compares strings.
+                $row[$field] = $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : $value;
+            }
+
+            return $row;
+        })->all();
+
+        $merged = $merger->merge($pageRows);
+
+        $anchor = $rows->first();
+        $notes = [];
+        if (! empty($merged['conflicts'])) {
+            $notes[] = 'صفحات متعارضة: '.implode(' | ', $merged['conflicts']);
+        }
+        if (! empty($merged['missing'])) {
+            $notes[] = 'حقول ناقصة: '.implode(', ', $merged['missing']);
+        }
+        $notes[] = 'دُمجت من '.$rows->count().' صفحة';
+
+        $anchor->forceFill($merged['values'] + [
+            'needs_review' => $merger->needsReview($merged),
+            'validation_notes' => implode(' — ', $notes),
+        ])->save();
+
+        // Everything else in the batch is a fragment of the anchor, not a
+        // separate contract. Keep the rows (they are the page-level evidence and
+        // the images the reviewer clicks through) but take them out of the list.
+        $batch->extractions()
+            ->where('id', '!=', $anchor->id)
+            ->whereNull('contract_id')
+            ->update(['superseded_by' => $anchor->id]);
+
+        return $anchor;
     }
 
     /** [lightThinking, hardThinking, escalateEnabled] from config (shared with invoices). */
