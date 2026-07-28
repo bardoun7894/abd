@@ -900,7 +900,11 @@ class FinancialController extends Controller
         $financial_month_m=  Carbon::parse(now())->format('m');
         $financial_month_y=  Carbon::parse(now())->format('Y');
 $payments_month_tbl = DB::table('payments_month')->where(['payments_month_m' => $financial_month_m, 'payments_month_y' => $financial_month_y])->first();
-$payments_month_val=$payments_month_tbl->payments_month_val;
+// The fallback below already says the amount defaults to 500 when this month has
+// no payments_month row — but the read happened BEFORE the check, so a missing
+// row fatalled instead of defaulting. Invisible on نور الصباح, which has a row
+// for the current month; a hard 500 on صباح النور, which was started empty.
+$payments_month_val = $payments_month_tbl?->payments_month_val;
 if(!$payments_month_val){$payments_month_val=500;}
 
 
