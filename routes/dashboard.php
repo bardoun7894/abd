@@ -54,7 +54,11 @@ Route::group([
         Route::post('/ai-extract/{module}', [\App\Http\Controllers\Dashboard\AiExtractionController::class, 'start'])->name('ai_extract.start');
         Route::get('/ai-extract/status/{job}', [\App\Http\Controllers\Dashboard\AiExtractionController::class, 'status'])->whereNumber('job')->name('ai_extract.status');
 
-        Route::resource('/categories', CategoriesController::class);
+        // The `categories` table does not exist in either production database and
+        // no migration creates it, so index/show/edit are dead however they are
+        // called — they reached PDO and came back "Base table or view not found".
+        // Only `store` survives because one view still resolves its route name.
+        Route::resource('/categories', CategoriesController::class)->only(['store']);
 
         // No ->name() here: Route::resource('/workers') below already owns
         // workers.index — a duplicate name breaks `php artisan route:cache`.
@@ -128,7 +132,11 @@ Route::group([
         Route::post('/constant/ajax_search_project', [ConstantController::class,'ajax_search_project'])->name('expense.ajax_search_project');
         Route::get('/constant/views', [ConstantController::class,'views'])->name('expense.views');
         Route::post('/constant/updstore', [ConstantController::class,'updstore'])->name('expense.updstore');*/
-        Route::resource('/constant', ConstantController::class);
+        // ConstantController implements none of the seven resource actions — the
+        // real screens are the explicit /constant/{city,job,workplace,...} routes
+        // above. Registering the resource only created URLs that 500 with
+        // "Method ConstantController::index does not exist"; nothing links to them.
+        // Route::resource('/constant', ConstantController::class);
 
 
         Route::post('/general/sel_worker_list', [GeneralController::class, 'sel_worker_list'])->name('general.sel_worker_list');
@@ -161,7 +169,7 @@ Route::group([
         Route::post('/emps/del_role', [empsController::class, 'del_role'])->name('emps.del_role');
         Route::post('/emps/upd_role', [empsController::class, 'upd_role'])->name('emps.upd_role');
         Route::post('/emps/updrole', [empsController::class, 'updrole'])->name('emps.updrole');
-        Route::resource('/emps', empsController::class);
+        Route::resource('/emps', empsController::class)->only(['index', 'store']);
 
         // No ->name() here: Route::resource('/accountings') below already owns
         // accountings.create (GET form). Duplicate names break route:cache.
@@ -196,7 +204,7 @@ Route::group([
         Route::post('/shop/ajax_search_project', [shopController::class, 'ajax_search_project'])->name('shop.ajax_search_project');
         Route::get('/shop/views', [shopController::class, 'views'])->name('shop.views');
         Route::post('/shop/updstore', [shopController::class, 'updstore'])->name('shop.updstore');
-        Route::resource('/shop', shopController::class);
+        Route::resource('/shop', shopController::class)->only(['index', 'store']);
         Route::post('/shop/print', [shopController::class, 'print'])->name('shop.print');
         Route::post('/shop/sel_worker_list', [shopController::class, 'sel_worker_list'])->name('shop.sel_worker_list');
         Route::post('/shop/delete_file', [shopController::class, 'delete_file'])->name('shop.delete_file');
@@ -242,7 +250,7 @@ Route::group([
         Route::post('/violation/del_violation', [violationController::class, 'del_violation'])->name('violation.del_violation');
         Route::get('/violation/views', [violationController::class, 'views'])->name('violation.views');
         Route::post('/violation/updstore', [violationController::class, 'updstore'])->name('violation.updstore');
-        Route::resource('/violation', violationController::class);
+        Route::resource('/violation', violationController::class)->only(['index', 'store']);
         Route::post('/violation/print', [violationController::class, 'print'])->name('violation.print');
         Route::post('/violation/show_job_cat', [violationController::class, 'show_job_cat'])->name('violation.show_job_cat');
         Route::post('/violation/load_emp_div', [violationController::class, 'load_emp_div'])->name('violation.load_emp_div');
@@ -332,7 +340,7 @@ Route::group([
         Route::post('/manager/ajax_search_project', [managerController::class, 'ajax_search_project'])->name('manager.ajax_search_project');
         Route::get('/manager/views', [managerController::class, 'views'])->name('manager.views');
         Route::post('/manager/updstore', [managerController::class, 'updstore'])->name('manager.updstore');
-        Route::resource('/manager', managerController::class);
+        Route::resource('/manager', managerController::class)->only(['index', 'store']);
         Route::post('/manager/print', [managerController::class, 'print'])->name('manager.print');
         Route::post('/manager/sel_worker_list', [managerController::class, 'sel_worker_list'])->name('manager.sel_worker_list');
 
@@ -348,7 +356,7 @@ Route::group([
         Route::post('/purchase/ajax_search_project', [purchaseController::class, 'ajax_search_project'])->name('purchase.ajax_search_project');
         Route::get('/purchase/views', [purchaseController::class, 'views'])->name('purchase.views');
         Route::post('/purchase/updstore', [purchaseController::class, 'updstore'])->name('purchase.updstore');
-        Route::resource('/purchase', purchaseController::class);
+        Route::resource('/purchase', purchaseController::class)->only(['index', 'store']);
         Route::post('/purchase/print', [purchaseController::class, 'print'])->name('purchase.print');
         Route::post('/purchase/sel_worker_list', [purchaseController::class, 'sel_worker_list'])->name('purchase.sel_worker_list');
         Route::post('/purchase/delete_file', [purchaseController::class, 'delete_file'])->name('purchase.delete_file');
@@ -372,7 +380,7 @@ Route::group([
         Route::post('/expense/ajax_search_project', [expenseController::class, 'ajax_search_project'])->name('expense.ajax_search_project');
         Route::get('/expense/views', [expenseController::class, 'views'])->name('expense.views');
         Route::post('/expense/updstore', [expenseController::class, 'updstore'])->name('expense.updstore');
-        Route::resource('/expense', expenseController::class);
+        Route::resource('/expense', expenseController::class)->only(['index', 'store']);
         Route::post('/expense/print', [expenseController::class, 'print'])->name('expense.print');
         Route::post('/expense/sel_worker_list', [expenseController::class, 'sel_worker_list'])->name('expense.sel_worker_list');
         Route::post('/expense/delete_file', [expenseController::class, 'delete_file'])->name('expense.delete_file');
@@ -405,7 +413,7 @@ Route::group([
         Route::post('/moraslat/ajax_search_project', [moraslatController::class, 'ajax_search_project'])->name('moraslat.ajax_search_project');
         Route::get('/moraslat/views', [moraslatController::class, 'views'])->name('moraslat.views');
         Route::post('/moraslat/updstore', [moraslatController::class, 'updstore'])->name('moraslat.updstore');
-        Route::resource('/moraslat', moraslatController::class);
+        Route::resource('/moraslat', moraslatController::class)->only(['index', 'store']);
         Route::post('/moraslat/print', [moraslatController::class, 'print'])->name('moraslat.print');
         Route::post('/moraslat/sel_worker_list', [moraslatController::class, 'sel_worker_list'])->name('moraslat.sel_worker_list');
         Route::post('/moraslat/delete_file', [moraslatController::class, 'delete_file'])->name('moraslat.delete_file');
@@ -440,7 +448,7 @@ Route::group([
         Route::post('/vacation/print', [vacationController::class, 'print'])->name('vacation.print');
 
         Route::post('/vacation/updstore', [vacationController::class, 'updstore'])->name('vacation.updstore');
-        Route::resource('/vacation', vacationController::class);
+        Route::resource('/vacation', vacationController::class)->only(['index', 'store']);
 
 
         Route::post('/report/print_worker_pdf', [ReportController::class, 'print_worker_pdf'])->name('report.print_worker_pdf');
@@ -467,7 +475,7 @@ Route::group([
 
         Route::post('/report/print_vacation_xlsx', [ReportController::class, 'print_vacation_xlsx'])->name('report.print_vacation_xlsx');
         Route::post('/report/print_vacation_pdf', [ReportController::class, 'print_vacation_pdf'])->name('report.print_vacation_pdf');
-        Route::resource('/report', ReportController::class);
+        Route::resource('/report', ReportController::class)->only(['index']);
         Route::post('/report/ai-narrate', [ReportController::class, 'aiNarrate'])->name('report.ai_narrate');
         Route::post('/report/ai-ask', [ReportController::class, 'aiAsk'])->name('report.ai_ask');
 
