@@ -2,9 +2,14 @@
 #
 # Deploy app code to an instance via rsync.
 #
-#   ./deploy/sync.sh noor          # noor-alsabah.com   (Hostinger shared)
-#   ./deploy/sync.sh contabo       # 91.230.110.187     (VPS)
+#   ./deploy/sync.sh noor          # noor-alsabah.com        (Hostinger shared)
+#   ./deploy/sync.sh sabah         # sabah.noor-alsabah.com  (same host, ./sabah)
+#   ./deploy/sync.sh contabo       # 91.230.110.187          (VPS)
 #   ./deploy/sync.sh noor --dry    # preview only
+#
+# noor and sabah are two SEPARATE installs of this app on one Hostinger account,
+# each with its own .env, database and company branding. Deploying code to one
+# does not touch the other — ship to both when a fix applies to both.
 #
 # WHY THIS SCRIPT EXISTS
 # ----------------------
@@ -23,8 +28,9 @@ DRY=""
 
 case "$TARGET" in
   noor)    DEST="noor:~/domains/noor-alsabah.com/public_html/" ;;
+  sabah)   DEST="noor:~/domains/noor-alsabah.com/public_html/sabah/" ;;
   contabo) DEST="MyContabo:/var/www/abd/" ;;
-  *) echo "usage: $0 {noor|contabo} [--dry]" >&2; exit 2 ;;
+  *) echo "usage: $0 {noor|sabah|contabo} [--dry]" >&2; exit 2 ;;
 esac
 
 rsync -az --stats $DRY \
