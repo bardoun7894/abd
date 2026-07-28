@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\ArabicText;
+
 /**
  * Folds the per-page extraction rows of ONE lease batch into a single contract.
  *
@@ -132,31 +134,10 @@ class LeaseFieldMerger
             return $m[1];
         }
 
-        return $this->foldArabic($s);
-    }
-
-    /**
-     * Collapse the Arabic spelling variants that differ per page of the same
-     * document. Real case (2026-07-28): page 2 of a contract said "نصف سنوى" and
-     * page 3 said "نصف سنوي" — one word, final ya written two ways — and that
-     * alone put an otherwise clean contract into manual review.
-     *
-     * Comparison only. The value stored is whatever the winning page said.
-     */
-    private function foldArabic(string $s): string
-    {
-        $map = [
-            'ى' => 'ي',                                     // alef maqsura → ya
-            'أ' => 'ا', 'إ' => 'ا', 'آ' => 'ا',             // hamzated alef → alef
-            'ة' => 'ه',                                     // ta marbuta → ha
-            'ؤ' => 'و', 'ئ' => 'ي',
-            'ـ' => '',                                      // tatweel
-        ];
-        $s = strtr($s, $map);
-        // Harakat (diacritics) — present on one page, absent on the next.
-        $s = preg_replace('/[\x{064B}-\x{0652}]/u', '', $s) ?? $s;
-
-        return preg_replace('/\s+/u', ' ', $s) ?? $s;
+        // Real case (2026-07-28): page 2 of a contract said "نصف سنوى" and page 3
+        // said "نصف سنوي" — one word, final ya written two ways — and that alone
+        // put an otherwise clean contract into manual review.
+        return ArabicText::fold($s);
     }
 
     /**

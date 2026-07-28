@@ -201,3 +201,36 @@ it('validateSchedule reports dates outside the lease term', function () {
     expect($errors)->not->toBeEmpty();
     expect(implode(' ', $errors))->toContain('2027-01-01');
 });
+
+// Client contract on صباح النور, 2026-07-28: payment_frequency came back as
+// "نصف سنوى" (alef maqsura) rather than the "نصف سنوي" in FREQUENCY_MONTHS.
+// The lookup was an exact match, so it missed and fell through to the monthly
+// default — a semi-annual lease produced دفعات one month apart. Two of the
+// client's three contracts were affected.
+test('semi-annual is recognised whichever way the final ya is written', function () {
+    foreach (['نصف سنوي', 'نصف سنوى', 'نصف سنوية', 'نصف سنويه'] as $spelling) {
+        $rows = $this->gen->generate(validLeaseContract([
+            'start_date' => '2026-07-01',
+            'end_date' => '2027-06-30',
+            'rent_value' => 50000.0,
+            'num_payments' => 2,
+            'payment_value' => 25000.0,
+            'payment_frequency' => $spelling,
+        ]));
+
+        expect($rows)->toHaveCount(2);
+        expect($rows[1]['due_date'])->toBe('2027-01-01', "spelling: {$spelling}");
+    }
+});
+
+test('monthly and yearly survive the same folding', function () {
+    $monthly = $this->gen->generate(validLeaseContract(['payment_frequency' => 'شهرية']));
+    expect($monthly[1]['due_date'])->toBe('2026-02-01');
+
+    $yearly = $this->gen->generate(validLeaseContract([
+        'start_date' => '2026-01-01', 'end_date' => '2027-12-31',
+        'rent_value' => 2000.0, 'num_payments' => 2, 'payment_value' => 1000.0,
+        'payment_frequency' => 'سنويه',
+    ]));
+    expect($yearly[1]['due_date'])->toBe('2027-01-01');
+});

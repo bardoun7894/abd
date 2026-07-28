@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\ArabicText;
 use Carbon\Carbon;
 use InvalidArgumentException;
 
@@ -222,9 +223,15 @@ class LeaseScheduleGenerator
     private function intervalMonths(?string $frequency, int $numPayments): int
     {
         if ($frequency) {
-            $key = strtolower(trim($frequency));
-            if (isset(self::FREQUENCY_MONTHS[$key])) {
-                return self::FREQUENCY_MONTHS[$key];
+            // Fold Arabic spelling before matching. A contract reading "نصف سنوى"
+            // (alef maqsura) instead of "نصف سنوي" used to miss the table entirely
+            // and fall through to the monthly default below — so a semi-annual
+            // lease silently produced دفعات one month apart. Same word, real money.
+            $key = ArabicText::fold($frequency);
+            foreach (self::FREQUENCY_MONTHS as $name => $months) {
+                if (ArabicText::fold($name) === $key) {
+                    return $months;
+                }
             }
         }
 
