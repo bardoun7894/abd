@@ -213,6 +213,24 @@
 @keyframes sn-shake { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-4px)} 40%,60%{transform:translateX(4px)} }
 .sn-shake { animation: sn-shake .5s var(--sn-ease-out) both; }
 
+/* Every server-side error box carries BOTH .sn-anim and .sn-shake. .sn-anim
+   starts at opacity:0 and depends on its sn-rise animation to fade in; .sn-shake
+   sets the `animation` shorthand too and, being later in this file, REPLACED
+   sn-rise. So the box kept opacity:0 — the message was in the DOM, took up
+   layout space, and was never visible.
+
+   That is what the client reported as «يسجل كلمة المرور، يرجعني على نفس الصفحة»
+   (2026-07-29): a wrong password bounced him back with no reason shown, because
+   "بيانات الاعتماد هذه غير متطابقة" was rendered invisibly. It hid the password
+   reset messages on the other four auth screens the same way.
+
+   Both animations, explicitly, at a specificity that beats either alone. */
+.sn-anim.sn-shake {
+  opacity: 1;
+  animation: sn-shake .5s var(--sn-ease-out) both,
+             sn-rise 620ms var(--sn-ease-out) both;
+}
+
 /* ---------------------------------------------------------------------------
    RESPONSIVE — collapse to single column with a compact brand band on top
    ------------------------------------------------------------------------ */
