@@ -723,16 +723,61 @@ class ShopController extends Controller
             return null;
         }
 
+        $numPayments = $this->resolvePaymentCount($numPayments, $rentValue, $paymentValue);
+        if ($numPayments <= 0) {
+            return self::UNKNOWN_PAYMENT_COUNT_MSG;
+        }
+
         // shop_id / start-date / already-has-payments guards now live in
         // generateRentPaymentsFor(), so the file-driven path gets them too.
         return $this->generateRentPaymentsFor($shop_id, [
             'start_date' => $startDate,
             'end_date' => $endDate !== '' ? $endDate : null,
-            'num_payments' => $numPayments > 0 ? $numPayments : 1,
+            'num_payments' => $numPayments,
             'rent_value' => $rentValue,
             'payment_value' => $paymentValue,
             'payment_frequency' => $frequency,
         ]);
+    }
+
+    /** Shown whenever the payment count is neither stated nor derivable. */
+    private const UNKNOWN_PAYMENT_COUNT_MSG =
+        'تم حفظ العقد، لكن لم يُحدَّد عدد الدفعات ولا يمكن استنتاجه من قيمة الإيجار وقيمة الدفعة. '
+        . 'لم تُنشأ أي دفعات حتى لا يُسجَّل جدول ناقص — أدخل عدد الدفعات يدوياً من «إدارة دفعات الايجار».';
+
+    /**
+     * How many instalments this lease actually has. Returns 0 when that cannot be
+     * established, which callers must treat as "generate nothing".
+     *
+     * BOTH ways a lease reaches this controller — the «استخراج بالذكاء الاصطناعي»
+     * widget's hidden rent_sched_* fields, and a contract PDF attached to «تحميل
+     * صورة العقد» — used to fall back to `: 1`. So a count the AI failed to read
+     * became a one-instalment schedule that reported success. صباح النور
+     * 2026-07-29: a 50,000 lease of 2 × 25,000 was stored as a single 25,000
+     * دفعة, and an operator marked it مدفوعة before anyone noticed the other half
+     * was missing.
+     *
+     * LeaseScheduleGenerator's reconciliation does not save us here — the same
+     * documents that lose num_payments usually lose rent_value too, and with
+     * expectedTotal 0 the sum check is skipped entirely.
+     *
+     * Fixing this in one place because the two callers drifted apart once already.
+     */
+    private function resolvePaymentCount(int $numPayments, float $rentValue, $paymentValue): int
+    {
+        if ($numPayments > 0) {
+            return $numPayments;
+        }
+
+        // Recoverable when total and instalment are both known and divide evenly.
+        if ($rentValue > 0 && is_numeric($paymentValue) && (float) $paymentValue > 0) {
+            $derived = (int) round($rentValue / (float) $paymentValue);
+            if ($derived >= 1 && abs(($derived * (float) $paymentValue) - $rentValue) <= max(0.01, $rentValue * 0.01)) {
+                return $derived;
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -858,30 +903,10 @@ class ShopController extends Controller
         $start = $startDate !== '' ? $startDate : (string) ($data['issue_date'] ?? '');
         $end = $endDate !== '' ? $endDate : (string) ($data['expiry_date'] ?? '');
 
-        // NEVER assume one payment. This used to read
-        //     'num_payments' => $numPayments > 0 ? $numPayments : 1
-        // so a contract whose payment count the extractor missed produced a
-        // single دفعة and reported success. Client, صباح النور 2026-07-29: a
-        // 50,000 lease of 2×25,000 became ONE payment of 25,000 — half the
-        // liability silently absent from the ledger, and the operator had already
-        // marked it paid before anyone noticed.
-        //
-        // The reconciliation check in LeaseScheduleGenerator does not catch this
-        // when rent_amount is also missing: expectedTotal is then 0 and the sum
-        // check is skipped entirely, so the wrong schedule validates clean.
-        if ($numPayments <= 0 && $rentValue > 0 && is_numeric($paymentValue) && (float) $paymentValue > 0) {
-            // The count is recoverable when the total and the instalment are both
-            // known and divide evenly — 50,000 / 25,000 = 2.
-            $derived = (int) round($rentValue / (float) $paymentValue);
-            if ($derived >= 1 && abs(($derived * (float) $paymentValue) - $rentValue) <= max(0.01, $rentValue * 0.01)) {
-                $numPayments = $derived;
-            }
-        }
-
+        // Never assume one payment — see resolvePaymentCount().
+        $numPayments = $this->resolvePaymentCount($numPayments, $rentValue, $paymentValue);
         if ($numPayments <= 0) {
-            return 'تم حفظ العقد، لكن لم يُحدَّد عدد الدفعات في المستند ولا يمكن استنتاجه من '
-                . 'قيمة الإيجار وقيمة الدفعة. لم تُنشأ أي دفعات حتى لا يُسجَّل جدول ناقص — '
-                . 'أدخل عدد الدفعات يدوياً من «إدارة دفعات الايجار».';
+            return self::UNKNOWN_PAYMENT_COUNT_MSG;
         }
 
         return $this->generateRentPaymentsFor($shop_id, [
