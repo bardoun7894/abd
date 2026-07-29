@@ -221,7 +221,44 @@
 <script src="{{ asset('assets/module/main_j.js') }}?t={{ config('global.ver.version_all') }}"></script>
 <script>
 notify_num("{{ route('notify_num') }}");
+</script>
 
+<script>
+/* Global AJAX failure reporter.
+   Nearly every module's $.ajax call ships an error handler whose branches are
+   all empty, e.g. calculate_j.js print_calculate_xlsx(). So when a request
+   failed the screen simply did nothing and the user reported "لا يعمل" with no
+   way for anyone to tell what had gone wrong. This reports what the call sites
+   swallow. Scoped to failures the call sites never handle - 419/401 session or
+   CSRF expiry, 5xx, and dropped connections - so ordinary 422 validation, which
+   the forms already surface themselves, stays quiet. */
+$(document).ajaxError(function (event, jqxhr, settings, thrownError) {
+    var s = jqxhr.status;
+    var msg = null;
+
+    /* A dropped session can also come back as the login PAGE with status 200,
+       which jQuery reports as a parse failure rather than an auth error. Without
+       this branch that case stays as invisible as it was before. */
+    if (s === 200 && thrownError && String(thrownError).indexOf('JSON') !== -1) {
+        msg = 'انتهت صلاحية الجلسة على الأرجح. سجّل الدخول من جديد ثم أعد المحاولة.';
+    } else if (s === 419 || s === 401) {
+        msg = 'انتهت صلاحية الجلسة. سجّل الدخول من جديد ثم أعد المحاولة.';
+    } else if (s === 403) {
+        msg = 'لا تملك صلاحية تنفيذ هذا الإجراء.';
+    } else if (s >= 500) {
+        msg = 'حدث خطأ في الخادم أثناء تنفيذ الطلب. حاول مرة أخرى، وإن تكرر أبلغ الدعم.';
+    } else if (s === 0) {
+        msg = 'انقطع الاتصال قبل اكتمال الطلب. تحقق من الشبكة وحاول مرة أخرى.';
+    }
+
+    if (!msg) { return; }
+
+    if (typeof swal !== 'undefined' && swal.fire) {
+        swal.fire('تنبيه', msg, 'error');
+    } else {
+        alert(msg);
+    }
+});
 </script>
 
 
