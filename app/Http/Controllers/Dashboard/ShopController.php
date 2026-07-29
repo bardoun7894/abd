@@ -858,10 +858,36 @@ class ShopController extends Controller
         $start = $startDate !== '' ? $startDate : (string) ($data['issue_date'] ?? '');
         $end = $endDate !== '' ? $endDate : (string) ($data['expiry_date'] ?? '');
 
+        // NEVER assume one payment. This used to read
+        //     'num_payments' => $numPayments > 0 ? $numPayments : 1
+        // so a contract whose payment count the extractor missed produced a
+        // single دفعة and reported success. Client, صباح النور 2026-07-29: a
+        // 50,000 lease of 2×25,000 became ONE payment of 25,000 — half the
+        // liability silently absent from the ledger, and the operator had already
+        // marked it paid before anyone noticed.
+        //
+        // The reconciliation check in LeaseScheduleGenerator does not catch this
+        // when rent_amount is also missing: expectedTotal is then 0 and the sum
+        // check is skipped entirely, so the wrong schedule validates clean.
+        if ($numPayments <= 0 && $rentValue > 0 && is_numeric($paymentValue) && (float) $paymentValue > 0) {
+            // The count is recoverable when the total and the instalment are both
+            // known and divide evenly — 50,000 / 25,000 = 2.
+            $derived = (int) round($rentValue / (float) $paymentValue);
+            if ($derived >= 1 && abs(($derived * (float) $paymentValue) - $rentValue) <= max(0.01, $rentValue * 0.01)) {
+                $numPayments = $derived;
+            }
+        }
+
+        if ($numPayments <= 0) {
+            return 'تم حفظ العقد، لكن لم يُحدَّد عدد الدفعات في المستند ولا يمكن استنتاجه من '
+                . 'قيمة الإيجار وقيمة الدفعة. لم تُنشأ أي دفعات حتى لا يُسجَّل جدول ناقص — '
+                . 'أدخل عدد الدفعات يدوياً من «إدارة دفعات الايجار».';
+        }
+
         return $this->generateRentPaymentsFor($shop_id, [
             'start_date' => $start,
             'end_date' => $end !== '' ? $end : null,
-            'num_payments' => $numPayments > 0 ? $numPayments : 1,
+            'num_payments' => $numPayments,
             'rent_value' => $rentValue,
             'payment_value' => $paymentValue,
             'payment_frequency' => $data['payment_frequency'] ?? null,
