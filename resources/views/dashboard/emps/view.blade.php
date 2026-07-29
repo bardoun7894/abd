@@ -137,6 +137,62 @@
         src="{{ asset('assets/module/emp_j.js') }}?t={{ config('global.ver.version_all') }}"></script>
     <script>
         view_all_emp("{{ route('dashboard.emps.tbl') }}");
+
+        /* Admin-set password. «نسيت كلمة المرور» needs SMTP, which this host does
+           not have, so without this a user who forgets their password is locked
+           out for good. Deliberately does NOT reveal the value back to the page. */
+        function reset_pw (id) {
+            swal.fire({
+                title: 'تغيير كلمة المرور',
+                html: '<input id="pw1" type="password" class="form-control mb-3" placeholder="كلمة المرور الجديدة" autocomplete="new-password">' +
+                      '<input id="pw2" type="password" class="form-control" placeholder="تأكيد كلمة المرور" autocomplete="new-password">' +
+                      '<div class="text-muted fs-8 mt-2">8 أحرف على الأقل. سلّمها للمستخدم ليغيّرها بنفسه.</div>',
+                showCancelButton: true,
+                confirmButtonText: 'حفظ',
+                cancelButtonText: 'الغاء',
+                buttonsStyling: false,
+                customClass: {
+                    confirmButton: "btn btn-primary",
+                    cancelButton: 'btn btn-danger'
+                },
+                preConfirm: function () {
+                    var a = document.getElementById('pw1').value;
+                    var b = document.getElementById('pw2').value;
+                    if (!a || a.length < 8) {
+                        swal.showValidationMessage('كلمة المرور يجب ألا تقل عن 8 أحرف');
+                        return false;
+                    }
+                    if (a !== b) {
+                        swal.showValidationMessage('كلمتا المرور غير متطابقتين');
+                        return false;
+                    }
+                    return { pw: a, pw2: b };
+                }
+            }).then(function (result) {
+                if (!result.value) { return; }
+                $.ajax({
+                    url: "{{ route('dashboard.emps.reset_password') }}",
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
+                        id: id,
+                        password: result.value.pw,
+                        password_confirmation: result.value.pw2
+                    },
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                    },
+                    success: function (resp) {
+                        swal.fire(resp.status ? 'تم' : 'خطأ', resp.message_out || '');
+                    },
+                    error: function (xhr) {
+                        var m = (xhr.responseJSON && xhr.responseJSON.message_out) || 'تعذّر تغيير كلمة المرور';
+                        swal.fire('خطأ', m);
+                    }
+                });
+            });
+        }
+
         function del_emps (id) {
             swal.fire({
                 text: 'هل انت متأكد من الحذف',

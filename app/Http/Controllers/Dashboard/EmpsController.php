@@ -319,6 +319,10 @@ class EmpsController extends Controller
                     if (Perm::get_function_access(3)) {
                         $opt .= '<a class="btn btn-sm btn-success btn-icon btn-icon-sm upd_emps" style="margin-bottom: 5px;margin-top: 5px;margin-left:5px !important"    data-url=' . "'" . route('dashboard.emps.upd_emps') . "'" . '            onclick="upd_emps(' . "'" . $x->id . "'" . ')"> <i class="far fa-edit fa-fw"></i></a>';
                     }
+                    if (Perm::get_function_access(3)) {
+                        // id only — a name with an apostrophe would break the inline onclick.
+                        $opt .= '<a class="btn btn-sm btn-warning btn-icon btn-icon-sm" title="تغيير كلمة المرور" style="margin-bottom: 5px;margin-top: 5px;margin-left:5px !important" onclick="reset_pw(' . "'" . $x->id . "'" . ')"> <i class="fas fa-key fa-fw"></i></a>';
+                    }
                     if (Perm::get_function_access(4)) {
                         $opt .= '<a class="btn btn-sm btn-danger btn-icon btn-icon-sm" style="margin-bottom: 5px;margin-top: 5px;margin-left:5px !important" onclick="del_emps(' . "'" . $x->id . "'" . ')"> <i class="fas fa-trash-alt fa-fw"></i>  </a>';
                     }
@@ -398,6 +402,66 @@ class EmpsController extends Controller
         }
     }
 
+
+    /**
+     * Set another user's password from «المستخدمين و الصلاحيات».
+     *
+     * WHY THIS EXISTS
+     * ---------------
+     * There was no way to change an existing user's password anywhere in the
+     * system. updstore() lists 'password' among its attribute labels but never
+     * validates or saves it — only user CREATION ever set one. The only recovery
+     * path was «نسيت كلمة المرور», which needs SMTP, and no working mail
+     * credentials exist on either instance. A user who forgot their password was
+     * therefore locked out permanently, with no in-app remedy at all (client
+     * منصور, 2026-07-28, on both systems).
+     *
+     * Gated on the same permission as editing a user (function 3): whoever can
+     * edit a user can already change their email address, so this grants no
+     * privilege they did not effectively have.
+     *
+     * The change is written to the audit log — provenance belongs there, not in
+     * anything the user sees.
+     */
+    public function reset_password(Request $request)
+    {
+        if (! Perm::get_function_access(3)) {
+            return response()->json(['status' => false, 'message_out' => 'لا تملك صلاحية تغيير كلمة المرور'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'id' => ['required'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+        $validator->setAttributeNames([
+            'password' => 'كلمة المرور',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => $validator->errors(),
+                'message_out' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        $user = User::find($request->id);
+        if (! $user) {
+            return response()->json(['status' => false, 'message_out' => 'المستخدم غير موجود'], 404);
+        }
+
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        \App\Services\AuditLogger::log('user', (int) $user->id, \App\Services\AuditLogger::EDIT, [
+            'note' => 'تم تعيين كلمة مرور جديدة للمستخدم بواسطة '.(Auth::user()->name ?? '—'),
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message_out' => 'تم تغيير كلمة المرور للمستخدم «'.$user->name.'». سلّمها له ليغيّرها بنفسه.',
+        ]);
+    }
 
     public function upd_emps(Request $request)
     {

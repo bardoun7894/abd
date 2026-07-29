@@ -169,6 +169,9 @@ Route::group([
         Route::post('/emps/del_role', [empsController::class, 'del_role'])->name('emps.del_role');
         Route::post('/emps/upd_role', [empsController::class, 'upd_role'])->name('emps.upd_role');
         Route::post('/emps/updrole', [empsController::class, 'updrole'])->name('emps.updrole');
+        // Admin-set password. The only in-app recovery from a forgotten password —
+        // «نسيت كلمة المرور» needs SMTP, which neither instance has.
+        Route::post('/emps/reset_password', [EmpsController::class, 'reset_password'])->name('emps.reset_password');
         Route::resource('/emps', empsController::class)->only(['index', 'store']);
 
         // No ->name() here: Route::resource('/accountings') below already owns
