@@ -155,10 +155,19 @@ class LeaseController extends Controller
         // Only the merged contract row, not the page fragments it was folded from
         // (LeasePipeline::consolidate). Batches processed before that existed have
         // superseded_by null on every row and still list page-by-page.
-        $extractions = $batch->extractions()
-            ->whereNull('superseded_by')
-            ->orderBy('page_number')
-            ->get()->map(fn (LeaseExtraction $e) => [
+        $rows = $batch->extractions()->whereNull('superseded_by')->orderBy('page_number')->get();
+
+        // Deleting the merged row used to blank the whole batch: its fragments are
+        // all superseded, so the filter above returned nothing and the screen said
+        // the extraction had produced no contracts at all. Happened for real on
+        // صباح النور 2026-07-29, when an operator deleted the three merged rows and
+        // every batch went empty. Fall back to the fragments so the pages a user
+        // paid AI time for are never hidden behind a row they deleted.
+        if ($rows->isEmpty()) {
+            $rows = $batch->extractions()->orderBy('page_number')->get();
+        }
+
+        $extractions = $rows->map(fn (LeaseExtraction $e) => [
             'id' => $e->id,
             'page_number' => $e->page_number,
             'contract_no' => $e->contract_no,
