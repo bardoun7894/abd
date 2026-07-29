@@ -176,7 +176,20 @@ class Purchase extends Model
         if ($purchase_dt_from  == "" and $purchase_dt_to != "") {
             $rs_stmt1 = $rs_stmt1 . " and  p.purchase_dt <= '$purchase_dt_to'  ";
         }
-        if ($manager_id  != "") {
+        // `and $shops != "on"` is load-bearing, and this report was the only one of
+        // the three queries missing it. On شراء المحلات the branch above already
+        // pins `p.manager_id IS NULL` — shop purchases have no قائد المحل — so
+        // also requiring `p.manager_id = '5'` is a contradiction and the report
+        // comes back with ZERO rows every time.
+        //
+        // It only bit users who send a قائد المحل: an admin browsing with «الكل»
+        // sends an empty manager_id and never sees it, while an employee scoped to
+        // a manager got an Excel file containing nothing but headers (client,
+        // 2026-07-29: "he still get empty excel ... admin is work").
+        //
+        // serachspenddata() and serachspendcount() have carried this guard all
+        // along, which is why the table on screen showed rows the export could not.
+        if ($manager_id  != "" and $shops != "on") {
             $rs_stmt1 = $rs_stmt1 . " and  p.manager_id = '$manager_id ' ";
         }
         if ($shop_id  != "") {
