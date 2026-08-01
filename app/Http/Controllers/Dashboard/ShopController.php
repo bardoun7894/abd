@@ -584,8 +584,10 @@ class ShopController extends Controller
     {
         if (Perm::get_function_access(33) ) {
             $shop_id = $request->shop_id;
-            $list_total = Shop::serachrentpaycount($shop_id);
-            $list = Shop::serachrentpaydata($shop_id);
+            // Due-soon filter (client, 2026-08-01: «نقدر نطلع الدفعات اللي على وشك الاستحقاق»).
+            $due = (string) $request->input('due', '');
+            $list_total = Shop::serachrentpaycount($shop_id, $due);
+            $list = Shop::serachrentpaydata($shop_id, $due);
             $data = array();
             $no = $_POST['start'];
             $i = 0;

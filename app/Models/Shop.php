@@ -732,20 +732,44 @@ CASE
 
 
 
-    public function scopeserachrentpaycount($query, $shop_id)
+    /**
+     * SQL fragment for the due-soon دفعات filter (client, 2026-08-01: «نقدر نطلع
+     * الدفعات اللي على وشك الاستحقاق»). Only matches against the fixed enum the
+     * UI offers, so there is no user input to escape here.
+     *
+     *   overdue  — unpaid and already past the due date
+     *   due7     — unpaid, due within the next 7 days (today counts)
+     *   due30    — unpaid, due within the next 30 days
+     *   ''/other — no filter
+     *
+     * Overdue payments are NOT included in due7/due30; they have their own
+     * bucket, so "خلال 30 يوماً" does not also dump every late payment on you.
+     */
+    private static function rentpayDuePredicate(string $due): string
+    {
+        return match ($due) {
+            'overdue' => " and sn.rentpay_status != 'paid' and sn.rentpay_dt < CURDATE() ",
+            'due7'    => " and sn.rentpay_status != 'paid' and sn.rentpay_dt >= CURDATE() and sn.rentpay_dt <= DATE_ADD(CURDATE(), INTERVAL 7 DAY) ",
+            'due30'   => " and sn.rentpay_status != 'paid' and sn.rentpay_dt >= CURDATE() and sn.rentpay_dt <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) ",
+            default   => '',
+        };
+    }
+
+    public function scopeserachrentpaycount($query, $shop_id, $due = '')
     {
         $shop_id = TRIM($shop_id);
-        $rs_stmt1 = " SELECT rentpay_id  FROM  shop_rentpay where   1=1  ";
+        $rs_stmt1 = " SELECT rentpay_id  FROM  shop_rentpay sn where   1=1  ";
         if ($shop_id  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  shop_id = '$shop_id ' ";
+            $rs_stmt1 = $rs_stmt1 . " and  sn.shop_id = '$shop_id ' ";
         }
+        $rs_stmt1 = $rs_stmt1 . self::rentpayDuePredicate((string) $due);
 
         $results = count(DB::select($rs_stmt1));
         return  $results;
     }
 
 
-    public function scopeserachrentpaydata($query, $shop_id)
+    public function scopeserachrentpaydata($query, $shop_id, $due = '')
     {
         $a = $_POST['length'] ?? "";
         $b = $_POST['start'] ?? "";
@@ -768,6 +792,7 @@ CASE
         if ($shop_id  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  sn.shop_id = '$shop_id ' ";
         }
+        $rs_stmt1 = $rs_stmt1 . self::rentpayDuePredicate((string) $due);
 
         $rs_stmt1 = $rs_stmt1  . $ord;
         if (isset($b) and isset($a) and $b !="" and $a!="")

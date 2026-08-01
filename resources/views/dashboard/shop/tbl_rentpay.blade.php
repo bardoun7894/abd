@@ -1,6 +1,15 @@
 <link href="{{ asset('assets/plugins/custom/datatables/datatables.bundle.css') }}" rel="stylesheet" type="text/css" />
 <script src="{{ asset('assets/plugins/custom/datatables/datatables.bundle.js') }}"></script>
    <div class="py-5">
+        <div class="d-flex align-items-center gap-3 mb-4">
+            <label for="rentpay_due_filter" class="form-label fs-6 fw-bold text-dark mb-0">عرض:</label>
+            <select id="rentpay_due_filter" class="form-select form-select-solid w-auto fw-bold">
+                <option value="">كل الدفعات</option>
+                <option value="overdue">متأخرة (تجاوزت الاستحقاق)</option>
+                <option value="due7">على وشك الاستحقاق — خلال 7 أيام</option>
+                <option value="due30">على وشك الاستحقاق — خلال 30 يوماً</option>
+            </select>
+        </div>
         <table id="rentpay_tbl" class="table table-row-bordered gy-5">
         	<thead>
         		<tr class="fw-semibold fs-6 text-muted">
@@ -72,8 +81,14 @@
 
                 data: function (d) {
                  d.shop_id =shop_id;
+                 d.due = $('#rentpay_due_filter').val();
                 },
             },
+        });
+
+        // Reload when the due-soon filter changes.
+        $(document).on('change', '#rentpay_due_filter', function () {
+            $('#rentpay_tbl').DataTable().ajax.reload(null, false);
         });
           });
 
