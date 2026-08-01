@@ -63,8 +63,8 @@ class LogActivity
         'dashboard.invoices.manual-entry' => 'إدخال بيانات فاتورة يدوياً',
         'dashboard.invoices.destroy' => 'حذف دفعة فواتير',
         'dashboard.invoices.store' => 'رفع دفعة فواتير للاستخراج',
-        'dashboard.shop.rentpay.receipt' => 'تسجيل سند قبض إيجار',
-        'dashboard.shop.rentpay.void' => 'إلغاء سند قبض إيجار',
+        'dashboard.shop.rentpay.receipt' => 'تسجيل سند صرف إيجار',
+        'dashboard.shop.rentpay.void' => 'إلغاء سند صرف إيجار',
     ];
 
     /** Route-name tokens that map to a delete action. */

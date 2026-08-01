@@ -1141,6 +1141,11 @@ class ShopController extends Controller
                 $receipt = (new CashboxService())->recordReceipt(array_merge([
                     'source_type' => 'shop_rentpay',
                     'source_id' => $rentpay_id,
+                    // Money OUT. Client, 2026-08-01: «المبلغ صرف من الشركة» — on
+                    // these إجارة contracts the company pays, so a دفعة سند is a
+                    // سند صرف, not a سند قبض. recordReceipt defaults to 'in' when
+                    // this key is absent, so it must be stated explicitly.
+                    'direction' => 'out',
                     'amount' => $request->input('amount'),
                     'receipt_date' => $request->input('receipt_date'),
                     'payer_name' => $request->input('payer_name'),
@@ -1163,7 +1168,7 @@ class ShopController extends Controller
         }
 
         AuditLogger::log('lease', $rentpay_id, AuditLogger::PAID, [
-            'note' => 'سند قبض ' . $receipt->receipt_no,
+            'note' => 'سند صرف ' . $receipt->receipt_no,
             'user' => Auth::user()->id,
         ]);
 
@@ -1171,7 +1176,7 @@ class ShopController extends Controller
             'status' => true,
             'rentpay_status' => 'paid',
             'receipt_no' => $receipt->receipt_no,
-            'message_out' => 'تم تسجيل سند القبض والتحديد كمدفوع',
+            'message_out' => 'تم تسجيل سند الصرف والتحديد كمدفوع',
         ]);
     }
 
