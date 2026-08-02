@@ -116,7 +116,8 @@
                                     <select class="form-select fw-bold" data-control="select2" id="rentpay_price_v"
                                         name="rentpay_price_v" dir="rtl" >
                                         <option value="">الكل</option>
-                                        <option value="due">دفعات على وشك الاستحقاق</option>
+                                        <option value="due">على وشك الاستحقاق</option>
+                                        <option value="overdue">مستحق الان</option>
                                         <option value="paid">دفعات مدفوعة</option>
                                         <option value="0">يحتاج الى تحديث</option>
                                         <option value="1">له بيانات ايجار</option>

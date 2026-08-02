@@ -183,7 +183,7 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
         $shop_id = TRIM($shop_id);
         $rentpay_price = TRIM($rentpay_price);
 
-        $rs_stmt1 = " SELECT sh.*,m.manager_name,c.city_name,u.name,sherp.rentpay_dt,sherp.rentpay_price,
+        $rs_stmt1 = " SELECT sh.*,m.manager_name,c.city_name,u.name,sherp.rentpay_dt,sherp.rentpay_price,sherp.rentpay_status,
             sm.municip_no,sm.municip_sdt,sm.municip_edt,
             sd.defence_no,sd.defence_sdt,sd.defence_edt,
             shel.health_no,shel.health_edt,
@@ -237,7 +237,7 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
             left join  shop_rent sr on sr.shop_id=sr.shop_id
             left join  shop_defence  sd on sh.shop_id=sd.shop_id
             left join  shop_health shel on sh.shop_id=shel.shop_id
-            left join   shop_rentpay sherp on sh.shop_id=sherp.shop_id and (sherp.rentpay_dt BETWEEN now() and DATE_ADD(CURDATE(), INTERVAL 30 DAY)  or date(now())<=date(rentpay_dt) )
+            left join   shop_rentpay sherp on sh.shop_id=sherp.shop_id and sherp.rentpay_dt <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) /* overdue (rentpay_dt < today) must surface too — مستحق الان is a filter of its own. The old BETWEEN-now-AND-+30d OR today<=rentpay_dt was redundant AND hid every overdue row. */
 
 
        ";
@@ -266,7 +266,11 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
             } else  if ($rentpay_price  == "1") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is not null ";
             } else  if ($rentpay_price  == "due") {
-                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' ";
+                // على وشك الاستحقاق — unpaid, due AFTER today (مستحق الان has its own value).
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' and sherp.rentpay_dt > CURDATE() ";
+            } else  if ($rentpay_price  == "overdue") {
+                // مستحق الان — unpaid, due today or already past. Needs the widened join above.
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' and sherp.rentpay_dt <= CURDATE() ";
             } else  if ($rentpay_price  == "paid") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status = 'paid' ";
 
@@ -324,7 +328,7 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
         $rs_stmt1 = " SELECT sh.shop_id FROM  shop sh
         left join  shop_municip sm on sh.shop_id=sm.shop_id
             left join  shop_comme sc on sh.shop_id=sc.shop_id
-            left join   shop_rentpay sherp on sh.shop_id=sherp.shop_id and (sherp.rentpay_dt BETWEEN now() and DATE_ADD(CURDATE(), INTERVAL 30 DAY)  or date(now())<=date(rentpay_dt) )
+            left join   shop_rentpay sherp on sh.shop_id=sherp.shop_id and sherp.rentpay_dt <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) /* overdue (rentpay_dt < today) must surface too — مستحق الان is a filter of its own. The old BETWEEN-now-AND-+30d OR today<=rentpay_dt was redundant AND hid every overdue row. */
 
           ";
 
@@ -352,7 +356,11 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
             } else  if ($rentpay_price  == "1") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is not null ";
             } else  if ($rentpay_price  == "due") {
-                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' ";
+                // على وشك الاستحقاق — unpaid, due AFTER today (مستحق الان has its own value).
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' and sherp.rentpay_dt > CURDATE() ";
+            } else  if ($rentpay_price  == "overdue") {
+                // مستحق الان — unpaid, due today or already past. Needs the widened join above.
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' and sherp.rentpay_dt <= CURDATE() ";
             } else  if ($rentpay_price  == "paid") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status = 'paid' ";
             }
@@ -429,7 +437,7 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
             $ord =  "    ";
         }
 
-        $rs_stmt1 = " SELECT sh.*,m.manager_name,c.city_name,u.name,sherp.rentpay_dt,sherp.rentpay_price,
+        $rs_stmt1 = " SELECT sh.*,m.manager_name,c.city_name,u.name,sherp.rentpay_dt,sherp.rentpay_price,sherp.rentpay_status,
             sm.municip_no,sm.municip_sdt,sm.municip_edt,
             sd.defence_no,sd.defence_sdt,sd.defence_edt,
             shel.health_no,shel.health_edt,
@@ -483,7 +491,7 @@ CASE
             left join  shop_rent sr on sr.shop_id=sr.shop_id
             left join  shop_defence  sd on sh.shop_id=sd.shop_id
             left join  shop_health shel on sh.shop_id=shel.shop_id
-            left join   shop_rentpay sherp on sh.shop_id=sherp.shop_id and (sherp.rentpay_dt BETWEEN now() and DATE_ADD(CURDATE(), INTERVAL 30 DAY)  or date(now())<=date(rentpay_dt) )
+            left join   shop_rentpay sherp on sh.shop_id=sherp.shop_id and sherp.rentpay_dt <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) /* overdue (rentpay_dt < today) must surface too — مستحق الان is a filter of its own. The old BETWEEN-now-AND-+30d OR today<=rentpay_dt was redundant AND hid every overdue row. */
 
             ";
         if ($this->emp_job != 1) {
@@ -543,7 +551,11 @@ CASE
             } else  if ($rentpay_price  == "1") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is not null ";
             } else  if ($rentpay_price  == "due") {
-                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' ";
+                // على وشك الاستحقاق — unpaid, due AFTER today (مستحق الان has its own value).
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' and sherp.rentpay_dt > CURDATE() ";
+            } else  if ($rentpay_price  == "overdue") {
+                // مستحق الان — unpaid, due today or already past. Needs the widened join above.
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' and sherp.rentpay_dt <= CURDATE() ";
             } else  if ($rentpay_price  == "paid") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status = 'paid' ";
 

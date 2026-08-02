@@ -246,8 +246,20 @@ class ShopController extends Controller
                     '<div class="fw-bold text-success">' . $x->rentpay_price . '</div>';
                 }
                 else{
-                    $rentpay_dt_char = '<span class="ms-2 badge badge-light-primary fw-bold">يحتاج الى تحديث</span>';
-
+                    // Past the due date. Client, 2026-08-03: «المفروض لما أعمل على وشك يطلع بس
+                    // هذا، كذلك لو يطلع بعد المستحق الآن». This used to read «يحتاج الى تحديث»
+                    // for ANY past date, so a filter on مستحق الان surfaced rows whose own
+                    // badge said «يحتاج الى تحديث» — meaningless against a list of money owed.
+                    // rentpay_status is now selected by the scope; a past UNPAID date is money
+                    // due now, not a data-entry gap. A past PAID one is settled.
+                    $isPaid = ($x->rentpay_status ?? 'unpaid') === 'paid';
+                    if ($isPaid) {
+                        $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge badge-light-success fw-bold">مدفوعة</span>'.'<br>'.
+                        '<div class="fw-bold text-success">' . $x->rentpay_price . '</div>';
+                    } else {
+                        $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge badge-light-danger fw-bold">مستحق الان</span>'.'<br>'.
+                        '<div class="fw-bold text-success">' . $x->rentpay_price . '</div>';
+                    }
                 }
             }
 
