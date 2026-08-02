@@ -232,17 +232,22 @@ class ShopController extends Controller
 
 
 
+                // Badge now follows the paid state as well as the date. Client, 2026-08-03:
+                // the label must match what the filter selected, and a settled payment is not
+                // money owed regardless of its due date.
+                $isPaid = ($x->rentpay_status ?? 'unpaid') === 'paid';
+
                 if ($rentpay_dt > $today and  $rentpay_dt > $newDateTime) {
-                    $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge badge-light-info fw-bold">ساري</span>'.'<br>'.
+                    $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge '.($isPaid ? 'badge-light-success' : 'badge-light-info').' fw-bold">'.($isPaid ? 'مدفوعة' : 'ساري').'</span>'.'<br>'.
                     '<div class="fw-bold text-success">' . $x->rentpay_price . '</div>';
                 }
               else  if ($rentpay_dt > $today and  $rentpay_dt < $newDateTime) {
-                    $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge badge-light-info fw-bold">على وشك الاستحقاق</span>'.'<br>'.
+                    $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge '.($isPaid ? 'badge-light-success' : 'badge-light-info').' fw-bold">'.($isPaid ? 'مدفوعة' : 'على وشك الاستحقاق').'</span>'.'<br>'.
                     '<div class="fw-bold text-success">' . $x->rentpay_price . '</div>';
                 }
 
                 else if ($rentpay_dt == $today) {
-                    $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge badge-light-danger fw-bold">مستحق الان</span>'.'<br>'.
+                    $rentpay_dt_char = $rentpay_dt.'<br>'.'<span class="ms-2 badge '.($isPaid ? 'badge-light-success' : 'badge-light-danger').' fw-bold">'.($isPaid ? 'مدفوعة' : 'مستحق الان').'</span>'.'<br>'.
                     '<div class="fw-bold text-success">' . $x->rentpay_price . '</div>';
                 }
                 else{

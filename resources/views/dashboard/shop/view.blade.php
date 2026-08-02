@@ -118,6 +118,7 @@
                                         <option value="">الكل</option>
                                         <option value="due">على وشك الاستحقاق</option>
                                         <option value="overdue">مستحق الان</option>
+                                        <option value="valid">ساري</option>
                                         <option value="paid">دفعات مدفوعة</option>
                                         <option value="0">يحتاج الى تحديث</option>
                                         <option value="1">له بيانات ايجار</option>
