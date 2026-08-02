@@ -254,12 +254,22 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
             }
         }
 
+        // «حالة استحقاق دفع الايجار» — client 2026-08-02: «فلتر في صفحة إدارة
+        // المحلات يعرف من خلاله الدفعات لي وشك الاستحقاق». The shop_rentpay join
+        // above is already windowed to the next 30 days, so surviving sherp.* rows
+        // are دفعات on وشك الاستحقاق by construction; the extra values pick a due
+        // state inside that window. sherp.rentpay_status is non-null in this schema,
+        // so IS NULL rows are always «لا دفعات».
         if ($rentpay_price  != "") {
             if ($rentpay_price  == "0") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is null ";
             } else  if ($rentpay_price  == "1") {
-
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is not null ";
+            } else  if ($rentpay_price  == "due") {
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' ";
+            } else  if ($rentpay_price  == "paid") {
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status = 'paid' ";
+
             }
         }
 
@@ -330,11 +340,21 @@ left join  note_type n2 on nh.old_note_type_id =n2.note_type_id
                 $rs_stmt1 = $rs_stmt1 . " and  sh.create_user = $this->user_id ";
             }
         }
+        // «حالة استحقاق دفع الايجار» — client 2026-08-02: «فلتر في صفحة إدارة
+        // المحلات يعرف من خلاله الدفعات لي وشك الاستحقاق». The shop_rentpay join
+        // above is already windowed to the next 30 days, so surviving sherp.* rows
+        // are دفعات on وشك الاستحقاق by construction; the extra values pick a due
+        // state inside that window. sherp.rentpay_status is non-null in this schema,
+        // so IS NULL rows are always «لا دفعات».
         if ($rentpay_price  != "") {
             if ($rentpay_price  == "0") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is null ";
             } else  if ($rentpay_price  == "1") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is not null ";
+            } else  if ($rentpay_price  == "due") {
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' ";
+            } else  if ($rentpay_price  == "paid") {
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status = 'paid' ";
             }
         }
 
@@ -511,12 +531,22 @@ CASE
                 $rs_stmt1 = $rs_stmt1 . " and  sh.create_user = $this->user_id ";
             }
         }
+        // «حالة استحقاق دفع الايجار» — client 2026-08-02: «فلتر في صفحة إدارة
+        // المحلات يعرف من خلاله الدفعات لي وشك الاستحقاق». The shop_rentpay join
+        // above is already windowed to the next 30 days, so surviving sherp.* rows
+        // are دفعات on وشك الاستحقاق by construction; the extra values pick a due
+        // state inside that window. sherp.rentpay_status is non-null in this schema,
+        // so IS NULL rows are always «لا دفعات».
         if ($rentpay_price  != "") {
             if ($rentpay_price  == "0") {
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is null ";
             } else  if ($rentpay_price  == "1") {
-
                 $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_price is not null ";
+            } else  if ($rentpay_price  == "due") {
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status != 'paid' ";
+            } else  if ($rentpay_price  == "paid") {
+                $rs_stmt1 = $rs_stmt1 . " and  sherp.rentpay_status = 'paid' ";
+
             }
         }
         if ($shop_name  != "") {
