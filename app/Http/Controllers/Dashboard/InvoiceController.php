@@ -45,6 +45,16 @@ class InvoiceController extends Controller
      */
     private const WEB_METHODS = ['index', 'create', 'show', 'review', 'error', 'report', 'file', 'exportBatches', 'needsFix'];
 
+    /** Content types file() serves — kept in step with imageUrl()'s allowed extensions. */
+    private const MIME_BY_EXT = [
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'pdf' => 'application/pdf',
+    ];
+
     /**
      * Spec 024 Feature 1 — special permission (per_function id 222, seeded by
      * 2026_07_24_000017_seed_invoice_reroute_permission.php) gating
@@ -1773,17 +1783,35 @@ class InvoiceController extends Controller
         }
     }
 
-    /** Build a Laravel-served URL for a page attachment (web servers here don't serve the symlinked uploads dir). */
+    /**
+     * Build a Laravel-served URL for a page attachment (web servers here don't serve
+     * the symlinked uploads dir).
+     *
+     * image_path is NOT always a bare file name: when poppler is unavailable (the
+     * production host disables exec()), InvoicePipeline::wholeDocument() stores the
+     * source document plus a page fragment — "…/batch_12/source.pdf#page=64". Match the
+     * extension on the path WITHOUT that fragment, then carry the fragment onto the
+     * generated URL so the browser's PDF viewer still opens on the right page.
+     * Anchoring the check at the end of the whole string left every invoice on such a
+     * host with an empty المرفق cell (شركة صباح النور, batch 12).
+     */
     private function imageUrl(int $batchId, ?string $imagePath): ?string
     {
-        if (! $imagePath || ! preg_match('/\.(png|jpe?g|webp|gif|pdf)$/i', $imagePath)) {
+        if (! $imagePath) {
             return null; // missing
         }
 
-        return route('dashboard.invoices.file', ['id' => $batchId, 'name' => basename($imagePath)]);
+        [$clean, $fragment] = array_pad(explode('#', $imagePath, 2), 2, null);
+        if (! preg_match('/\.(png|jpe?g|webp|gif|pdf)$/i', $clean)) {
+            return null; // not a servable document
+        }
+
+        $url = route('dashboard.invoices.file', ['id' => $batchId, 'name' => basename($clean)]);
+
+        return filled($fragment) ? $url.'#'.$fragment : $url;
     }
 
-    /** Stream a per-page invoice image through the app (auth + ownership enforced). */
+    /** Stream a per-page invoice attachment through the app (auth + ownership enforced). */
     public function file($id, $name)
     {
         $batch = $this->findOwned($id);
@@ -1793,7 +1821,15 @@ class InvoiceController extends Controller
             storage_path('app/public/invoices/pages/batch_'.$batch->id.'/'.$name),
         ] as $path) {
             if (is_file($path)) {
-                return response()->file($path);
+                // Send the type explicitly and inline: mime guessing needs ext-fileinfo,
+                // and an octet-stream fallback makes the browser DOWNLOAD the file
+                // instead of opening it — which also kills the "#page=N" fragment the
+                // whole-document fallback relies on to land on the right invoice.
+                return response()->file($path, [
+                    'Content-Type' => static::MIME_BY_EXT[strtolower(pathinfo($path, PATHINFO_EXTENSION))]
+                        ?? 'application/octet-stream',
+                    'Content-Disposition' => 'inline; filename="'.$name.'"',
+                ]);
             }
         }
         abort(404);

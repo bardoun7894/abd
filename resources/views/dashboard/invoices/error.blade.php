@@ -59,11 +59,7 @@
             <div class="card-body">
                 <div class="row g-5">
                     <div class="col-lg-4">
-                        @if ($invoice->image_url)
-                            <img src="{{ $invoice->image_url }}" loading="lazy" class="inv-thumb w-100 rounded border" data-full="{{ $invoice->image_url }}" style="cursor:zoom-in" title="اضغط للتكبير">
-                        @else
-                            <div class="text-muted text-center border rounded py-10">لا توجد صورة للصفحة</div>
-                        @endif
+                        @include('dashboard.invoices._attachment', ['url' => $invoice->image_url])
                         <div class="alert alert-danger mt-3 py-2 px-3 fs-7 mb-0">{{ $invoice->error_message ?: 'فشل الاستخراج لسبب غير معروف' }}</div>
                     </div>
                     <div class="col-lg-8">
