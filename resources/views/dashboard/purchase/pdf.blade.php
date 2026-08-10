@@ -46,14 +46,16 @@ $tbl = '';
 $tbl_header='<table style="width:100%;background:#fff;table-layout: fixed;  border-collapse: collapse;"align="center"
 border=1 bordercolor=#000000  cellspacing="0" cellpadding="4">
 <tr nobr="true">
-<td  nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:5%;">#</td>
-<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:12%;">رقم الفاتورة</td>
-<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:12%;">تاريخ الفاتورة</td>
-<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:8%;">قيمة الفاتورة</td>
-<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:18%;">اسم المورد</td>
-<td nobr="true"  style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:18%;">قائد المحل</td>
+<td  nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:4%;">#</td>
+<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:11%;">رقم الفاتورة</td>
+<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:9%;">تاريخ الفاتورة</td>
+<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:10%;">المبلغ غير شامل الضريبة</td>
+<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:8%;">الضريبة</td>
+<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:10%;">المبلغ شامل الضريبة</td>
+<td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:16%;">اسم المورد</td>
+<td nobr="true"  style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:14%;">قائد المحل</td>
 <td nobr="true" style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:8%;">تاريح الادخال</td>
-<td nobr="true"  style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:20%;">الملاحظة</td>
+<td nobr="true"  style="text-align:center;border:1px solid #000000;background-color:#e4dcd6;font-weight: bold;width:10%;">الملاحظة</td>
 
 </tr>';
 $i=1;
@@ -66,6 +68,8 @@ $manager_name='';
 $created_at='';
 $note='';
 $purchase_price_sum=0;
+$before_vat_sum=0;
+$vat_sum=0;
 
 	foreach ($list as $x) {
         $purchase_no = $x->purchase_no;
@@ -77,12 +81,24 @@ $purchase_price_sum=0;
             $note = $x->note;
             $purchase_price_sum=$purchase_price_sum+$purchase_price;
 
+            // Same rule as the screen and the Excel report — see App\Support\VatBreakdown.
+            [$before_vat, $vat] = \App\Support\VatBreakdown::split(
+                $purchase_price,
+                $x->amount_before_vat ?? null,
+                $x->vat_amount ?? null,
+                $x->vat_rate ?? null
+            );
+            $before_vat_sum = $before_vat_sum + $before_vat;
+            $vat_sum = $vat_sum + $vat;
+
 
 $tbl .='<tr bordercolor=#666666 nobr="true">
 <td style="text-align:center;border: 1px solid #000000;">'.$i.'</td>
 <td style="text-align:center;border: 1px solid #000000;">'.$purchase_no.'</td>
 <td style="text-align:center;border: 1px solid #000000;">'.$purchase_dt.'</td>
-<td style="text-align:center;border: 1px solid #000000;">'.$purchase_price.'</td>
+<td style="text-align:center;border: 1px solid #000000;">'.number_format($before_vat,2).'</td>
+<td style="text-align:center;border: 1px solid #000000;">'.number_format($vat,2).'</td>
+<td style="text-align:center;border: 1px solid #000000;">'.number_format($purchase_price,2).'</td>
 <td style="text-align:center;border: 1px solid #000000;">'.$purchase_respon.'</td>
 <td style="text-align:center;border: 1px solid #000000;">'.$manager_name.'</td>
 <td style="text-align:center;border: 1px solid #000000;">'.$created_at.'</td>
@@ -94,8 +110,11 @@ $cn++;
 
 }
 $tbl .= '<tr nobr="true" bordercolor=#666666>
-<td colspan="4" style="text-align:center;border:1px solid #000000;background-color:#e3f2e4;font-weight:bold;"> الإجمالي المبلغ </td>
-<td colspan="4" style="text-align:center;border:1px solid #000000;font-weight:bold;">'.$purchase_price_sum.'</td>
+<td colspan="3" style="text-align:center;border:1px solid #000000;background-color:#e3f2e4;font-weight:bold;"> الإجمالي المبلغ </td>
+<td style="text-align:center;border:1px solid #000000;background-color:#e3f2e4;font-weight:bold;">'.number_format($before_vat_sum,2).'</td>
+<td style="text-align:center;border:1px solid #000000;background-color:#e3f2e4;font-weight:bold;">'.number_format($vat_sum,2).'</td>
+<td style="text-align:center;border:1px solid #000000;background-color:#e3f2e4;font-weight:bold;">'.number_format($purchase_price_sum,2).'</td>
+<td colspan="4" style="text-align:center;border:1px solid #000000;"></td>
 
 </tr>';
 

@@ -135,18 +135,14 @@ class ReportController extends Controller
             $created_at = Carbon::parse($x->created_at)->format('d-m-Y');
             $note = $x->note;
 
-            // Only AI-extracted invoices carry a real VAT breakdown (~3% of rows
-            // today); the rest were keyed in as a single figure. Leave the two VAT
-            // cells EMPTY rather than back-computing them from an assumed rate —
-            // this is a tax document, and a plausible-looking invented number is
-            // worse than a blank one. Fall back to vat_rate only when the invoice
-            // actually states a rate.
-            $beforeVat = $x->amount_before_vat ?? null;
-            $vat = $x->vat_amount ?? null;
-            if ($beforeVat === null && $vat === null && ! empty($x->vat_rate) && (float) $x->vat_rate > 0) {
-                $beforeVat = round((float) $purchase_price / (1 + ((float) $x->vat_rate / 100)), 2);
-                $vat = round((float) $purchase_price - $beforeVat, 2);
-            }
+            // Leaving these blank for rows with no stored breakdown is what made
+            // the export disagree with the screen — see App\Support\VatBreakdown.
+            [$beforeVat, $vat] = \App\Support\VatBreakdown::split(
+                $purchase_price,
+                $x->amount_before_vat ?? null,
+                $x->vat_amount ?? null,
+                $x->vat_rate ?? null
+            );
 
             $sumBeforeVat += (float) ($beforeVat ?? 0);
             $sumVat += (float) ($vat ?? 0);

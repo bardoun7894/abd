@@ -94,8 +94,16 @@ class PurchaseController extends Controller
                 $row[] = Carbon::parse($x->purchase_dt)->format('d-m-Y');
                 $row[] = $x->purchase_price;
 
-                $row[] = number_format($x->purchase_price - $x->purchase_price / 1.15, 2);
-                $row[] = number_format($x->purchase_price / 1.15, 2);
+                // Was a bare /1.15 here, which ignored the breakdown the invoice
+                // itself states and so drifted from the Excel report.
+                [$beforeVat, $vat] = \App\Support\VatBreakdown::split(
+                    $x->purchase_price,
+                    $x->amount_before_vat ?? null,
+                    $x->vat_amount ?? null,
+                    $x->vat_rate ?? null
+                );
+                $row[] = number_format($vat, 2);
+                $row[] = number_format($beforeVat, 2);
                 $row[] = $x->tax_number;
 
                 $shop = Shop::find($x->shop_id);
