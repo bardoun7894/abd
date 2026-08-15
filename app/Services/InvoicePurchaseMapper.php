@@ -102,7 +102,9 @@ class InvoicePurchaseMapper
             return $imagePath;
         }
         try {
-            $clean = explode('#', $imagePath)[0]; // strip any #page=N fragment for the copy
+            $parts = explode('#', $imagePath, 2);
+            $clean = $parts[0];
+            $fragment = $parts[1] ?? null;
             $src = public_path($clean);
             if (! is_file($src)) {
                 return $imagePath;
@@ -113,6 +115,26 @@ class InvoicePurchaseMapper
                 @mkdir($destDir, 0775, true);
             }
             $name = 'inv_'.\Illuminate\Support\Str::random(12).'.'.$ext;
+
+            // Whole-document fallback paths carry "#page=K". Copying the WHOLE
+            // source.pdf made every purchase attachment open at page 1 — «أي
+            // فاتورة أضغط يجي فاتورة رقم واحد» (sabah, 2026-08-14). Extract just
+            // page K with FPDI (pure PHP — exec() is disabled on the prod host)
+            // so the attachment IS the invoice's own page. Fail-open to the
+            // whole-file copy below if the split fails.
+            if ($fragment && preg_match('/^page=(\d+)$/', $fragment, $m) && strtolower($ext) === 'pdf') {
+                try {
+                    (new PdfPageSplitter())->extractPage($src, (int) $m[1], $destDir.'/'.$name);
+
+                    return 'uploads/users/images/'.$name;
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('copyImageToPurchases: page extraction failed, copying whole file', [
+                        'image_path' => $imagePath,
+                        'reason' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             if (@copy($src, $destDir.'/'.$name)) {
                 return 'uploads/users/images/'.$name;
             }

@@ -29,6 +29,35 @@ class PdfPageSplitter
     }
 
     /**
+     * Write ONE page of a multi-page PDF as a single-page PDF at $outPath.
+     * Used when an attachment must be just the invoice's own page rather than
+     * the whole source document (see InvoicePurchaseMapper::copyImageToPurchases).
+     *
+     * @throws PdfSplitException
+     */
+    public function extractPage(string $pdfPath, int $pageNo, string $outPath): void
+    {
+        try {
+            $pdf = new Fpdi();
+            $pdf->setPrintHeader(false);
+            $pdf->setPrintFooter(false);
+            $pdf->SetAutoPageBreak(false, 0);
+            $pdf->SetMargins(0, 0, 0);
+            $pdf->setSourceFile($pdfPath);
+
+            $tpl = $pdf->importPage($pageNo);
+            $size = $pdf->getTemplateSize($tpl);
+            $orientation = $size['width'] > $size['height'] ? 'L' : 'P';
+
+            $pdf->AddPage($orientation, [$size['width'], $size['height']]);
+            $pdf->useTemplate($tpl, 0, 0, $size['width'], $size['height'], true);
+            $pdf->Output($outPath, 'F');
+        } catch (\Throwable $e) {
+            throw new PdfSplitException("Failed extracting page {$pageNo}: ".$e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
      * Write one single-page PDF per page into $destDir.
      *
      * @return string[] absolute paths of the per-page PDFs (page order)
