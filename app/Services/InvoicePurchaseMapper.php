@@ -118,25 +118,32 @@ class InvoicePurchaseMapper
 
             // Whole-document fallback paths carry "#page=K". Copying the WHOLE
             // source.pdf made every purchase attachment open at page 1 — «أي
-            // فاتورة أضغط يجي فاتورة رقم واحد» (sabah, 2026-08-14). Extract just
-            // page K with FPDI (pure PHP — exec() is disabled on the prod host)
-            // so the attachment IS the invoice's own page. Fail-open to the
-            // whole-file copy below if the split fails.
-            if ($fragment && preg_match('/^page=(\d+)$/', $fragment, $m) && strtolower($ext) === 'pdf') {
-                try {
-                    (new PdfPageSplitter())->extractPage($src, (int) $m[1], $destDir.'/'.$name);
+            // فاتورة أضغط يجي فاتورة رقم واحد» (sabah, 2026-08-14). Best: extract
+            // just page K with FPDI (pure PHP — exec() is disabled on the prod
+            // host) so the attachment IS the invoice's own page. Some sources use
+            // compressed xref streams the free FPDI parser rejects (the same
+            // reason the pipeline fell back to whole-document mode); then copy
+            // the whole file but KEEP the fragment on the stored path so the
+            // browser's own PDF viewer still jumps to page K.
+            $pageFragment = null;
+            if ($fragment && preg_match('/^page=(\d+)$/', $fragment, $m)) {
+                $pageFragment = '#page='.$m[1];
+                if (strtolower($ext) === 'pdf') {
+                    try {
+                        (new PdfPageSplitter())->extractPage($src, (int) $m[1], $destDir.'/'.$name);
 
-                    return 'uploads/users/images/'.$name;
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('copyImageToPurchases: page extraction failed, copying whole file', [
-                        'image_path' => $imagePath,
-                        'reason' => $e->getMessage(),
-                    ]);
+                        return 'uploads/users/images/'.$name;
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('copyImageToPurchases: page extraction failed, copying whole file with fragment', [
+                            'image_path' => $imagePath,
+                            'reason' => $e->getMessage(),
+                        ]);
+                    }
                 }
             }
 
             if (@copy($src, $destDir.'/'.$name)) {
-                return 'uploads/users/images/'.$name;
+                return 'uploads/users/images/'.$name.$pageFragment;
             }
         } catch (\Throwable $e) {
             // fall through to the original path

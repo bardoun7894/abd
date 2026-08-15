@@ -83,3 +83,20 @@ it('fails open when the fragment page is out of range', function () {
     // Fail-open contract: keep SOMETHING usable rather than losing the attachment.
     expect($out)->not->toBeNull();
 });
+
+/*
+ * Some sources use compressed xref streams the FREE FPDI parser rejects (the same
+ * reason the pipeline fell back to whole-document mode on sabah). Extraction then
+ * fails — the whole-file copy must KEEP the #page=K fragment so the browser's own
+ * PDF viewer still lands on the invoice's page instead of page 1.
+ */
+it('keeps the #page=K fragment on the copy when the source is not FPDI-parseable', function () {
+    // A .pdf the FPDI parser cannot read at all.
+    file_put_contents(public_path($this->srcRel), "%PDF-1.7\n%garbage-not-a-real-pdf-body");
+
+    $out = InvoicePurchaseMapper::copyImageToPurchases($this->srcRel.'#page=7');
+
+    expect($out)->toStartWith('uploads/users/images/inv_');
+    expect($out)->toEndWith('.pdf#page=7');
+    expect(is_file(public_path(explode('#', $out)[0])))->toBeTrue();
+});
