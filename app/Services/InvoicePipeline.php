@@ -126,7 +126,7 @@ class InvoicePipeline
             if ($this->skipExactDuplicate($batch, $inv)) {
                 return;
             }
-            $this->persist($batch, $inv['page_number'] ?? 1, $inv, $inv['_image'] ?? null);
+            $this->persist($batch, $inv['page_number'] ?? 1, $inv, $inv['_image'] ?? null, (int) ($inv['seq'] ?? 1));
             $made++;
         };
         $collect = function (array $inv) use ($group, &$rows, $persistRow): void {
@@ -161,30 +161,62 @@ class InvoicePipeline
             }
             $t0 = microtime(true);
             try {
-                // Pass 1 — cheap. Escalate THIS page to deeper thinking only if it's a bad scan.
-                $data = $this->service->extractInvoice($pagePath, $model, $light);
-                $this->inTokens += (int) ($data['_in'] ?? 0);
-                $this->outTokens += (int) ($data['_out'] ?? 0);
+                // Pass 1 — cheap. Ask for EVERY invoice on the sheet: a page may carry
+                // two or three receipts, and the old single-invoice call forced the model
+                // to merge them into one record («ما عزل كل فاتورة لحالها», 2026-08-17).
+                $read = $this->service->extractInvoicesFromPage($pagePath, $pageNo, $model, $light);
+                $this->inTokens += (int) ($read['in'] ?? 0);
+                $this->outTokens += (int) ($read['out'] ?? 0);
+                $found = $read['invoices'] ?? [];
 
-                if ($escalate && $hard !== $light && ! empty($data['needs_review'])) {
-                    $deep = $this->service->extractInvoice($pagePath, $model, $hard);
-                    $this->inTokens += (int) ($deep['_in'] ?? 0);
-                    $this->outTokens += (int) ($deep['_out'] ?? 0);
-                    $deep['_escalated'] = true;
-                    if (($deep['invoice_number'] ?? null) !== ($data['invoice_number'] ?? null)) {
-                        $deep['needs_review'] = true;
-                        $deep['validation_notes'] = array_merge(
-                            (array) ($deep['validation_notes'] ?? []),
-                            ['اختلفت قراءة رقم الفاتورة بين المحاولتين — تحقّق يدويًا من الرقم']
-                        );
+                // Escalate THIS page to deeper thinking only if a bad scan was found.
+                if ($escalate && $hard !== $light && $this->anyFlagged($found)) {
+                    $deepRead = $this->service->extractInvoicesFromPage($pagePath, $pageNo, $model, $hard);
+                    $this->inTokens += (int) ($deepRead['in'] ?? 0);
+                    $this->outTokens += (int) ($deepRead['out'] ?? 0);
+                    $deep = $deepRead['invoices'] ?? [];
+                    // Only trust the deep pass when it agrees on HOW MANY invoices the
+                    // page holds; a differing count means the two passes segmented the
+                    // sheet differently, which is a human's call, not ours.
+                    if ($deep && count($deep) === count($found)) {
+                        foreach ($deep as $k => $d) {
+                            $d['_escalated'] = true;
+                            if (($d['invoice_number'] ?? null) !== ($found[$k]['invoice_number'] ?? null)) {
+                                $d['needs_review'] = true;
+                                $d['validation_notes'] = array_merge(
+                                    (array) ($d['validation_notes'] ?? []),
+                                    ['اختلفت قراءة رقم الفاتورة بين المحاولتين — تحقّق يدويًا من الرقم']
+                                );
+                            }
+                            $deep[$k] = $d;
+                        }
+                        $found = $deep;
+                    } elseif ($deep) {
+                        foreach ($found as $k => $f) {
+                            $f['needs_review'] = true;
+                            $f['validation_notes'] = array_merge(
+                                (array) ($f['validation_notes'] ?? []),
+                                ['اختلف عدد الفواتير المقروءة في هذه الصفحة بين المحاولتين — راجع الصفحة يدويًا'],
+                            );
+                            $found[$k] = $f;
+                        }
                     }
-                    $data = $deep;
                 }
 
-                $data['page_number'] = $pageNo;
-                $data['_image'] = $rel;
-                $data['processing_ms'] = (int) round((microtime(true) - $t0) * 1000); // Spec 001 FR-009 avg-time metric
-                $collect($data);
+                // A page the model read as empty still owes the batch a row, otherwise
+                // the page silently disappears from the results grid.
+                if (! $found) {
+                    $found = [['page_number' => $pageNo, 'seq' => 1, 'invoice_number' => null]];
+                }
+
+                $ms = (int) round((microtime(true) - $t0) * 1000); // Spec 001 FR-009 avg-time metric
+                foreach ($found as $data) {
+                    $data['page_number'] = $pageNo;
+                    $data['seq'] = $data['seq'] ?? 1;
+                    $data['_image'] = $rel;
+                    $data['processing_ms'] = $ms;
+                    $collect($data);
+                }
             } catch (\Throwable $e) {
                 // One page's failure is recorded against that page only; the rest
                 // of the batch keeps going and keeps what it already extracted.
@@ -197,7 +229,14 @@ class InvoicePipeline
 
         // Split mode already persisted every page inside the loop above.
         if ($group) {
-            foreach ($this->service->groupByInvoiceNumber($rows) as $inv) {
+            // Grouping can move a merged invoice back to its first page, so the
+            // per-page ordinals from the read pass no longer hold. Renumber from
+            // scratch to guarantee (page, seq) stays unique after the merge.
+            $grouped = $this->service->groupByInvoiceNumber($rows);
+            foreach ($grouped as $k => $g) {
+                unset($grouped[$k]['seq']);
+            }
+            foreach (InvoiceExtractionService::assignSeqWithinPages($grouped) as $inv) {
                 $persistRow($inv);
             }
         }
@@ -206,23 +245,51 @@ class InvoicePipeline
     }
 
     /**
+     * Does the invoices table carry the per-page ordinal yet? The column arrives
+     * via the SEPARATE invoices-connection migration, which is easy to forget on
+     * deploy — without this guard the app would 500 on every extraction instead
+     * of degrading to the old one-invoice-per-page behaviour.
+     */
+    public static function supportsSeq(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = \Illuminate\Support\Facades\Schema::connection((new Invoice())->getConnectionName())
+                    ->hasColumn('invoices', 'seq');
+            } catch (\Throwable $e) {
+                $has = false;
+            }
+        }
+
+        return $has;
+    }
+
+    /**
      * True when page $pageNo already holds a finalized invoice a 're-read missing
      * only' pass must NOT overwrite: already posted to purchases, or successfully
      * extracted / user-corrected (done, not flagged, has an invoice number).
+     *
+     * With several invoices per page, the page is "good" only when EVERY row on it
+     * is — one unreadable receipt on a sheet must still bring the page back for a
+     * re-read.
      */
     private function pageAlreadyGood(InvoiceBatch $batch, int $pageNo): bool
     {
-        $inv = $batch->invoices()->where('page_number', $pageNo)->first();
-        if (! $inv) {
+        $rows = $batch->invoices()->where('page_number', $pageNo)->get();
+        if ($rows->isEmpty()) {
             return false;
         }
-        if (filled($inv->purchase_id)) {
-            return true;
-        }
 
-        return $inv->status === 'done'
-            && ! (bool) $inv->needs_review
-            && filled($inv->invoice_number);
+        return $rows->every(function ($inv) {
+            if (filled($inv->purchase_id)) {
+                return true;
+            }
+
+            return $inv->status === 'done'
+                && ! (bool) $inv->needs_review
+                && filled($inv->invoice_number);
+        });
     }
 
     /** @var \Illuminate\Support\Collection<int, \App\Models\Invoice>|null */
@@ -312,6 +379,11 @@ class InvoicePipeline
         // attachment instead of a link into the whole PDF.
         $pageImages = $this->rasterizePages($pdfPath, $batch);
 
+        // Two invoices reported on the same page used to collide on
+        // (batch_id, page_number) and overwrite each other — the second receipt on
+        // a sheet vanished without a trace. Number them within their page instead.
+        $invoices = InvoiceExtractionService::assignSeqWithinPages($invoices);
+
         $made = 0;
         foreach ($invoices as $idx => $inv) {
             $pageNo = $inv['page_number'] ?: ($idx + 1);
@@ -320,7 +392,7 @@ class InvoicePipeline
             if ($this->skipExactDuplicate($batch, $inv)) {
                 continue;
             }
-            $this->persist($batch, $pageNo, $inv, $image);
+            $this->persist($batch, $pageNo, $inv, $image, (int) ($inv['seq'] ?? 1));
             $made++;
         }
 
@@ -473,18 +545,27 @@ class InvoicePipeline
         }, $deep);
     }
 
-    public function persist(InvoiceBatch $batch, int $pageNo, array $data, ?string $imagePath): Invoice
+    public function persist(InvoiceBatch $batch, int $pageNo, array $data, ?string $imagePath, int $seq = 1): Invoice
     {
+        // A page may legitimately hold several invoices (two receipts on one
+        // sheet), so identity is (batch, page, ordinal-within-page). Guarded on
+        // the column so an app deploy that lands before the invoices-connection
+        // migration keeps working exactly as it did (one invoice per page).
+        $key = ['batch_id' => $batch->id, 'page_number' => $pageNo];
+        if (static::supportsSeq()) {
+            $key['seq'] = $seq;
+        }
+
         if (isset($data['_error'])) {
             return Invoice::updateOrCreate(
-                ['batch_id' => $batch->id, 'page_number' => $pageNo],
+                $key,
                 ['image_path' => $imagePath, 'status' => 'failed', 'needs_review' => true, 'error_message' => $data['_error']]
             );
         }
 
         // Governance — before a reprocess overwrites this page, snapshot its prior
         // extraction so no version is ever lost. New rows start at version 1.
-        $prior = Invoice::where('batch_id', $batch->id)->where('page_number', $pageNo)->first();
+        $prior = Invoice::where($key)->first();
         $newVersion = 1;
         if ($prior) {
             \App\Models\InvoiceVersion::create([
@@ -508,7 +589,7 @@ class InvoicePipeline
         $needsReview = (bool) ($data['needs_review'] ?? false) || ! empty($anomalyNotes);
 
         $invoice = Invoice::updateOrCreate(
-            ['batch_id' => $batch->id, 'page_number' => $pageNo],
+            $key,
             [
                 'version' => $newVersion,
                 'image_path' => $imagePath,

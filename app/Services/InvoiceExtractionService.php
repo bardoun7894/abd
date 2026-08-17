@@ -90,18 +90,101 @@ class InvoiceExtractionService
             if (empty($norm['page_number'])) {
                 $norm['page_number'] = $page;
             }
-            $validation = $this->validate($norm);
-            $invoices[] = $norm + [
-                'line_items' => $this->normalizeLineItems($row['line_items'] ?? null),
-                'field_confidence' => $this->normalizeFieldConfidence($row['field_confidence'] ?? null),
-                'raw_json' => $row,
-                'needs_review' => $validation['needs_review'],
-                'validation_notes' => $validation['notes'],
-            ];
+            $invoices[] = $this->decorateExtractedRow($norm, $row);
             $page++;
         }
 
+        // Several invoices may legitimately report the SAME page (two receipts
+        // scanned onto one sheet). Number them within the page so persist() can
+        // store them side by side instead of one overwriting the other.
+        $invoices = self::assignSeqWithinPages($invoices);
+
         return ['invoices' => $invoices, 'raw_json' => $raw, 'in' => $this->lastInputTokens(), 'out' => $this->lastOutputTokens()];
+    }
+
+    /**
+     * Extract EVERY invoice found on ONE page (single-page PDF or image).
+     *
+     * The per-page path used to call extractInvoice(), whose prompt states the file
+     * holds exactly one invoice — so a sheet carrying two or three receipts came back
+     * as a single merged record («الذكاء حط كل الفواتير ما عزل كل فاتورة لحالها»,
+     * 2026-08-17). This asks for a record per invoice and keeps them all on the page
+     * they were read from.
+     *
+     * @return array{invoices: array<int, array>, raw_json: mixed, in: int, out: int}
+     */
+    public function extractInvoicesFromPage(string $pagePath, int $pageNo, ?string $model = null, ?string $thinking = null): array
+    {
+        $gemini = new GeminiClient();
+        $raw = $gemini->extract($this->prompt(true), $pagePath, $this->documentSchema(), $model, $thinking);
+        $this->lastUsage = $gemini->lastUsage;
+
+        $list = $raw['invoices'] ?? (array_is_list($raw ?? []) ? $raw : []);
+
+        return [
+            'invoices' => $this->normalizePageInvoices($list, $pageNo),
+            'raw_json' => $raw,
+            'in' => $this->lastInputTokens(),
+            'out' => $this->lastOutputTokens(),
+        ];
+    }
+
+    /**
+     * Normalize the model's rows for ONE physical page: every record stays on that
+     * page and gets its ordinal within it (seq 1..N). Unlike the whole-document
+     * path, page_number is NEVER auto-incremented here — all these invoices really
+     * are on the same sheet.
+     *
+     * @param  array<int, mixed>  $list
+     * @return array<int, array>
+     */
+    private function normalizePageInvoices(array $list, int $pageNo): array
+    {
+        $invoices = [];
+        foreach ($list as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $norm = $this->normalize($row);
+            $norm['page_number'] = $pageNo;
+            $norm['seq'] = count($invoices) + 1;
+            $invoices[] = $this->decorateExtractedRow($norm, $row);
+        }
+
+        return $invoices;
+    }
+
+    /** Attach line items, confidences, raw payload and validation to a normalized row. */
+    private function decorateExtractedRow(array $norm, array $row): array
+    {
+        $validation = $this->validate($norm);
+
+        return $norm + [
+            'line_items' => $this->normalizeLineItems($row['line_items'] ?? null),
+            'field_confidence' => $this->normalizeFieldConfidence($row['field_confidence'] ?? null),
+            'raw_json' => $row,
+            'needs_review' => $validation['needs_review'],
+            'validation_notes' => $validation['notes'],
+        ];
+    }
+
+    /**
+     * Give each invoice its ordinal within its own page, preserving input order.
+     * Rows that already carry a seq keep it.
+     *
+     * @param  array<int, array>  $invoices
+     * @return array<int, array>
+     */
+    public static function assignSeqWithinPages(array $invoices): array
+    {
+        $counters = [];
+        foreach ($invoices as $i => $inv) {
+            $page = (int) ($inv['page_number'] ?? 1);
+            $counters[$page] = ($counters[$page] ?? 0) + 1;
+            $invoices[$i]['seq'] = (int) ($inv['seq'] ?? 0) ?: $counters[$page];
+        }
+
+        return $invoices;
     }
 
     /**

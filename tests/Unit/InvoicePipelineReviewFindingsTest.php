@@ -201,7 +201,7 @@ it('marks an invoice batch failed when every page extraction fails', function ()
     $rasterizer->shouldReceive('rasterize')->andReturn([public_path('uploads/invoices/pdf/test.pdf')]);
 
     $service = Mockery::mock(InvoiceExtractionService::class);
-    $service->shouldReceive('extractInvoice')->andThrow(new RuntimeException('AI call failed'));
+    $service->shouldReceive('extractInvoicesFromPage')->andThrow(new RuntimeException('AI call failed'));
     $service->shouldReceive('costUsd')->andReturn(0.0);
 
     $pipeline = new InvoicePipeline(
@@ -226,17 +226,21 @@ it('keeps an invoice batch done when some pages succeed', function () {
     ]);
 
     $service = Mockery::mock(InvoiceExtractionService::class);
-    $service->shouldReceive('extractInvoice')
+    $service->shouldReceive('extractInvoicesFromPage')
         ->once()->andReturn([
-            'supplier_name' => 'مورد 1',
-            'invoice_number' => 'OK-1',
-            'invoice_date' => '2026-07-01',
-            'total_incl_vat' => 100,
-            'needs_review' => false,
-            '_in' => 1,
-            '_out' => 1,
+            'invoices' => [[
+                'supplier_name' => 'مورد 1',
+                'invoice_number' => 'OK-1',
+                'invoice_date' => '2026-07-01',
+                'total_incl_vat' => 100,
+                'needs_review' => false,
+                'page_number' => 1,
+                'seq' => 1,
+            ]],
+            'in' => 1,
+            'out' => 1,
         ]);
-    $service->shouldReceive('extractInvoice')
+    $service->shouldReceive('extractInvoicesFromPage')
         ->once()->andThrow(new RuntimeException('AI call failed'));
     $service->shouldReceive('costUsd')->andReturn(0.0);
 
@@ -352,4 +356,51 @@ it('does NOT skip when only the invoice number matches a different supplier', fu
     // Same number, tax missing on the new extraction → human decides (needs_review), never auto-drop.
     $skip2 = $method->invoke($pipeline, $batch2, ['invoice_number' => '100']);
     expect($skip2)->toBeFalse();
+});
+
+/*
+ * Client report (2026-08-17): a PDF holding several invoices came back with them
+ * all lumped together — «الذكاء حط كل الفواتير ما عزل كل فاتورة لحالها».
+ *
+ * End-to-end proof that ONE page yielding THREE invoices now stores three rows
+ * instead of one. Before the fix this was impossible twice over: the per-page
+ * call asked the model for a single record, and (batch_id, page_number) was
+ * UNIQUE so only one row could exist per page.
+ */
+it('stores every invoice found on a single page instead of merging them', function () {
+    if (! InvoicePipeline::supportsSeq()) {
+        $this->markTestSkipped('invoices.seq migration not applied on this connection');
+    }
+
+    $batch = makeInvoiceBatch(['status' => 'pending']);
+
+    $pagePath = public_path('uploads/invoices/pages/batch_'.$batch->id.'/page-1.png');
+    @mkdir(dirname($pagePath), 0775, true);
+    file_put_contents($pagePath, 'png');
+
+    $rasterizer = Mockery::mock(PdfPageRasterizer::class);
+    $rasterizer->shouldReceive('rasterize')->andReturn([$pagePath]);
+
+    // One sheet, three receipts.
+    $service = Mockery::mock(InvoiceExtractionService::class);
+    $service->shouldReceive('extractInvoicesFromPage')->once()->andReturn([
+        'invoices' => [
+            ['invoice_number' => 'R-1', 'total_incl_vat' => 10, 'invoice_date' => '2026-08-01', 'page_number' => 1, 'seq' => 1, 'needs_review' => false],
+            ['invoice_number' => 'R-2', 'total_incl_vat' => 20, 'invoice_date' => '2026-08-01', 'page_number' => 1, 'seq' => 2, 'needs_review' => false],
+            ['invoice_number' => 'R-3', 'total_incl_vat' => 30, 'invoice_date' => '2026-08-01', 'page_number' => 1, 'seq' => 3, 'needs_review' => false],
+        ],
+        'in' => 1,
+        'out' => 1,
+    ]);
+    $service->shouldReceive('costUsd')->andReturn(0.0);
+
+    $pipeline = new InvoicePipeline(new PdfPageSplitter(), $service, $rasterizer);
+    $pipeline->run($batch, $pagePath, null, null, 'split');
+
+    $rows = Invoice::where('batch_id', $batch->id)->orderBy('seq')->get();
+    expect($rows)->toHaveCount(3);
+    expect($rows->pluck('invoice_number')->all())->toBe(['R-1', 'R-2', 'R-3']);
+    // All three really are on the same physical page.
+    expect($rows->pluck('page_number')->unique()->all())->toBe([1]);
+    expect($rows->pluck('seq')->all())->toBe([1, 2, 3]);
 });

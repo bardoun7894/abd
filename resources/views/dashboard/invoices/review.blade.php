@@ -53,7 +53,7 @@
         @endphp
         <div class="card mb-5{{ $needsReview ? ' border-warning' : '' }}" id="inv-{{ $invoice->id }}">
             <div class="card-header flex-wrap">
-                <h3 class="card-title">صفحة {{ $invoice->page_number }} — {{ $invoice->supplier_name ?: 'بدون اسم مورد' }}</h3>
+                <h3 class="card-title">صفحة {{ $invoice->page_number }}@if (($pageCounts[$invoice->page_number] ?? 1) > 1) <span class="badge badge-light-info ms-1">فاتورة {{ $invoice->seq ?? 1 }} من {{ $pageCounts[$invoice->page_number] }}</span>@endif — {{ $invoice->supplier_name ?: 'بدون اسم مورد' }}</h3>
                 <div class="card-toolbar">{!! $statusBadge !!}</div>
             </div>
             <div class="card-body">

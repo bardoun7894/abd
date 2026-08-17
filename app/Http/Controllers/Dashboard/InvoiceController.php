@@ -251,7 +251,7 @@ class InvoiceController extends Controller
         // the exported batches (not just the file list), answering "وين الفواتير".
         $exportedIds = $batches->pluck('id')->all();
         $invoices = ! empty($exportedIds)
-            ? Invoice::whereIn('batch_id', $exportedIds)->orderBy('batch_id')->orderBy('page_number')->get()
+            ? Invoice::whereIn('batch_id', $exportedIds)->orderBy('batch_id')->orderBy('page_number')->orderBy('id')->get()
             : collect();
 
         // Insert at index 0 so the file OPENS on the invoices — the file-log sheet
@@ -1273,12 +1273,15 @@ class InvoiceController extends Controller
         $batch = $this->findOwned($id);
         $page_title = 'مراجعة الفواتير — دفعة #'.$batch->id;
 
-        $invoices = $batch->invoices()->with('items')->orderBy('page_number')->get();
+        $invoices = $batch->invoices()->with('items')->orderBy('page_number')->orderBy('id')->get();
         $invoices->each(function (Invoice $i) use ($batch) {
             $i->image_url = $this->imageUrl($batch->id, $i->image_path);
         });
+        // How many invoices share each page, so a sheet with several receipts is
+        // labelled "فاتورة 2 من 3" instead of three identical "صفحة N" headings.
+        $pageCounts = $invoices->groupBy('page_number')->map->count();
 
-        return view('dashboard.invoices.review', compact('page_title', 'batch', 'invoices'));
+        return view('dashboard.invoices.review', compact('page_title', 'batch', 'invoices', 'pageCounts'));
     }
 
     /** Approve one invoice: clears needs_review so it counts as finalized. */
@@ -1577,7 +1580,10 @@ class InvoiceController extends Controller
         $batch = $this->findOwned($id);
         $total = max(1, (int) $batch->total_pages);
 
-        $batchInvoices = $batch->invoices()->orderBy('page_number')->get();
+        $batchInvoices = $batch->invoices()->orderBy('page_number')->orderBy('id')->get();
+
+        // How many invoices share each page — a sheet can carry several receipts.
+        $perPageCount = $batchInvoices->groupBy('page_number')->map->count();
 
         // Proactive duplicate flag: which of this batch's invoice numbers already exist
         // in the main `purchase` table (i.e. would be blocked on push). One cheap query.
@@ -1604,7 +1610,7 @@ class InvoiceController extends Controller
             $transferByNames = [];
         }
 
-        $invoices = $batchInvoices->map(function (Invoice $i) use ($batch, $existingNos, $transferByNames) {
+        $invoices = $batchInvoices->map(function (Invoice $i) use ($batch, $existingNos, $transferByNames, $perPageCount) {
             // ZATCA Phase-1 QR — only for invoices that have a total (i.e.
             // extraction actually produced numbers worth encoding).
             $zatcaQr = null;
@@ -1622,6 +1628,11 @@ class InvoiceController extends Controller
             return [
                 'id' => $i->id,
                 'page_number' => $i->page_number,
+                // Ordinal within the page + how many share it, so a sheet carrying
+                // several receipts reads as "صفحة 3 · فاتورة 2 من 3" instead of three
+                // indistinguishable rows all labelled "صفحة 3".
+                'seq' => (int) ($i->seq ?? 1),
+                'page_total' => (int) ($perPageCount[$i->page_number] ?? 1),
                 'supplier_name' => $i->supplier_name,
                 'supplier_tax_number' => $i->supplier_tax_number,
                 'invoice_number' => $i->invoice_number,

@@ -207,7 +207,7 @@ it('marks remaining invoice pages failed when deadline is exceeded', function ()
     ]);
 
     $service = Mockery::mock(InvoiceExtractionService::class);
-    $service->shouldReceive('extractInvoice')->never();
+    $service->shouldReceive('extractInvoicesFromPage')->never();
     $service->shouldReceive('costUsd')->andReturn(0.0);
 
     $pipeline = new InvoicePipeline(new PdfPageSplitter(), $service, $rasterizer);
@@ -241,20 +241,24 @@ it('processes invoice pages normally when deadline is far in the future', functi
     $rasterizer->shouldReceive('rasterize')->once()->andReturn([$pagePath]);
 
     $service = Mockery::mock(InvoiceExtractionService::class);
-    $service->shouldReceive('extractInvoice')->once()->andReturn([
-        'supplier_name' => 'OK',
-        'supplier_tax_number' => '300097525940003',
-        'invoice_number' => 'OK-1',
-        'invoice_date' => '2026-01-01',
-        'amount_before_vat' => 100,
-        'vat_amount' => 15,
-        'total_incl_vat' => 115,
-        'confidence' => 0.9,
-        'image_quality' => 'clear',
-        'needs_review' => false,
-        'validation_notes' => [],
-        '_in' => 10,
-        '_out' => 5,
+    $service->shouldReceive('extractInvoicesFromPage')->once()->andReturn([
+        'invoices' => [[
+            'supplier_name' => 'OK',
+            'supplier_tax_number' => '300097525940003',
+            'invoice_number' => 'OK-1',
+            'invoice_date' => '2026-01-01',
+            'amount_before_vat' => 100,
+            'vat_amount' => 15,
+            'total_incl_vat' => 115,
+            'confidence' => 0.9,
+            'image_quality' => 'clear',
+            'needs_review' => false,
+            'validation_notes' => [],
+            'page_number' => 1,
+            'seq' => 1,
+        ]],
+        'in' => 10,
+        'out' => 5,
     ]);
     $service->shouldReceive('costUsd')->andReturn(0.0);
 

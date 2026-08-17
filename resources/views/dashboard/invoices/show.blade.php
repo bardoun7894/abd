@@ -277,6 +277,14 @@
 
         function esc(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+        // A single sheet can carry several invoices (two receipts scanned together).
+        // Show which one this row is, otherwise they all read as the same page.
+        function pageCell(v) {
+            var page = esc(v.page_number);
+            if (!v.page_total || v.page_total < 2) { return page; }
+            return page + '<div class="fs-9 text-muted mt-1 text-nowrap">فاتورة ' + esc(v.seq) + ' من ' + esc(v.page_total) + '</div>';
+        }
+
         function qualityBadge(q) {
             if (q == 'clear') return '<span class="badge badge-light-success">واضحة</span>';
             if (q == 'medium') return '<span class="badge badge-light-warning">متوسطة</span>';
@@ -365,7 +373,7 @@
                 }
                 html += '<tr' + warn + '>'
                     + '<td class="d-print-none text-center"><input type="checkbox" class="form-check-input js-inv-chk" value="' + v.id + '"></td>'
-                    + '<td>' + esc(v.page_number) + '</td>'
+                    + '<td>' + pageCell(v) + '</td>'
                     + cell('supplier_name') + cell('supplier_tax_number') + cell('invoice_number') + cell('invoice_date')
                     + cell('amount_before_vat') + cell('vat_amount') + cell('total_incl_vat')
                     + '<td>' + qualityBadge(v.image_quality) + '</td>'

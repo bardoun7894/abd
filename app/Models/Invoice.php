@@ -13,7 +13,7 @@ class Invoice extends Model
     protected $table = 'invoices';
 
     protected $fillable = [
-        'batch_id', 'page_number', 'image_path',
+        'batch_id', 'page_number', 'seq', 'image_path',
         'supplier_name', 'supplier_tax_number', 'invoice_number',
         'invoice_date', 'invoice_date_raw',
         'amount_before_vat', 'vat_amount', 'total_incl_vat',
@@ -31,6 +31,7 @@ class Invoice extends Model
 
     protected $casts = [
         'page_number' => 'integer',
+        'seq' => 'integer',
         'invoice_date' => 'date',
         'amount_before_vat' => 'decimal:2',
         'vat_amount' => 'decimal:2',
