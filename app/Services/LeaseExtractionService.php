@@ -12,12 +12,23 @@ use Carbon\Carbon;
  */
 class LeaseExtractionService
 {
-    /** The 22 lease fields (Spec 003 FR-201), in display order. */
+    /**
+     * The scalar lease fields (Spec 003 FR-201), in display order.
+     *
+     * `annual_rent` and `vat_amount` were added after a real extraction bug: an
+     * official Saudi «إيجار» contract prints the pre-VAT annual rent, the VAT, and
+     * the VAT-inclusive grand total side by side, and a single `rent_value` field
+     * gave the model no way to tell them apart — so it sometimes returned the
+     * pre-VAT figure and the whole schedule came out short by the VAT.
+     * `rent_value` is now defined as the VAT-INCLUSIVE total; the other two are
+     * captured explicitly so the split is visible and auditable.
+     */
     public const FIELDS = [
         'contract_no', 'tenant_name', 'tenant_id_no', 'landlord_name', 'landlord_id_no',
         'property_no', 'unit', 'property_type', 'address',
         'start_date', 'end_date', 'duration',
-        'rent_value', 'num_payments', 'payment_value', 'payment_frequency',
+        'rent_value', 'annual_rent', 'vat_amount',
+        'num_payments', 'payment_value', 'payment_frequency',
         'deposit', 'payment_method',
         'renewal_terms', 'cancellation_terms', 'increase_terms', 'extra_terms',
     ];
@@ -91,6 +102,8 @@ class LeaseExtractionService
             'end_date' => $this->parseDate($d['end_date'] ?? null),
             'duration' => $this->cleanStr($d['duration'] ?? null),
             'rent_value' => $this->num($d['rent_value'] ?? null),
+            'annual_rent' => $this->num($d['annual_rent'] ?? null),
+            'vat_amount' => $this->num($d['vat_amount'] ?? null),
             'num_payments' => $this->int($d['num_payments'] ?? null),
             'payment_value' => $this->num($d['payment_value'] ?? null),
             'payment_frequency' => $this->cleanStr($d['payment_frequency'] ?? null),
@@ -100,8 +113,65 @@ class LeaseExtractionService
             'cancellation_terms' => $this->cleanStr($d['cancellation_terms'] ?? null),
             'increase_terms' => $this->cleanStr($d['increase_terms'] ?? null),
             'extra_terms' => $this->cleanStr($d['extra_terms'] ?? null),
+            'payments' => $this->normalizePayments($d['payments'] ?? null),
             'confidence' => $this->num($d['confidence'] ?? null),
         ];
+    }
+
+    /**
+     * Normalize the payment schedule the contract itself prints (جدول سداد الدفعات).
+     *
+     * Saudi «إيجار» contracts print every installment with its own due date, rent,
+     * VAT and total. Before this existed the app ignored that table and recomputed
+     * the schedule from rent_value / num_payments at fixed monthly intervals, which
+     * got both the amounts (VAT dropped) and the due dates wrong — real due dates
+     * sit days AFTER the tenancy start, not exactly on it.
+     *
+     * Rows without a usable due date or total are dropped rather than guessed: a
+     * half-read row is worse than falling back to the generator. Rows are returned
+     * ordered by payment_no so a shuffled table still yields a sane schedule.
+     *
+     * @return array<int,array{payment_no:int,due_date:string,rent_value:?float,vat:?float,total:float}>
+     */
+    public function normalizePayments($rows): array
+    {
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $out = [];
+        foreach (array_values($rows) as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $due = $this->parseDate($row['due_date'] ?? null);
+            $total = $this->num($row['total'] ?? null);
+            $rent = $this->num($row['rent_value'] ?? null);
+            $vat = $this->num($row['vat'] ?? null);
+
+            // A row is only usable if we know WHEN and HOW MUCH. Fall back to
+            // rent+VAT when the total column itself was unreadable.
+            if ($total === null && $rent !== null) {
+                $total = round($rent + ($vat ?? 0), 2);
+            }
+            if ($due === null || $total === null || $total <= 0) {
+                continue;
+            }
+
+            $no = $this->int($row['payment_no'] ?? null);
+            $out[] = [
+                'payment_no' => $no !== null && $no > 0 ? $no : $i + 1,
+                'due_date' => $due,
+                'rent_value' => $rent,
+                'vat' => $vat,
+                'total' => $total,
+            ];
+        }
+
+        usort($out, fn ($a, $b) => $a['payment_no'] <=> $b['payment_no']);
+
+        return $out;
     }
 
     /** Keep only 0..1 numeric per-field confidences (Spec 001 FR-002). */
@@ -233,7 +303,7 @@ class LeaseExtractionService
 
     private function schema(): array
     {
-        $numeric = ['rent_value', 'payment_value', 'deposit'];
+        $numeric = ['rent_value', 'annual_rent', 'vat_amount', 'payment_value', 'deposit'];
         $properties = [];
         foreach (self::FIELDS as $f) {
             if ($f === 'num_payments') {
@@ -244,6 +314,22 @@ class LeaseExtractionService
                 $properties[$f] = ['type' => 'STRING', 'nullable' => true];
             }
         }
+        // The contract's own printed schedule (جدول سداد الدفعات). Declared in the
+        // responseSchema so Gemini returns real objects rather than a prose blob.
+        $properties['payments'] = [
+            'type' => 'ARRAY',
+            'nullable' => true,
+            'items' => [
+                'type' => 'OBJECT',
+                'properties' => [
+                    'payment_no' => ['type' => 'INTEGER', 'nullable' => true],
+                    'due_date' => ['type' => 'STRING', 'nullable' => true],
+                    'rent_value' => ['type' => 'NUMBER', 'nullable' => true],
+                    'vat' => ['type' => 'NUMBER', 'nullable' => true],
+                    'total' => ['type' => 'NUMBER', 'nullable' => true],
+                ],
+            ],
+        ];
         $properties['confidence'] = ['type' => 'NUMBER', 'nullable' => true];
         $properties['field_confidence'] = [
             'type' => 'OBJECT',
@@ -254,8 +340,10 @@ class LeaseExtractionService
         return [
             'type' => 'OBJECT',
             'properties' => $properties,
+            // `payments` is deliberately NOT required: many contracts print no
+            // schedule table at all, and forcing the key would invite invention.
             'required' => self::FIELDS,
-            'propertyOrdering' => array_merge(self::FIELDS, ['confidence']),
+            'propertyOrdering' => array_merge(self::FIELDS, ['payments', 'confidence']),
         ];
     }
 

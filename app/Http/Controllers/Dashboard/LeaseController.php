@@ -277,6 +277,17 @@ class LeaseController extends Controller
         $data['start_date'] = $extraction->start_date?->format('Y-m-d');
         $data['end_date'] = $extraction->end_date?->format('Y-m-d');
 
+        // The contract's own printed schedule (جدول سداد الدفعات), carried in
+        // raw_json because it is an array and lease_extractions stores scalars.
+        // LeaseScheduleGenerator prefers it over deriving the schedule: the
+        // printed table has the real due dates and VAT-inclusive totals, which
+        // deriving got wrong. `only()` above would silently drop it, so it is
+        // attached explicitly here.
+        $raw = $extraction->raw_json;
+        $data['payments'] = is_array($raw) && is_array($raw['payments'] ?? null)
+            ? $raw['payments']
+            : [];
+
         if (empty($data['start_date']) || empty($data['rent_value'])) {
             return response()->json(['status' => false, 'message_out' => 'لا يمكن الموافقة: تاريخ البداية أو قيمة الإيجار مفقودة'], 422);
         }

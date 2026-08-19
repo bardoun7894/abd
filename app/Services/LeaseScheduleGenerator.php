@@ -52,6 +52,16 @@ class LeaseScheduleGenerator
      */
     public function generateWithWarnings(array $contract): array
     {
+        // The contract's OWN printed schedule always wins over anything we derive.
+        // Saudi «إيجار» contracts print جدول سداد الدفعات with each installment's real
+        // due date and VAT-inclusive total; deriving them instead got both wrong
+        // (VAT dropped, and due dates placed on the tenancy start rather than the
+        // days-later dates the table actually states).
+        $printed = $this->fromPrintedSchedule($contract);
+        if ($printed !== null) {
+            return $printed;
+        }
+
         $startDate = $contract['start_date'] ?? null;
         if (! $startDate) {
             throw new InvalidArgumentException('start_date is required to generate a payment schedule');
@@ -238,5 +248,77 @@ class LeaseScheduleGenerator
         // Unknown/blank frequency: spread evenly monthly if there's more than one
         // payment, otherwise treat it as a single one-time payment.
         return $numPayments > 1 ? 1 : 0;
+    }
+
+    /**
+     * Build the schedule straight from the table the contract prints, when one was
+     * extracted. Returns null (not an empty schedule) when there is nothing usable,
+     * so the caller falls through to the derived path for contracts that print no
+     * table — the common case for older/manual leases.
+     *
+     * Only the due date and total are taken from each row; status/remaining follow
+     * the same shape the derived path produces, so downstream persistence is
+     * untouched. A row's own VAT split is intentionally NOT persisted here: the
+     * lease_payments table stores one amount per installment, and that amount is
+     * what the tenant actually owes — the VAT-inclusive total.
+     *
+     * @return array{rows:array<int,array<string,mixed>>,warnings:array<int,string>}|null
+     */
+    private function fromPrintedSchedule(array $contract): ?array
+    {
+        $printed = $contract['payments'] ?? null;
+        if (! is_array($printed) || $printed === []) {
+            return null;
+        }
+
+        $rows = [];
+        $warnings = [];
+        $no = 1;
+        foreach ($printed as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $due = $row['due_date'] ?? null;
+            $total = $row['total'] ?? null;
+            if (! $due || ! is_numeric($total) || (float) $total <= 0) {
+                continue;
+            }
+
+            try {
+                $dueDate = Carbon::parse($due)->format('Y-m-d');
+            } catch (\Throwable $e) {
+                continue;   // unparseable date — skip rather than guess
+            }
+
+            $amount = round((float) $total, 2);
+            $rows[] = [
+                'payment_no' => $no,
+                'due_date' => $dueDate,
+                'amount' => $amount,
+                'status' => 'pending',
+                'remaining' => $amount,
+            ];
+            $no++;
+        }
+
+        if ($rows === []) {
+            return null;
+        }
+
+        // Surface disagreements instead of silently trusting either side.
+        $stated = $contract['num_payments'] ?? null;
+        if (is_numeric($stated) && (int) $stated !== count($rows)) {
+            $warnings[] = 'عدد الدفعات المذكور في العقد ('.(int) $stated.') لا يطابق عدد صفوف جدول السداد ('.count($rows).') — تم اعتماد الجدول المطبوع.';
+        }
+
+        $expectedTotal = $this->expectedTotal($contract);
+        if ($expectedTotal > 0) {
+            $sum = round(array_sum(array_column($rows, 'amount')), 2);
+            if (abs($sum - $expectedTotal) / $expectedTotal > self::RECONCILE_TOLERANCE) {
+                $warnings[] = "مجموع جدول السداد المطبوع ({$sum}) لا يطابق إجمالي قيمة العقد ({$expectedTotal}).";
+            }
+        }
+
+        return ['rows' => $rows, 'warnings' => $warnings];
     }
 }
