@@ -248,6 +248,7 @@
                                         setv('rent_mobile', d.owner_mobile);
                                         // Payment-schedule inputs → hidden fields; on save the server
                                         // auto-generates the دفعات into shop_rentpay (client feedback 2026-07).
+                                        setv('rent_sched_payments', (d.payments && d.payments.length) ? JSON.stringify(d.payments) : '');
                                         setv('rent_sched_num', d.num_payments); setv('rent_sched_value', d.payment_value);
                                         setv('rent_sched_freq', d.payment_frequency); setv('rent_sched_rentval', d.rent_amount);
                                         // The EJAR lease also carries the tenant's CR block — fill the
@@ -924,6 +925,10 @@ if($emp_job==1){
                          the دفعات into shop_rentpay (client feedback 2026-07). --}}
                     <input type="hidden" name="rent_sched_num" id="rent_sched_num" value="">
                     <input type="hidden" name="rent_sched_value" id="rent_sched_value" value="">
+                    {{-- The contract's own printed schedule (جدول سداد الدفعات) as JSON.
+                         Carries the real due dates and VAT-inclusive totals so the
+                         server never has to re-derive them. --}}
+                    <input type="hidden" name="rent_sched_payments" id="rent_sched_payments" value="">
                     <input type="hidden" name="rent_sched_freq" id="rent_sched_freq" value="">
                     <input type="hidden" name="rent_sched_rentval" id="rent_sched_rentval" value="">
                     <div class=" col-12 col-lg-4 col-md-12 col-sm-12 mb-5">

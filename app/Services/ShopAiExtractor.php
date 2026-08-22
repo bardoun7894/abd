@@ -52,12 +52,20 @@ class ShopAiExtractor
             'expiry_date' => $this->parseDate($raw['expiry_date'] ?? null),
             'owner_name' => $this->cleanStr($raw['owner_name'] ?? null),
             'owner_mobile' => $this->cleanIdStr($raw['owner_mobile'] ?? null),
+            // VAT-INCLUSIVE contract total. Saudi «إيجار» contracts print the pre-VAT
+            // annual rent, the VAT, and the inclusive grand total side by side; taking
+            // the pre-VAT figure under-bills the tenant by the whole VAT (2026-08-19).
             'rent_amount' => $this->num($raw['rent_amount'] ?? null),
+            'annual_rent' => $this->num($raw['annual_rent'] ?? null),
+            'vat_amount' => $this->num($raw['vat_amount'] ?? null),
             // Lease payment-schedule inputs (client feedback 2026-07) — used to
             // generate the shop_rentpay دفعات automatically. Null for non-lease docs.
             'num_payments' => $this->intOrNull($raw['num_payments'] ?? null),
             'payment_value' => $this->num($raw['payment_value'] ?? null),
             'payment_frequency' => $this->cleanStr($raw['payment_frequency'] ?? null),
+            // The schedule the contract PRINTS (جدول سداد الدفعات). Preferred over
+            // anything derived: it carries the real due dates and VAT-inclusive totals.
+            'payments' => (new LeaseExtractionService())->normalizePayments($raw['payments'] ?? null),
             // Tenant/business block found inside EJAR leases — lets one lease upload
             // also fill the commercial-registration section (same fields, one file).
             'unified_number' => $this->cleanIdStr($raw['unified_number'] ?? null),
@@ -89,9 +97,25 @@ class ShopAiExtractor
                 'owner_name' => ['type' => 'STRING', 'nullable' => true],
                 'owner_mobile' => ['type' => 'STRING', 'nullable' => true],
                 'rent_amount' => ['type' => 'NUMBER', 'nullable' => true],
+                'annual_rent' => ['type' => 'NUMBER', 'nullable' => true],
+                'vat_amount' => ['type' => 'NUMBER', 'nullable' => true],
                 'num_payments' => ['type' => 'INTEGER', 'nullable' => true],
                 'payment_value' => ['type' => 'NUMBER', 'nullable' => true],
                 'payment_frequency' => ['type' => 'STRING', 'nullable' => true],
+                'payments' => [
+                    'type' => 'ARRAY',
+                    'nullable' => true,
+                    'items' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'payment_no' => ['type' => 'INTEGER', 'nullable' => true],
+                            'due_date' => ['type' => 'STRING', 'nullable' => true],
+                            'rent_value' => ['type' => 'NUMBER', 'nullable' => true],
+                            'vat' => ['type' => 'NUMBER', 'nullable' => true],
+                            'total' => ['type' => 'NUMBER', 'nullable' => true],
+                        ],
+                    ],
+                ],
                 'unified_number' => ['type' => 'STRING', 'nullable' => true],
                 'tenant_cr_number' => ['type' => 'STRING', 'nullable' => true],
                 'tenant_cr_date' => ['type' => 'STRING', 'nullable' => true],
@@ -118,18 +142,35 @@ class ShopAiExtractor
             .'- document_type: نوع المستند، واحد فقط من: commercial_registration (السجل التجاري) أو municipal_license (رخصة البلدية) أو lease (عقد إيجار).'."\n"
             .'- document_number: رقم السجل التجاري أو رقم الرخصة أو رقم عقد الإيجار حسب نوع المستند.'."\n"
             .'- issue_date: تاريخ الإصدار/البداية بصيغة YYYY-MM-DD.'."\n"
+            .'  ⚠️ في عقد الإيجار: خذ «تاريخ بداية مدة الإيجار / Tenancy Start Date» حصراً،'."\n"
+            .'  ولا تأخذ «تاريخ إبرام العقد / Contract Sealing Date» — العقود السعودية (إيجار/REGA)'."\n"
+            .'  تطبع التاريخين متجاورين في الصفحة الأولى وقد يفصل بينهما شهور.'."\n"
+            .'  مثال: إبرام 2026-05-20 وبداية الإيجار 2026-08-12 ⇒ الصحيح 2026-08-12.'."\n"
             .'- expiry_date: تاريخ الانتهاء بصيغة YYYY-MM-DD.'."\n"
+            .'  في عقد الإيجار: «تاريخ نهاية مدة الإيجار / Tenancy End Date».'."\n"
             .'- owner_name: اسم صاحب المؤسسة/المحل، أو اسم المالك/المؤجر في حال كان عقد إيجار.'."\n"
             .'- owner_mobile: رقم جوال المالك/المؤجر بصيغة دولية إن وُجد (مثال 9665xxxxxxxx) — فقط لعقد الإيجار، وإلا null.'."\n"
-            .'- rent_amount: القيمة السنوية للإيجار (رقم بدون رمز عملة) — فقط إن كان المستند عقد إيجار، وإلا null.'."\n"
+            .'- rent_amount: إجمالي قيمة العقد شاملاً ضريبة القيمة المضافة (رقم بدون رمز عملة)'."\n"
+            .'  — فقط إن كان المستند عقد إيجار، وإلا null.'."\n"
+            .'  ⚠️ العقد يطبع عدة أرقام متجاورة: «القيمة السنوية للإيجار» (بدون ضريبة)،'."\n"
+            .'  و«مبلغ ضريبة القيمة المضافة»، و«اجمالي قيمة العقد» (شامل الضريبة).'."\n"
+            .'  خذ الإجمالي الشامل للضريبة. مثال: سنوي 55000 + ضريبة 8250 ⇒ rent_amount = 63250 وليس 55000.'."\n"
+            .'- annual_rent: القيمة السنوية للإيجار بدون ضريبة إن كانت مطبوعة، وإلا null.'."\n"
+            .'- vat_amount: مبلغ ضريبة القيمة المضافة على القيمة الإيجارية إن كان مطبوعاً، وإلا null.'."\n"
             .'- num_payments: عدد دفعات الإيجار كاملة (رقم صحيح) — فقط لعقد الإيجار، وإلا null.'."\n"
-            .'- payment_value: قيمة الدفعة الواحدة (رقم بدون رمز عملة؛ إن لم تُذكر صراحةً احسبها: الإيجار السنوي × عدد سنوات العقد ÷ عدد الدفعات) — فقط لعقد الإيجار، وإلا null.'."\n"
+            .'- payment_value: قيمة الدفعة الواحدة شاملة الضريبة كما هي مطبوعة في جدول سداد الدفعات'."\n"
+            .'  (عمود «إجمالي القيمة») — فقط لعقد الإيجار، وإلا null. لا تحسبها بنفسك إن كان الجدول مطبوعاً.'."\n"
             .'- payment_frequency: دورية سداد الإيجار (شهري/ربع سنوي/نصف سنوي/سنوي/دفعة واحدة) — فقط لعقد الإيجار، وإلا null.'."\n"
             .'- unified_number: الرقم الموحّد للمنشأة (المستأجر) إن وُجد في العقد، وإلا null.'."\n"
             .'- tenant_cr_number: رقم السجل التجاري للمستأجر كما يظهر داخل عقد الإيجار، وإلا null.'."\n"
             .'- tenant_cr_date: تاريخ سجل المستأجر التجاري بصيغة YYYY-MM-DD، وإلا null.'."\n"
             .'- city: مدينة العقار/المحل (مثال: الدمام، الرياض)، وإلا null.'."\n"
             .'- shop_area: مساحة الوحدة/المحل بالمتر المربع (رقم)، وإلا null.'."\n"
+            .'- payments: جدول سداد الدفعات المطبوع في العقد كمصفوفة (وإلا مصفوفة فارغة).'."\n"
+            .'  انسخ الجدول كما هو دون إعادة حساب أو ترتيب. لكل صف كائن يحتوي:'."\n"
+            .'  payment_no (الرقم المسلسل)، due_date (تاريخ الاستحقاق الميلادي YYYY-MM-DD)،'."\n"
+            .'  rent_value (قيمة الإيجار)، vat (ضريبة القيمة المضافة)، total (إجمالي القيمة).'."\n"
+            .'  تجاهل أعمدة التاريخ الهجري (هـ) تماماً.'."\n"
             .'- field_confidence: درجة ثقة 0..1 لكل من document_number و issue_date و expiry_date و owner_name.'."\n"
             .'حوّل الأرقام العربية إلى لاتينية. لا تخمّن؛ استخدم null لأي حقل غير موجود. أعد JSON فقط.';
     }

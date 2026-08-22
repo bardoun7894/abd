@@ -734,17 +734,25 @@ class ShopController extends Controller
         $frequency = $request->input('rent_sched_freq');
         $startDate = trim((string) $request->input('rent_sdt', ''));
         $endDate = trim((string) $request->input('rent_edt', ''));
+        // The contract's own printed schedule, carried as JSON in a hidden field by
+        // the AI widget. LeaseScheduleGenerator prefers it over deriving a schedule:
+        // it holds the real due dates and VAT-inclusive totals.
+        $printedPayments = $this->decodePrintedPayments($request->input('rent_sched_payments'));
 
         // Did this submission carry any lease-schedule payload at all? If not, the
         // save has nothing to do with a lease and must stay silent.
-        $hasScheduleInputs = $numPayments > 0 || $rentValue > 0 || is_numeric($paymentValue);
+        $hasScheduleInputs = $numPayments > 0 || $rentValue > 0 || is_numeric($paymentValue) || $printedPayments !== [];
         if (! $hasScheduleInputs) {
             return null;
         }
 
-        $numPayments = $this->resolvePaymentCount($numPayments, $rentValue, $paymentValue);
-        if ($numPayments <= 0) {
-            return self::UNKNOWN_PAYMENT_COUNT_MSG;
+        // A printed schedule already states the count; only fall back to inferring
+        // it when the contract gave us no table.
+        if ($printedPayments === []) {
+            $numPayments = $this->resolvePaymentCount($numPayments, $rentValue, $paymentValue);
+            if ($numPayments <= 0) {
+                return self::UNKNOWN_PAYMENT_COUNT_MSG;
+            }
         }
 
         // shop_id / start-date / already-has-payments guards now live in
@@ -756,7 +764,28 @@ class ShopController extends Controller
             'rent_value' => $rentValue,
             'payment_value' => $paymentValue,
             'payment_frequency' => $frequency,
+            'payments' => $printedPayments,
         ]);
+    }
+
+    /**
+     * Accept the printed schedule from either shape it can arrive in: a JSON string
+     * (hidden form field, round-tripped through the browser) or an already-decoded
+     * array (server-side extraction result). Returns [] for anything unusable, so a
+     * malformed payload degrades to the derived path rather than throwing.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function decodePrintedPayments($raw): array
+    {
+        if (is_string($raw)) {
+            $raw = json_decode($raw, true);
+        }
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        return app(\App\Services\LeaseExtractionService::class)->normalizePayments($raw);
     }
 
     /** Shown whenever the payment count is neither stated nor derivable. */
@@ -922,10 +951,15 @@ class ShopController extends Controller
         $start = $startDate !== '' ? $startDate : (string) ($data['issue_date'] ?? '');
         $end = $endDate !== '' ? $endDate : (string) ($data['expiry_date'] ?? '');
 
+        // The contract's own printed schedule wins over anything derived here.
+        $printedPayments = $this->decodePrintedPayments($data['payments'] ?? null);
+
         // Never assume one payment — see resolvePaymentCount().
-        $numPayments = $this->resolvePaymentCount($numPayments, $rentValue, $paymentValue);
-        if ($numPayments <= 0) {
-            return self::UNKNOWN_PAYMENT_COUNT_MSG;
+        if ($printedPayments === []) {
+            $numPayments = $this->resolvePaymentCount($numPayments, $rentValue, $paymentValue);
+            if ($numPayments <= 0) {
+                return self::UNKNOWN_PAYMENT_COUNT_MSG;
+            }
         }
 
         return $this->generateRentPaymentsFor($shop_id, [
@@ -935,6 +969,7 @@ class ShopController extends Controller
             'rent_value' => $rentValue,
             'payment_value' => $paymentValue,
             'payment_frequency' => $data['payment_frequency'] ?? null,
+            'payments' => $printedPayments,
         ]);
     }
 
@@ -2675,9 +2710,14 @@ class ShopController extends Controller
                 'owner_name' => $data['owner_name'],
                 'owner_mobile' => $data['owner_mobile'] ?? null,
                 'rent_amount' => $data['rent_amount'],
+                'annual_rent' => $data['annual_rent'] ?? null,
+                'vat_amount' => $data['vat_amount'] ?? null,
                 'num_payments' => $data['num_payments'] ?? null,
                 'payment_value' => $data['payment_value'] ?? null,
                 'payment_frequency' => $data['payment_frequency'] ?? null,
+                // The contract's own printed schedule. Whitelisted explicitly —
+                // omitting it here silently discards it before the form ever sees it.
+                'payments' => $data['payments'] ?? [],
                 'unified_number' => $data['unified_number'] ?? null,
                 'tenant_cr_number' => $data['tenant_cr_number'] ?? null,
                 'tenant_cr_date' => $data['tenant_cr_date'] ?? null,
@@ -2750,9 +2790,15 @@ class ShopController extends Controller
                 'owner_name' => $d['owner_name'] ?? null,
                 'owner_mobile' => $d['owner_mobile'] ?? null,
                 'rent_amount' => $d['rent_amount'] ?? null,
+                'annual_rent' => $d['annual_rent'] ?? null,
+                'vat_amount' => $d['vat_amount'] ?? null,
                 'num_payments' => $d['num_payments'] ?? null,
                 'payment_value' => $d['payment_value'] ?? null,
                 'payment_frequency' => $d['payment_frequency'] ?? null,
+                // Printed schedule — must be whitelisted here too. This ASYNC path is
+                // the one the form actually polls; the sync payload above is the
+                // fallback, and fixing only one leaves the bug live.
+                'payments' => $d['payments'] ?? [],
                 'unified_number' => $d['unified_number'] ?? null,
                 'tenant_cr_number' => $d['tenant_cr_number'] ?? null,
                 'tenant_cr_date' => $d['tenant_cr_date'] ?? null,
