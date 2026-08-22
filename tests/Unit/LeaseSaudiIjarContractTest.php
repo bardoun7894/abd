@@ -222,3 +222,87 @@ it('still generates from a printed table when start_date is missing', function (
     expect($rows)->toHaveCount(2);
     expect($rows[0]['due_date'])->toBe('2026-08-22');
 });
+
+// ---------------------------------------------------------------------------
+// A SECOND real contract: 5 years, 10 payments, ZERO VAT (20871952286-2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Found while verifying the fix against a second real «إيجار» PDF. It exposed a
+ * bug in expectedTotal(): it scaled rent_value by the lease length, which was
+ * right when rent_value meant the ANNUAL rent but wrong now that extraction
+ * returns the CONTRACT TOTAL. A 5-year lease of 200,000 was scored against
+ * 1,000,000, so every schedule "failed" reconciliation — a false warning on the
+ * shop path and a BLOCKED SAVE on the leases path, where validateSchedule()
+ * treats the mismatch as an error.
+ *
+ * Also proves zero-VAT contracts still work: not every «إيجار» charges VAT.
+ */
+function ijar5yContract(array $overrides = []): array
+{
+    $payments = [];
+    $due = ['2024-01-11', '2024-07-11', '2025-01-11', '2025-07-11', '2026-01-11',
+            '2026-07-11', '2027-01-11', '2027-07-11', '2028-01-11', '2028-07-11'];
+    foreach ($due as $i => $d) {
+        $payments[] = [
+            'payment_no' => $i + 1,
+            'due_date' => $d,
+            'rent_value' => 20000.00,
+            'vat' => 0.00,
+            'total' => 20000.00,
+        ];
+    }
+
+    return array_merge([
+        'start_date' => '2024-01-01',   // tenancy start (sealing was 2023-12-27)
+        'end_date' => '2028-12-31',
+        'rent_value' => 200000.00,      // whole-contract total
+        'annual_rent' => 40000.00,
+        'vat_amount' => 0.00,
+        'num_payments' => 10,
+        'payment_value' => 20000.00,
+        'payments' => $payments,
+    ], $overrides);
+}
+
+it('does not inflate the expected total on a multi-year contract', function () {
+    $result = (new LeaseScheduleGenerator())->generateWithWarnings(ijar5yContract());
+
+    expect($result['rows'])->toHaveCount(10);
+    expect(array_sum(array_column($result['rows'], 'amount')))->toBe(200000.00);
+
+    // The bug: "مجموع جدول السداد المطبوع (200000) لا يطابق إجمالي قيمة العقد (1000000)".
+    expect($result['warnings'])->toBe([]);
+});
+
+it('lets a multi-year contract pass schedule validation, so the save is not blocked', function () {
+    $gen = new LeaseScheduleGenerator();
+    $contract = ijar5yContract();
+
+    // validateSchedule() failing here is what blocks approve() with a 422.
+    expect($gen->validateSchedule($gen->generateWithWarnings($contract)['rows'], $contract))->toBe([]);
+});
+
+it('handles a zero-VAT contract without inventing tax', function () {
+    $rows = (new LeaseScheduleGenerator())->generate(ijar5yContract());
+
+    expect($rows[0]['amount'])->toBe(20000.00);
+    expect($rows[0]['due_date'])->toBe('2024-01-11');
+    expect($rows[9]['due_date'])->toBe('2028-07-11');
+});
+
+it('still scales a genuinely ANNUAL rent_value over the lease term', function () {
+    // Legacy/hand-entered rows hold one year's rent with no annual_rent field
+    // and no printed table. That reading must keep working.
+    $gen = new LeaseScheduleGenerator();
+    $rows = $gen->generateWithWarnings([
+        'start_date' => '2024-01-01',
+        'end_date' => '2025-12-31',   // 2 years
+        'rent_value' => 40000.00,     // per YEAR
+        'num_payments' => 2,
+        'payment_value' => 40000.00,  // 2 × 40,000 = 80,000 total
+    ]);
+
+    expect($rows['rows'])->toHaveCount(2);
+    expect($rows['warnings'])->toBe([]);
+});

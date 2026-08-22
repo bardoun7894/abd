@@ -188,11 +188,57 @@ class LeaseScheduleGenerator
             return (float) $explicit;
         }
 
-        $years = $this->leaseYears($contract);
         $rentValue = (float) ($contract['rent_value'] ?? 0);
+        if ($rentValue <= 0) {
+            return $rentValue;
+        }
 
-        if ($years > 0 && $rentValue > 0) {
-            return round($rentValue * $years, 2);
+        // `rent_value` may be EITHER the whole-contract total or a single year's
+        // rent, depending on where the contract came from — extraction now returns
+        // the VAT-inclusive contract total, but hand-entered and legacy rows still
+        // hold an annual figure. Multiplying a total by the lease length inflates
+        // it: a 5-year lease of 200,000 was scored against 1,000,000 and every
+        // schedule "failed" reconciliation. Seen on a real 5-year, 10-payment,
+        // zero-VAT contract (2026-08-22).
+        //
+        // `annual_rent` is the unambiguous signal: when the extractor captured it
+        // separately, `rent_value` is definitively the total, so never scale it.
+        if (isset($contract['annual_rent']) && is_numeric($contract['annual_rent']) && (float) $contract['annual_rent'] > 0) {
+            return $rentValue;
+        }
+
+        // A printed schedule states the total outright — trust it over any guess.
+        if (! empty($contract['payments']) && is_array($contract['payments'])) {
+            $sum = 0.0;
+            foreach ($contract['payments'] as $row) {
+                if (is_array($row) && is_numeric($row['total'] ?? null)) {
+                    $sum += (float) $row['total'];
+                }
+            }
+            if ($sum > 0) {
+                return round($sum, 2);
+            }
+        }
+
+        $years = $this->leaseYears($contract);
+        if ($years > 0) {
+            // Only scale when the figure actually looks annual. If rent_value
+            // already covers the full term (total ÷ years lands on the stated
+            // installment, or simply exceeds one year's worth), scaling would
+            // double-count it.
+            $scaled = round($rentValue * $years, 2);
+            $paymentValue = $contract['payment_value'] ?? null;
+            $numPayments = (int) ($contract['num_payments'] ?? 0);
+
+            if (is_numeric($paymentValue) && $numPayments > 0) {
+                $fromPayments = round((float) $paymentValue * $numPayments, 2);
+                // Whichever reading matches the installments is the right one.
+                if (abs($rentValue - $fromPayments) <= abs($scaled - $fromPayments)) {
+                    return $rentValue;
+                }
+            }
+
+            return $scaled;
         }
 
         return $rentValue;
