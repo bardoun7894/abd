@@ -46,8 +46,15 @@ $payments_month_tbl = DB::table('payments_month')->where(['payments_month_m' => 
 $payments_month_val = $payments_month_tbl?->payments_month_val;
 if(!$payments_month_val){$payments_month_val=500;}
 // No authenticated user exists under cron; Auth::user()->id was a guaranteed
-// fatal on every scheduled run. create_user is nullable — null means "system".
-$create_user = Auth::user()?->id;
+// fatal on every scheduled run. And null is NOT an option even though the column
+// allows it: Financial::serachspenddatadesc (and the report/PDF queries in 8
+// other models) inner-join users on create_user, so a null row is counted by
+// the count query but never rendered — «34 سجل» + «لم يعثر على أية سجلات».
+// Attribute to whoever created the previous batch (the admin who used to press
+// «الشهر الجديد»), falling back to the lowest-id admin on a fresh install.
+$create_user = Auth::user()?->id
+    ?? DB::table('financial')->whereNotNull('create_user')->orderByDesc('financial_id')->value('create_user')
+    ?? DB::table('users')->where('emp_job', 1)->orderBy('id')->value('id');
 
 
         $workers = DB::table('workers')->get();

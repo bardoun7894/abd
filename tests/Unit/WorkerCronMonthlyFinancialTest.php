@@ -15,9 +15,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 beforeEach(function () {
-    foreach (['financial', 'workers', 'payments_month'] as $t) {
+    foreach (['financial', 'workers', 'payments_month', 'users'] as $t) {
         Schema::dropIfExists($t);
     }
+    Schema::create('users', function ($table) {
+        $table->increments('id');
+        $table->string('name')->nullable();
+        $table->integer('emp_job')->nullable();
+    });
+    DB::table('users')->insert([
+        ['id' => 3, 'name' => 'clerk', 'emp_job' => 2],
+        ['id' => 7, 'name' => 'admin-low', 'emp_job' => 1],
+        ['id' => 11, 'name' => 'admin-who-clicked', 'emp_job' => 1],
+    ]);
     Schema::create('workers', function ($table) {
         $table->increments('worker_id');
         $table->string('worker_name')->nullable();
@@ -60,7 +70,32 @@ it('creates one row per worker from the CLI with no payments_month row and no au
     $rows = DB::table('financial')->where('financial_month_desc', '09-2026')->get();
     expect($rows)->toHaveCount(3);
     expect($rows->pluck('financial_month_val')->unique()->all())->toBe([500]);
-    expect($rows->pluck('create_user')->unique()->all())->toBe([null]);
+    // Never null: every list/report query inner-joins users on create_user, so a
+    // null row is counted but never rendered («34 سجل» + «لم يعثر على أية سجلات»).
+    expect($rows->pluck('create_user')->unique()->all())->not->toContain(null);
+});
+
+it('attributes cron rows to whoever created the previous batch, like the manual button did', function () {
+    DB::table('financial')->insert([
+        'worker_id' => 1, 'financial_month_desc' => '07-2026', 'financial_month_m' => 7,
+        'financial_month_y' => 2026, 'financial_month_val' => 500, 'create_user' => 11,
+        'created_at' => '2026-07-29 02:57:19',
+    ]);
+    Carbon::setTestNow('2026-09-05 10:00:00');
+
+    Artisan::call('worker:cron');
+
+    $new = DB::table('financial')->where('financial_month_desc', '09-2026')->pluck('create_user')->unique()->all();
+    expect($new)->toBe([11]);
+});
+
+it('falls back to the lowest-id admin when there is no previous batch', function () {
+    Carbon::setTestNow('2026-09-05 10:00:00');
+
+    Artisan::call('worker:cron');
+
+    $new = DB::table('financial')->where('financial_month_desc', '09-2026')->pluck('create_user')->unique()->all();
+    expect($new)->toBe([7]);
 });
 
 it('uses the payments_month amount when the month has one', function () {
