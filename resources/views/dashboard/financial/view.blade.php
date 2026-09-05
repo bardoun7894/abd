@@ -120,14 +120,15 @@
                                             </a>
                                         </div>
                                     </div>
-                                    @if(count(DB::table('payments_month')->get()) > 0)
+                                    {{-- Always shown. It used to be gated on payments_month having rows,
+                                         which hid it entirely on صباح النور (table empty there) — and
+                                         cronadd() already defaults to 500 when the month has no row. --}}
                                     <a  class="btn btn-danger btn-danger--icon"  href="{{ route('dashboard.financial.cronadd') }}">
                                         <span>
                                             <i class="fas fa-history fa-fw"></i>
                                             <span>الشهر الجديد</span>
                                         </span>
                                     </a>
-                                    @endif
 
                                     <a class="btn btn-info btn-info--icon" href="{{ route('dashboard.financial.ai_insights') }}">
                                         <span>

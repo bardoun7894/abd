@@ -41,8 +41,13 @@ class WrokerCron extends Command
         $financial_month_m=  Carbon::parse(now())->format('m');
         $financial_month_y=  Carbon::parse(now())->format('Y');
 $payments_month_tbl = DB::table('payments_month')->where(['payments_month_m' => $financial_month_m, 'payments_month_y' => $financial_month_y])->first();
-$payments_month_val=$payments_month_tbl->payments_month_val;
+// Same fix as FinancialController::cronadd (0913772): a month with no
+// payments_month row fatalled here instead of defaulting — صباح النور has none.
+$payments_month_val = $payments_month_tbl?->payments_month_val;
 if(!$payments_month_val){$payments_month_val=500;}
+// No authenticated user exists under cron; Auth::user()->id was a guaranteed
+// fatal on every scheduled run. create_user is nullable — null means "system".
+$create_user = Auth::user()?->id;
 
 
         $workers = DB::table('workers')->get();
@@ -69,7 +74,7 @@ if(!$payments_month_val){$payments_month_val=500;}
                                             'financial_month_val' => $payments_month_val,
                                             'note' =>'تم انشاء الفاتورة اوتوامتيك',
                                             'created_at' => Carbon::now(),
-                                            'create_user' => Auth::user()->id,
+                                            'create_user' => $create_user,
 
                                         ]);
                    /*        $result_upload = DB::table('financial_detail')->insertGetId([
