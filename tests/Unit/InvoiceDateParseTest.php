@@ -50,8 +50,18 @@ it('parses the printed forms Saudi suppliers actually use, day-first', function 
     expect(parseDateVia('15-May-26'))->toBe('2026-05-15');    // Nahla
     expect(parseDateVia('15-Aug-26'))->toBe('2026-08-15');
     expect(parseDateVia('24-08-2026 8:49:20PM'))->toBe('2026-08-24'); // Caesar, time appended
+    expect(parseDateVia('08:43 02/08/2026'))->toBe('2026-08-02');   // POS receipt, time BEFORE the date (batch 202)
+    expect(parseDateVia('08:45 22/08/2026'))->toBe('2026-08-22');
+    expect(parseDateVia('23/07/2026 11:01'))->toBe('2026-07-23');
+    expect(parseDateVia('9:55:00 21/7/2026'))->toBe('2026-07-21');
     expect(parseDateVia('2026/08/04'))->toBe('2026-08-04');   // Y/M/D with slashes
+    expect(parseDateVia('2025/20/1'))->toBe('2025-01-20');    // Y/D/M — middle part cannot be a month (batch 137)
+    expect(parseDateVia('2025/20/20'))->toBeNull();           // Carbon would roll month 20 over; we refuse
     expect(parseDateVia('٢٥-٠٨-٢٠٢٦'))->toBe('2026-08-25');   // Arabic-Indic digits
+    expect(parseDateVia('24 - 06 - 2026'))->toBe('2026-06-24'); // spaced separators (re-read, batch 2)
+    expect(parseDateVia('30 07 2026'))->toBe('2026-07-30');     // space-only separators (batch 120)
+    expect(parseDateVia('01 يوليو, 2026'))->toBe('2026-07-01'); // Arabic month name (re-read of INV/2026/17640)
+    expect(parseDateVia('15 أغسطس 2026'))->toBe('2026-08-15');
 });
 
 it('keeps the printed date text in invoice_date_raw, not the parsed ISO', function () {

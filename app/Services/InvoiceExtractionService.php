@@ -493,14 +493,20 @@ class InvoiceExtractionService
      * strays cannot out-vote the truth, and needs a clear majority (>= 3 votes and
      * more than half of them). Below that, nothing is touched.
      *
+     * When the batch has no clear majority (a scan of mostly unreadable pages),
+     * $fallbackMonth ("Y-m", typically the upload month) can anchor the window
+     * instead. In that mode ONLY outliers are reported, never swaps — the
+     * fallback is a hint good enough to ask a question, not to rewrite a date.
+     *
      * @param  array<int|string, ?string>  $dates  id => Y-m-d (or null)
      * @return array{dominant: ?string, swap: array<int|string, string>, outlier: array<int|string, string>}
      */
-    public static function dateOutliers(array $dates): array
+    public static function dateOutliers(array $dates, ?string $fallbackMonth = null): array
     {
         $none = ['dominant' => null, 'swap' => [], 'outlier' => []];
         $votes = [];
         $parsed = [];
+        $viaFallback = false;
         foreach ($dates as $id => $d) {
             if (! $d || ! preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string) $d, $m)) {
                 continue;
@@ -511,14 +517,15 @@ class InvoiceExtractionService
                 $votes[$ym] = ($votes[$ym] ?? 0) + 1;
             }
         }
-        if (! $votes) {
-            return $none;
-        }
         arsort($votes);
-        $dominant = array_key_first($votes);
-        $top = $votes[$dominant];
+        $dominant = $votes ? array_key_first($votes) : null;
+        $top = $dominant ? $votes[$dominant] : 0;
         if ($top < 3 || $top * 2 <= array_sum($votes)) {
-            return $none;
+            if (! $fallbackMonth || ! preg_match('/^\d{4}-\d{2}$/', $fallbackMonth)) {
+                return $none;
+            }
+            $dominant = $fallbackMonth;
+            $viaFallback = true;
         }
         [$dy, $dm] = array_map('intval', explode('-', $dominant));
         // A batch is "this month's invoices", but the client scans the last days of
@@ -535,7 +542,7 @@ class InvoiceExtractionService
                 continue;
             }
             // Swapped reading: printed DD-MM was taken as MM-DD, so month<->day.
-            if ($p['d'] <= 12 && $p['d'] === $dm && $p['y'] === $dy && checkdate($dm, $p['mo'], $dy)) {
+            if (! $viaFallback && $p['d'] <= 12 && $p['d'] === $dm && $p['y'] === $dy && checkdate($dm, $p['mo'], $dy)) {
                 $swap[$id] = sprintf('%04d-%02d-%02d', $dy, $dm, $p['mo']);
                 continue;
             }
@@ -708,14 +715,29 @@ class InvoiceExtractionService
             return null;
         }
         $v = trim($this->arabicDigits($v));
+        // POS receipts print the time next to the date, before or after ("08:43
+        // 02/08/2026", "23/07/2026 11:01", "16:29 02-06-2026"). Drop it first, or the
+        // day-first branch never matches and Carbon guesses US month-first.
+        $v = trim(preg_replace('/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AaPp]\.?[Mm]\.?|ص|م)?\b/u', ' ', $v));
+        $v = trim(preg_replace('/\s{2,}/', ' ', $v));
+        // "24 - 06 - 2026" and "30 07 2026" are printed forms too: collapse spaced or
+        // space-only separators between three numeric groups into plain dashes.
+        $v = preg_replace('#^(\d{1,2})\s*[/\-.\s]\s*(\d{1,2})\s*[/\-.\s]\s*(\d{2,4})\b#', '$1-$2-$3', $v);
 
-        // Already ISO (YYYY-MM-DD / YYYY/MM/DD…) — unambiguous, trust it.
+        // Already ISO (YYYY-MM-DD / YYYY/MM/DD…) — unambiguous, trust it. Validate the
+        // parts ourselves: Carbon rolls month 20 over into next year ("2025/20/1" →
+        // 2026-08-01) instead of rejecting it. A year-first D/M ("2025/20/1") is
+        // read as Y/D/M when the middle part cannot be a month.
         if (preg_match('#^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})#', $v, $iso)) {
-            try {
-                return Carbon::createFromDate((int) $iso[1], (int) $iso[2], (int) $iso[3])->format('Y-m-d');
-            } catch (\Throwable $e) {
-                return null;
+            [$y, $a, $b] = [(int) $iso[1], (int) $iso[2], (int) $iso[3]];
+            if (checkdate($a, $b, $y)) {
+                return sprintf('%04d-%02d-%02d', $y, $a, $b);
             }
+            if ($a > 12 && checkdate($b, $a, $y)) {
+                return sprintf('%04d-%02d-%02d', $y, $b, $a);
+            }
+
+            return null;
         }
 
         // D/M/Y or D-M-Y or D.M.Y (any separator), optionally followed by a time
@@ -752,13 +774,28 @@ class InvoiceExtractionService
             }
         }
 
-        // Fallback for anything else — month-name forms ("15-May-26", "Aug 15, 2026"),
-        // which Carbon reads unambiguously because a name cannot be a day.
+        // Fallback for anything else — month-name forms ("15-May-26", "Aug 15, 2026",
+        // "01 يوليو, 2026"), which Carbon reads unambiguously because a name cannot
+        // be a day. Arabic month names are mapped to English first.
         try {
-            return Carbon::parse($v)->format('Y-m-d');
+            return Carbon::parse(self::arabicMonthsToEnglish($v))->format('Y-m-d');
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /** "01 يوليو, 2026" → "01 July, 2026" so Carbon can parse it. Levantine/Gulf and Maghreb names. */
+    private static function arabicMonthsToEnglish(string $v): string
+    {
+        static $map = [
+            'يناير' => 'January', 'فبراير' => 'February', 'مارس' => 'March', 'أبريل' => 'April', 'ابريل' => 'April', 'إبريل' => 'April',
+            'مايو' => 'May', 'يونيو' => 'June', 'يوليو' => 'July', 'أغسطس' => 'August', 'اغسطس' => 'August', 'سبتمبر' => 'September',
+            'أكتوبر' => 'October', 'اكتوبر' => 'October', 'نوفمبر' => 'November', 'ديسمبر' => 'December',
+            'كانون الثاني' => 'January', 'شباط' => 'February', 'آذار' => 'March', 'نيسان' => 'April', 'أيار' => 'May', 'حزيران' => 'June',
+            'تموز' => 'July', 'آب' => 'August', 'أيلول' => 'September', 'تشرين الأول' => 'October', 'تشرين الثاني' => 'November', 'كانون الأول' => 'December',
+        ];
+
+        return str_replace(array_keys($map), array_values($map), $v);
     }
 
     /** Convert Arabic-Indic digits to ASCII so numbers/dates parse. */

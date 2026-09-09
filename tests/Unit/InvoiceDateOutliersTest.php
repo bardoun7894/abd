@@ -93,6 +93,17 @@ it('tolerates end-of-previous-month dates in a batch, but not a wrong year or a 
     expect(array_keys($r['outlier']))->toBe([8, 9, 10]);
 });
 
+it('with no majority, a fallback month anchors the window but never produces swaps', function () {
+    // Batch 214 shape: 8 unclear pages, dates all over the place, uploaded in September.
+    $dates = [1 => '2025-08-28', 2 => '2025-09-01', 3 => '2024-08-31', 4 => '2024-06-23', 5 => '2026-02-28', 6 => '2025-03-24', 7 => '2026-09-08', 8 => '2026-04-09'];
+    expect(InvoiceExtractionService::dateOutliers($dates))->toBe(['dominant' => null, 'swap' => [], 'outlier' => []]);
+
+    $r = InvoiceExtractionService::dateOutliers($dates, '2026-09');
+    expect($r['dominant'])->toBe('2026-09');
+    expect($r['swap'])->toBe([]);                            // 2026-04-09 is swap-shaped, but not on a fallback
+    expect(array_keys($r['outlier']))->toBe([1, 2, 3, 4, 5, 6, 8]);
+});
+
 it('ignores null dates and a date already in the dominant month with day<=12', function () {
     $dates = [1 => '2026-08-03', 2 => null, 3 => '2026-08-18', 4 => '2026-08-17', 5 => '2026-08-15', 6 => '2026-08-16'];
     $r = InvoiceExtractionService::dateOutliers($dates);
