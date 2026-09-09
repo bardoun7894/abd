@@ -50,6 +50,8 @@ class InvoicePipeline
 
         // Flag repeated invoice numbers (within this batch and against earlier ones) for review.
         $this->flagDuplicates($batch);
+        // Correct day/month-swapped dates and flag dates outside the batch's month.
+        $this->flagDateOutliers($batch);
 
         $counts = $batch->invoices()
             ->selectRaw("status, count(*) as cnt")
@@ -471,6 +473,44 @@ class InvoicePipeline
     }
 
     /** Best-effort PNG-per-page map (pageNo => public-relative path); empty if pdftoppm unavailable. */
+    /**
+     * Client report 2026-09-09 «تسع فواتير مضافة، يطلعوا ستة في البحث»: dates like
+     * 04-08-2026 were stored as April, and 25-08-2026 once as 05-25, so the August
+     * date filter hid them. Uses the batch's own dates as ground truth
+     * (InvoiceExtractionService::dateOutliers): a swapped date is corrected in
+     * place and noted; anything else outside the month is flagged for review so it
+     * cannot be pushed to purchases with a wrong date.
+     */
+    private function flagDateOutliers(InvoiceBatch $batch): void
+    {
+        $invoices = $batch->invoices()->get();
+        $dates = [];
+        foreach ($invoices as $inv) {
+            $dates[$inv->id] = $inv->invoice_date ? $inv->invoice_date->format('Y-m-d') : null;
+        }
+        $r = InvoiceExtractionService::dateOutliers($dates);
+        if (! $r['dominant']) {
+            return;
+        }
+
+        foreach ($invoices as $inv) {
+            $add = [];
+            $fill = [];
+            if (isset($r['swap'][$inv->id])) {
+                $add[] = 'تم تصحيح ترتيب اليوم والشهر في التاريخ ('.$dates[$inv->id].' ← '.$r['swap'][$inv->id].')';
+                $fill['invoice_date'] = $r['swap'][$inv->id];
+            } elseif (isset($r['outlier'][$inv->id])) {
+                $add[] = 'تاريخ الفاتورة خارج شهر بقية الدفعة ('.$r['dominant'].') — تحقّق من التاريخ المطبوع';
+                $fill['needs_review'] = true;
+            }
+            if ($add) {
+                $notes = trim((string) $inv->validation_notes);
+                $fill['validation_notes'] = $notes !== '' ? $notes.' | '.implode(' | ', $add) : implode(' | ', $add);
+                $inv->forceFill($fill)->save();
+            }
+        }
+    }
+
     private function rasterizePages(string $pdfPath, InvoiceBatch $batch): array
     {
         try {

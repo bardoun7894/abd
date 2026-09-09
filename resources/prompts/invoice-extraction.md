@@ -18,7 +18,11 @@ the whole document.
 2. **supplier_tax_number** — the SELLER's VAT/Tax registration number (15 digits in KSA). **Not** the customer's.
    EN: VAT No, VAT Reg. No, TRN, Tax Registration Number. AR: الرقم الضريبي، الرقم الضريبي للمورد.
 3. **invoice_number** — EN: Invoice No, Invoice #, Bill No, Document No, Tax Invoice No. AR: رقم الفاتورة.
-4. **invoice_date** — issue date as YYYY-MM-DD. EN: Date, Invoice Date, Issue Date. AR: التاريخ، تاريخ الفاتورة، تاريخ الإصدار.
+4. **invoice_date** — the issue date **exactly as printed**, character for character (`25-08-2026`, `04/08/2026`,
+   `15-May-26`, `24-08-2026 8:49PM`). **Do not convert, reformat, or reorder it** — the system parses it.
+   Saudi invoices are written **DD/MM/YYYY (day first)**; `04/08/2026` is 4 August, never April 8.
+   EN: Date, Invoice Date, Issue Date. AR: التاريخ، تاريخ الفاتورة، تاريخ الإصدار.
+   انسخ التاريخ كما هو مطبوع حرفيًا دون تحويل؛ التواريخ السعودية يوم/شهر/سنة.
 5. **amount_before_vat** — total BEFORE VAT. EN: Subtotal, Taxable Amount, Net, Total (Excl. VAT), Total Amount.
    AR: المبلغ قبل الضريبة، الإجمالي قبل الضريبة، الصافي، المبلغ الإجمالي.
 6. **vat_amount** — total VAT. EN: VAT, VAT Amount, Tax, Total VAT. AR: ضريبة القيمة المضافة، مبلغ الضريبة، إجمالي الضريبة.
@@ -45,7 +49,8 @@ Output all 7 keys **every time**. If a field is genuinely absent from the invoic
 ## Formatting — قواعد التنسيق
 - Numbers with no currency symbol and no thousands separators (`366.85`, not `SAR 366,85` / `366٬85 ر.س`).
 - Convert Arabic-Indic digits (٠١٢٣٤٥٦٧٨٩) to Latin.
-- Dates as YYYY-MM-DD (`15-May-26` → `2026-05-15`; `05/15/2026` → `2026-05-15`).
+- Dates: copy the printed text verbatim (`25-08-2026` stays `25-08-2026`, `15-May-26` stays `15-May-26`).
+  Never output YYYY-MM-DD unless that is what is printed. Printed numeric dates are DD/MM/YYYY.
 - supplier_tax_number as a 15-digit string with no spaces.
 - Keep supplier_name verbatim in its printed language.
 
@@ -57,13 +62,13 @@ and `supplier_tax_number` is 15 digits. If anything conflicts, re-read the invoi
 Input: «شركة نهلة الوادي للتجارة», الرقم الضريبي 300975259400003, رقم NHD252236491, التاريخ 15-May-26,
 المبلغ قبل الضريبة 319.00, الضريبة 47.85, المجموع 366.85 (5 بنود).
 Output:
-{"supplier_name":"شركة نهلة الوادي للتجارة","supplier_tax_number":"300975259400003","invoice_number":"NHD252236491","invoice_date":"2026-05-15","amount_before_vat":319.00,"vat_amount":47.85,"total_incl_vat":366.85,"confidence":0.98}
+{"supplier_name":"شركة نهلة الوادي للتجارة","supplier_tax_number":"300975259400003","invoice_number":"NHD252236491","invoice_date":"15-May-26","amount_before_vat":319.00,"vat_amount":47.85,"total_incl_vat":366.85,"confidence":0.98}
 
-## Example B — English invoice
+## Example B — English invoice (date is 4 October, day first — copied verbatim)
 Input: "Gulf Supplies Co." Tax Invoice, VAT No 311223344550003, Invoice No INV-7782, Date 04/10/2026,
 Subtotal 1,200.00, VAT 180.00, Total Due 1,380.00.
 Output:
-{"supplier_name":"Gulf Supplies Co.","supplier_tax_number":"311223344550003","invoice_number":"INV-7782","invoice_date":"2026-04-10","amount_before_vat":1200.00,"vat_amount":180.00,"total_incl_vat":1380.00,"confidence":0.97}
+{"supplier_name":"Gulf Supplies Co.","supplier_tax_number":"311223344550003","invoice_number":"INV-7782","invoice_date":"04/10/2026","amount_before_vat":1200.00,"vat_amount":180.00,"total_incl_vat":1380.00,"confidence":0.97}
 
 ## Extended header fields — حقول إضافية (أخرِجها إن وُجدت، وإلا null)
 - **invoice_type** — `"tax"` (فاتورة ضريبية) or `"simplified"` (فاتورة ضريبية مبسطة). A simplified invoice usually has no buyer VAT number.
@@ -72,7 +77,7 @@ Output:
 - **vat_rate** — the VAT percentage as a number (e.g. 15). AR: نسبة الضريبة.
 - **commercial_registration** — the seller's Commercial Registration (C.R.) number if printed. EN: CR No, C.R. AR: السجل التجاري، رقم السجل التجاري.
 - **payment_method** — if stated. EN: Cash, Card, Credit, Bank Transfer. AR: نقدًا، بطاقة، آجل، تحويل بنكي.
-- **due_date** — payment due date as YYYY-MM-DD if present. AR: تاريخ الاستحقاق.
+- **due_date** — payment due date exactly as printed (same rule as invoice_date) if present. AR: تاريخ الاستحقاق.
 - **issuer_establishment_name** — the issuing establishment/branch name if it differs from supplier_name (اسم المنشأة المصدرة للفاتورة). Else null.
 - **notes** — any other notes or extra data printed on the invoice (أي ملاحظات أو بيانات إضافية). Else null.
 

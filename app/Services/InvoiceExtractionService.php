@@ -481,6 +481,79 @@ class InvoiceExtractionService
     }
 
     /**
+     * Batch-level sanity check on invoice dates. A bulk PDF is one supplier's run of
+     * consecutive invoices, so its dates cluster in one month; a date outside that
+     * month is a misread, not a fact. Two shapes came out of the 2026-09-09 report:
+     *   swap    — day/month reversed (04-08 read as April 8). Auto-correctable when
+     *             the swapped reading lands in the dominant month.
+     *   outlier — anything else outside the dominant month (25-08 read as 05-25).
+     *             Cannot be guessed; flagged for a human.
+     *
+     * The dominant month is voted only by UNAMBIGUOUS dates (day > 12) so the swapped
+     * strays cannot out-vote the truth, and needs a clear majority (>= 3 votes and
+     * more than half of them). Below that, nothing is touched.
+     *
+     * @param  array<int|string, ?string>  $dates  id => Y-m-d (or null)
+     * @return array{dominant: ?string, swap: array<int|string, string>, outlier: array<int|string, string>}
+     */
+    public static function dateOutliers(array $dates): array
+    {
+        $none = ['dominant' => null, 'swap' => [], 'outlier' => []];
+        $votes = [];
+        $parsed = [];
+        foreach ($dates as $id => $d) {
+            if (! $d || ! preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string) $d, $m)) {
+                continue;
+            }
+            $parsed[$id] = ['y' => (int) $m[1], 'mo' => (int) $m[2], 'd' => (int) $m[3]];
+            if ((int) $m[3] > 12) {
+                $ym = $m[1].'-'.$m[2];
+                $votes[$ym] = ($votes[$ym] ?? 0) + 1;
+            }
+        }
+        if (! $votes) {
+            return $none;
+        }
+        arsort($votes);
+        $dominant = array_key_first($votes);
+        $top = $votes[$dominant];
+        if ($top < 3 || $top * 2 <= array_sum($votes)) {
+            return $none;
+        }
+        [$dy, $dm] = array_map('intval', explode('-', $dominant));
+        // A batch is "this month's invoices", but the client scans the last days of
+        // the previous month with it — 26–31 July in an August batch is normal, not a
+        // misread. Only dates well outside that window are outliers.
+        $monthStart = Carbon::createFromDate($dy, $dm, 1)->startOfDay();
+        $windowFrom = $monthStart->copy()->subDays(45);
+        $windowTo = $monthStart->copy()->endOfMonth()->addDays(15);
+
+        $swap = [];
+        $outlier = [];
+        foreach ($parsed as $id => $p) {
+            if ($p['y'] === $dy && $p['mo'] === $dm) {
+                continue;
+            }
+            // Swapped reading: printed DD-MM was taken as MM-DD, so month<->day.
+            if ($p['d'] <= 12 && $p['d'] === $dm && $p['y'] === $dy && checkdate($dm, $p['mo'], $dy)) {
+                $swap[$id] = sprintf('%04d-%02d-%02d', $dy, $dm, $p['mo']);
+                continue;
+            }
+            try {
+                $date = Carbon::createFromDate($p['y'], $p['mo'], $p['d'])->startOfDay();
+            } catch (\Throwable $e) {
+                $outlier[$id] = sprintf('%04d-%02d-%02d', $p['y'], $p['mo'], $p['d']);
+                continue;
+            }
+            if ($date->lt($windowFrom) || $date->gt($windowTo)) {
+                $outlier[$id] = $date->format('Y-m-d');
+            }
+        }
+
+        return ['dominant' => $dominant, 'swap' => $swap, 'outlier' => $outlier];
+    }
+
+    /**
      * Coerce the model's image-quality rating into one of: clear | medium | unclear.
      * Accepts common synonyms; unknown/empty -> null.
      */
@@ -636,18 +709,19 @@ class InvoiceExtractionService
         }
         $v = trim($this->arabicDigits($v));
 
-        // Already ISO (YYYY-MM-DD…) — unambiguous, trust it.
-        if (preg_match('/^\d{4}-\d{1,2}-\d{1,2}/', $v)) {
+        // Already ISO (YYYY-MM-DD / YYYY/MM/DD…) — unambiguous, trust it.
+        if (preg_match('#^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})#', $v, $iso)) {
             try {
-                return Carbon::parse($v)->format('Y-m-d');
+                return Carbon::createFromDate((int) $iso[1], (int) $iso[2], (int) $iso[3])->format('Y-m-d');
             } catch (\Throwable $e) {
                 return null;
             }
         }
 
-        // D/M/Y or D-M-Y or D.M.Y (any separator). Build day-first (Saudi) + swapped
+        // D/M/Y or D-M-Y or D.M.Y (any separator), optionally followed by a time
+        // ("24-08-2026 8:49:20PM" — Caesar). Build day-first (Saudi) + swapped
         // candidates, then prefer the non-future one.
-        if (preg_match('#^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$#', $v, $m)) {
+        if (preg_match('#^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})(?:\s|$)#', $v, $m)) {
             $a = (int) $m[1];
             $b = (int) $m[2];
             $y = (int) $m[3];
@@ -667,7 +741,10 @@ class InvoiceExtractionService
             }
             if ($candidates) {
                 $pick = $candidates[0]; // DD/MM (Saudi) first
-                if ($pick->gt($today) && isset($candidates[1]) && $candidates[1]->lte($today)) {
+                // Only abandon the day-first reading when it is implausibly far in the
+                // future. A hard "any future date" rule flipped a genuine 04-08 (4 Aug)
+                // processed on 24 Jul into 8 Apr — the exact bug we are fixing.
+                if ($pick->gt($today->copy()->addDays(45)) && isset($candidates[1]) && $candidates[1]->lte($today)) {
                     $pick = $candidates[1]; // model swapped day/month — take the non-future reading
                 }
 
@@ -675,7 +752,8 @@ class InvoiceExtractionService
             }
         }
 
-        // Fallback for anything else (month names, etc.).
+        // Fallback for anything else — month-name forms ("15-May-26", "Aug 15, 2026"),
+        // which Carbon reads unambiguously because a name cannot be a day.
         try {
             return Carbon::parse($v)->format('Y-m-d');
         } catch (\Throwable $e) {
@@ -706,7 +784,7 @@ class InvoiceExtractionService
 
         // Fallback so the service never breaks if the file is missing.
         return 'استخرج من الفاتورة الضريبية السعودية: supplier_name، supplier_tax_number (15 رقمًا، رقم '
-            .'البائع أعلى الفاتورة وليس العميل)، invoice_number، invoice_date (YYYY-MM-DD)، '
+            .'البائع أعلى الفاتورة وليس العميل)، invoice_number، invoice_date (كما هو مطبوع حرفيًا، يوم/شهر/سنة)، '
             .'amount_before_vat، vat_amount، total_incl_vat (من ملخص الفاتورة بالأسفل وليس البنود). '
             .'أعد كل المفاتيح دائمًا، واستخدم null لأي حقل غير موجود. أعد JSON فقط.';
     }
