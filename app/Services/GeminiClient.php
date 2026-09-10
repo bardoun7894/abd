@@ -753,37 +753,85 @@ class GeminiClient
         }
     }
 
+    /** Never sleep longer than this on one 429, however long the API asks for. */
+    private const MAX_RETRY_AFTER = 120;
+
     /**
-     * How long to sleep before a 429 retry. Parses the Retry-After response header
-     * (seconds or HTTP-date) and falls back to retryDelay/retry_delay in the JSON
-     * error body. Returns 0 when nothing is provided; callers add their own floor.
+     * How long to sleep before a 429 retry. Reads, in order: the Retry-After header,
+     * the RetryInfo block Gemini actually sends, the older flat keys, and finally the
+     * "Please retry in N s" sentence in the message. Returns 0 when nothing is
+     * provided; callers add their own floor.
+     *
+     * The RetryInfo lookup is the one that matters. Gemini puts its wait inside
+     * error.details[] —
+     *   {"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"11s"}
+     * — which the old top-level/error.* lookup never reached, so this returned 0 and
+     * the caller's 1s/2s/4s floor burned every attempt inside an 11s window. Client
+     * report 2026-09-10: extraction still failing after the account was paid.
      */
     private function retryAfterSeconds($resp): int
     {
         $header = $resp->header('Retry-After');
         if ($header !== null && $header !== '') {
             if (is_numeric($header)) {
-                return (int) $header;
+                return $this->clampRetryAfter((float) $header);
             }
             $date = strtotime($header);
             if ($date !== false) {
-                return max(0, $date - time());
+                return $this->clampRetryAfter($date - time());
             }
         }
 
         $json = $resp->json();
-        if (is_array($json)) {
-            foreach (['retryDelay', 'retry_delay', 'retryDelaySeconds'] as $key) {
-                $val = data_get($json, $key) ?? data_get($json, "error.{$key}");
-                if (is_numeric($val)) {
-                    return (int) $val;
-                }
-                if (is_string($val) && preg_match('/^(\d+(\.\d+)?)\s*s?$/', $val, $m)) {
-                    return (int) ceil((float) $m[1]);
-                }
+        if (! is_array($json)) {
+            return 0;
+        }
+
+        // google.rpc.RetryInfo inside error.details[] — where Gemini really puts it.
+        foreach ((array) data_get($json, 'error.details', []) as $detail) {
+            if (! is_array($detail)) {
+                continue;
+            }
+            $val = $detail['retryDelay'] ?? $detail['retry_delay'] ?? null;
+            $secs = $this->durationToSeconds($val);
+            if ($secs !== null) {
+                return $this->clampRetryAfter($secs);
             }
         }
 
+        // Older/flat shapes kept working.
+        foreach (['retryDelay', 'retry_delay', 'retryDelaySeconds'] as $key) {
+            $secs = $this->durationToSeconds(data_get($json, $key) ?? data_get($json, "error.{$key}"));
+            if ($secs !== null) {
+                return $this->clampRetryAfter($secs);
+            }
+        }
+
+        // Last resort: the human sentence ("Please retry in 11.33793498s.").
+        $message = (string) data_get($json, 'error.message', '');
+        if ($message !== '' && preg_match('/retry in\s+(\d+(?:\.\d+)?)\s*s/i', $message, $m)) {
+            return $this->clampRetryAfter((float) $m[1]);
+        }
+
         return 0;
+    }
+
+    /** "11s" / "11.33s" / 11 -> seconds as a float. Null when it is not a duration. */
+    private function durationToSeconds($val): ?float
+    {
+        if (is_numeric($val)) {
+            return (float) $val;
+        }
+        if (is_string($val) && preg_match('/^\s*(\d+(?:\.\d+)?)\s*s?\s*$/', $val, $m)) {
+            return (float) $m[1];
+        }
+
+        return null;
+    }
+
+    /** Round up (never wake early) and cap, so one odd response cannot stall a worker. */
+    private function clampRetryAfter(float $seconds): int
+    {
+        return (int) max(0, min(self::MAX_RETRY_AFTER, ceil($seconds)));
     }
 }

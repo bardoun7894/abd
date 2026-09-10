@@ -53,6 +53,53 @@ class Purchase extends Model
 
 
 
+    /**
+     * The `and <prefix>purchase_no like '%…%'` fragment for the search box, or ''
+     * when nothing was typed.
+     *
+     * Was `= '<value> '`: an exact match, so a partial number found nothing — the
+     * client's video 2026-09-09 shows an empty table while the invoice is in the
+     * table. Quotes and the LIKE wildcards are escaped, because these scopes build
+     * raw SQL and a typed `%` would otherwise widen the search silently.
+     */
+    public static function purchaseNoWhere(string $prefix, $purchase_no): string
+    {
+        $value = trim((string) $purchase_no);
+        if ($value === '') {
+            return '';
+        }
+        // Order matters: escape the backslash first, then the quote and wildcards.
+        $escaped = str_replace(
+            ['\\', "'", '%', '_'],
+            ['\\\\', "\\'", '\\%', '\\_'],
+            $value
+        );
+
+        return " and {$prefix}purchase_no like '%{$escaped}%' ";
+    }
+
+    /**
+     * The shop/manager mode filter for the listing — or '' when the user typed an
+     * invoice number.
+     *
+     * «المشتريات» shows purchases carrying a manager_id (1,063 rows) and «مشتريات
+     * المحلات» those carrying a shop_id (9,153 rows, including 3,344 of the 3,379
+     * AI-pushed invoices). Constraining a *number search* to the current mode meant
+     * searching an AI invoice from the first page silently returned nothing — the
+     * client's video, 2026-09-09. A typed number is a targeted lookup, so it looks
+     * across both; the manager/shop dropdowns and the permission filters still apply.
+     */
+    public static function modeWhere(string $prefix, $shops, $purchase_no): string
+    {
+        if (trim((string) $purchase_no) !== '') {
+            return '';
+        }
+
+        return $shops == 'on'
+            ? " and {$prefix}manager_id is NULL and {$prefix}shop_id is not NULL "
+            : " and {$prefix}manager_id is not NULL and {$prefix}shop_id is NULL ";
+    }
+
     public function scopeserachspendcount($query, $purchase_no, $purchase_dt_from, $purchase_dt_to, $purchase_respon, $manager_id, $shop_id, $shops , $create_users)
     {
         $purchase_no = TRIM($purchase_no);
@@ -65,9 +112,7 @@ class Purchase extends Model
 
 
         $rs_stmt1 = " SELECT purchase_id FROM  purchase where  1=1  ";
-        if ($purchase_no  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  purchase_no = '$purchase_no ' ";
-        }
+        $rs_stmt1 = $rs_stmt1 . self::purchaseNoWhere('', $purchase_no);
 
         if ($purchase_respon  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  purchase_respon like '%$purchase_respon%' ";
@@ -89,25 +134,18 @@ class Purchase extends Model
         if ($purchase_dt_from  == "" and $purchase_dt_to != "") {
             $rs_stmt1 = $rs_stmt1 . " and  purchase_dt <= '$purchase_dt_to'  ";
         }
+        $rs_stmt1 = $rs_stmt1 . self::modeWhere('', $shops, $purchase_no);
         if ($shops == "on") {
-            $rs_stmt1 = $rs_stmt1 . " and  manager_id  is NULL ";
-            $rs_stmt1 = $rs_stmt1 . " and  shop_id is not NULL";
-
             if ($manager_id  != "") {
                 $shops_list = "(";
 
                 foreach( Manager::find($manager_id)->shops as $shop){
-                    $shops_list .= $shop->shop_id ."," ; 
+                    $shops_list .= $shop->shop_id ."," ;
                 }
                 $shops_list .=  "0)";
 
                 $rs_stmt1 = $rs_stmt1 . " and  shop_id in   ".$shops_list  ;
             }
-
-        } else {
-
-            $rs_stmt1 = $rs_stmt1 . " and  manager_id  is not NULL ";
-            $rs_stmt1 = $rs_stmt1 . " and  shop_id is  NULL";
         }
 
         if ($manager_id  != "" and $shops != "on") {
@@ -137,33 +175,24 @@ class Purchase extends Model
         if ($purchase_id  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  p.purchase_id = '$purchase_id ' ";
         }
-        if ($purchase_no  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  p.purchase_no = '$purchase_no ' ";
-        }
+        $rs_stmt1 = $rs_stmt1 . self::purchaseNoWhere('p.', $purchase_no);
 
         if ($purchase_respon  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  p.purchase_respon like '%$purchase_respon%' ";
         }
 
+        $rs_stmt1 = $rs_stmt1 . self::modeWhere('p.', $shops, $purchase_no);
         if ($shops == "on") {
-            $rs_stmt1 = $rs_stmt1 . " and  p.manager_id  is NULL ";
-            $rs_stmt1 = $rs_stmt1 . " and  p.shop_id is not NULL";
-
             if ($manager_id  != "") {
                 $shops_list = "(";
 
                 foreach( Manager::find($manager_id)->shops as $shop){
-                    $shops_list .= $shop->shop_id ."," ; 
+                    $shops_list .= $shop->shop_id ."," ;
                 }
                 $shops_list .=  "0)";
 
                 $rs_stmt1 = $rs_stmt1 . " and  p.shop_id in   ".$shops_list  ;
             }
-
-        } else {
-
-            $rs_stmt1 = $rs_stmt1 . " and  p.manager_id  is not NULL ";
-            $rs_stmt1 = $rs_stmt1 . " and  p.shop_id is  NULL";
         }
         if ($purchase_dt_from  != "" and $purchase_dt_to  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  p.purchase_dt between '$purchase_dt_from' and '$purchase_dt_to'  ";
@@ -227,9 +256,7 @@ class Purchase extends Model
             left join  manager m on p.manager_id=m.manager_id
             left join  users u on p.create_user=u.id
             where  1=1 ";
-        if ($purchase_no  != "") {
-            $rs_stmt1 = $rs_stmt1 . " and  p.purchase_no = '$purchase_no ' ";
-        }
+        $rs_stmt1 = $rs_stmt1 . self::purchaseNoWhere('p.', $purchase_no);
 
         if ($purchase_respon  != "") {
             $rs_stmt1 = $rs_stmt1 . " and  p.purchase_respon like '%$purchase_respon%' ";
@@ -250,24 +277,18 @@ class Purchase extends Model
         if ($purchase_dt_from  == "" and $purchase_dt_to != "") {
             $rs_stmt1 = $rs_stmt1 . " and  p.purchase_dt <= '$purchase_dt_to'  ";
         }
+        $rs_stmt1 = $rs_stmt1 . self::modeWhere('p.', $shops, $purchase_no);
         if ($shops == "on") {
-            $rs_stmt1 = $rs_stmt1 . " and  p.manager_id  is NULL ";
-            $rs_stmt1 = $rs_stmt1 . " and  p.shop_id is not NULL";
-
             if ($manager_id  != "") {
                 $shops_list = "(";
 
                 foreach( Manager::find($manager_id)->shops as $shop){
-                    $shops_list .= $shop->shop_id ."," ; 
+                    $shops_list .= $shop->shop_id ."," ;
                 }
                 $shops_list .=  "0)";
 
                 $rs_stmt1 = $rs_stmt1 . " and  p.shop_id in   ".$shops_list  ;
             }
-        } else {
-
-            $rs_stmt1 = $rs_stmt1 . " and  p.manager_id  is not NULL ";
-            $rs_stmt1 = $rs_stmt1 . " and  p.shop_id is  NULL";
         }
         if ($manager_id  != "" and $shops != "on") {
             $rs_stmt1 = $rs_stmt1 . " and  p.manager_id = '$manager_id ' ";

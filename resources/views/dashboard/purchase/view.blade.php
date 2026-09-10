@@ -35,10 +35,13 @@
                                     <div class="input-group">
                                         <div class="input-group-prepend"><span class="input-group-text"><i
                                                     class="far fa-id-card fa-fw text-dark"></i></span></div><input
+                                            {{-- No inputmask: a quarter of the invoice numbers on file contain
+                                                 letters or "/" (NHD252439396, INV/2026/17095), and the decimal
+                                                 mask that used to be here refused to let them be typed. --}}
                                             type="text" name="purchase_no_v" id="purchase_no_v"
                                             class="form-control fw-bold text-dark text-info "
-                                            data-inputmask="'alias' : 'decimal'" minlenght="1" maxlength="20"
-                                            placeholder="رقم الفاتورة">
+                                            maxlength="100" autocomplete="off"
+                                            placeholder="رقم الفاتورة أو جزء منه">
                                     </div>
                                 </div>
 
