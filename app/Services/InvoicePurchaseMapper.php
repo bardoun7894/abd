@@ -68,7 +68,10 @@ class InvoicePurchaseMapper
             'purchase_price' => $a['total_incl_vat'] ?? null,
             'purchase_dt' => $date,
             'tax_number' => $a['supplier_tax_number'] ?? null,
-            'purchase_respon' => $a['supplier_name'] ?? null,
+            'purchase_respon' => self::canonicalSupplierName(
+                $a['supplier_tax_number'] ?? null,
+                $a['supplier_name'] ?? null
+            ),
             'shop_id' => $shopId,
             'manager_id' => $managerId,
             'purchasefile' => $a['image_path'] ?? null,
@@ -518,6 +521,50 @@ class InvoicePurchaseMapper
             || $driverCode === '1'                // SQLite constraint
             || str_contains($msg, 'duplicate')
             || str_contains($msg, 'unique constraint');
+    }
+
+    /**
+     * The name to store on the purchase row for a supplier the master already knows
+     * by tax number — otherwise whatever was printed on the invoice.
+     *
+     * Suppliers with a bilingual header (نهلة الوادي prints Arabic and English on
+     * separate lines) come back differently on every invoice: 34 spellings of the
+     * one company on نور الصباح, 16 on صباح النور, all tax 300975259400003. The
+     * supplier LINK was always correct, but purchase_respon kept the raw text and
+     * «اسم المورد» searches LIKE against it, so the client only ever found a slice
+     * of his own invoices. Tax number identifies a company; the master names it.
+     *
+     * Deliberately tax-only: a fuzzy name match must never rename someone's
+     * supplier, and an unknown tax number keeps exactly what was printed.
+     */
+    public static function canonicalSupplierName($taxNumber, $rawName): ?string
+    {
+        $raw = trim((string) $rawName);
+        $tax = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $taxNumber));
+        if ($tax === '') {
+            return $raw === '' ? null : $raw;
+        }
+
+        // Fail-open: naming a supplier is a nicety, pushing the invoice is the job.
+        // An unreachable suppliers table must never cost the client a purchase row.
+        try {
+            $canonical = trim((string) \App\Models\Supplier::where('tax_number', $tax)->value('name'));
+        } catch (\Throwable $e) {
+            $canonical = '';
+        }
+
+        return $canonical !== '' ? $canonical : ($raw === '' ? null : $raw);
+    }
+
+    /** ٣٠٠ -> 300, so a tax number typed in Arabic-Indic digits still matches. */
+    private static function arabicDigitsToAscii(string $v): string
+    {
+        return strtr($v, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+        ]);
     }
 
     /**
