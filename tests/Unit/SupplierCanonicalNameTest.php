@@ -117,6 +117,20 @@ it('learns a supplier CR the first time an invoice prints a good one, and never 
     expect(Supplier::find($other->id)->cr_number)->toBeEmpty();
 });
 
+// Purchases reach the table by three routes. The AI batch push and the AI prefill
+// both go through buildPurchaseRow(), so they were covered from the start; the
+// manual «إضافة فاتورة» form wrote whatever was in the box. One free-form save
+// against a known tax number starts a 35th spelling and undoes the unification.
+it('every route that writes purchase_respon canonicalises it', function () {
+    $src = file_get_contents(__DIR__.'/../../app/Http/Controllers/Dashboard/PurchaseController.php');
+
+    // No write site may pass the raw request value straight through.
+    expect($src)->not->toMatch("/'purchase_respon'\s*=>\s*\\\$request->purchase_respon/");
+
+    // Both the create and the update go through the shared helper.
+    expect(substr_count($src, 'canonicalSupplierName'))->toBeGreaterThanOrEqual(2);
+});
+
 it('keeps what was printed when the tax number is unknown — never invents a supplier', function () {
     expect(InvoicePurchaseMapper::canonicalSupplierName('311102341900003', null, 'CAESAR MANUFACTURING CO.'))
         ->toBe('CAESAR MANUFACTURING CO.');
