@@ -234,7 +234,14 @@ class PurchaseController extends Controller
                     'tax_number' => $request->tax_number,
                     'manager_id' => $request->manager_id ?? NULL,
 
-                    'purchase_respon' => $request->purchase_respon,
+                    // Same rule as the AI push: a supplier the master already knows by
+                    // tax (or CR) is stored under its one name, so «اسم المورد» finds
+                    // every invoice. A hand-typed name for an unknown supplier is kept.
+                    'purchase_respon' => \App\Services\InvoicePurchaseMapper::canonicalSupplierName(
+                        $request->tax_number,
+                        $request->commercial_registration,
+                        $request->purchase_respon
+                    ),
                     'purchasefile' => $purchasefile_url,
                     'note' => $request->note,
                     'created_at' => Carbon::now(),
@@ -349,7 +356,12 @@ class PurchaseController extends Controller
 
                         'tax_number' => $request->tax_number,
 
-                        'purchase_respon' => $request->purchase_respon,
+                        // Same rule on edit as on create — see store().
+                        'purchase_respon' => \App\Services\InvoicePurchaseMapper::canonicalSupplierName(
+                            $request->tax_number,
+                            $request->commercial_registration,
+                            $request->purchase_respon
+                        ),
                         'purchasefile' => $purchasefile_url,
                         'note' => $request->note,
                         'updated_at' => Carbon::now(),
