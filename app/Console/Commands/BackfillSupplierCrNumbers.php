@@ -37,6 +37,7 @@ class BackfillSupplierCrNumbers extends Command
         $filled = 0;
         $contested = 0;
         $none = 0;
+        $own = InvoicePurchaseMapper::ownCrNumbers();
 
         $suppliers = DB::table('suppliers')
             ->whereNotNull('tax_number')->where('tax_number', '<>', '')
@@ -57,11 +58,13 @@ class BackfillSupplierCrNumbers extends Command
 
             foreach ($rows as $cr) {
                 $digits = preg_replace('/\D+/', '', (string) $cr);
-                if (InvoicePurchaseMapper::isPlausibleCr($digits)) {
+                // The buyer's own CR on a supplier's invoice is not evidence about the supplier.
+                if (InvoicePurchaseMapper::isPlausibleCr($digits) && ! in_array($digits, $own, true)) {
                     $seen[$digits] = ($seen[$digits] ?? 0) + 1;
                 }
             }
-            if (! $seen) {
+            // One invoice is not agreement: a CR needs at least two invoices behind it.
+            if (array_sum($seen) < 2) {
                 $none++;
 
                 continue;

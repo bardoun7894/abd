@@ -565,12 +565,14 @@ class InvoicePurchaseMapper
         // An unreachable suppliers table must never cost the client a purchase row.
         foreach ($keys as [$column, $value]) {
             try {
-                $canonical = trim((string) \App\Models\Supplier::where($column, $value)->value('name'));
+                $names = \App\Models\Supplier::where($column, $value)->pluck('name')
+                    ->map(fn ($n) => trim((string) $n))->filter()->unique();
             } catch (\Throwable $e) {
                 return $fallback;
             }
-            if ($canonical !== '') {
-                return $canonical;
+            // A key shared by two different companies identifies neither: fall through.
+            if ($names->count() === 1) {
+                return $names->first();
             }
         }
 
@@ -618,6 +620,11 @@ class InvoicePurchaseMapper
         $cr = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $crNumber));
 
         try {
+            // The buyer's own CR printed on the invoice is not the supplier's.
+            if (in_array($cr, self::ownCrNumbers(), true)) {
+                return;
+            }
+
             // Guarded on blank so concurrent pushes cannot fight over it.
             \App\Models\Supplier::where('id', $supplier->id)
                 ->where(fn ($q) => $q->whereNull('cr_number')->orWhere('cr_number', ''))
@@ -626,6 +633,23 @@ class InvoicePurchaseMapper
             // Fail-open, exactly like naming: never cost the client a purchase row.
             Log::warning('could not record supplier CR', ['supplier' => $supplier->id, 'reason' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * The client's own commercial registrations (one per shop). Invoices sometimes
+     * print the buyer's CR where the seller's belongs, so these never identify a supplier.
+     *
+     * @return array<int, string>
+     */
+    public static function ownCrNumbers(): array
+    {
+        if (! Schema::hasTable('shop_comme')) {
+            return [];
+        }
+
+        return DB::table('shop_comme')->whereNotNull('comme_no')->pluck('comme_no')
+            ->map(fn ($v) => preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $v)))
+            ->filter()->values()->all();
     }
 
     /** ٣٠٠ -> 300, so a tax number typed in Arabic-Indic digits still matches. */
@@ -654,7 +678,10 @@ class InvoicePurchaseMapper
 
         $result = (new SupplierMatcher())->match($tax ?: null, $name ?: null);
         if ($result['match']) {
-            self::learnCrNumber($result['match'], $a['commercial_registration'] ?? null);
+            // Only a tax-number match proves the company; a fuzzy name match must not teach it a CR.
+            if ($result['reason'] === 'tax_number') {
+                self::learnCrNumber($result['match'], $a['commercial_registration'] ?? null);
+            }
 
             return (int) $result['match']->id;
         }
