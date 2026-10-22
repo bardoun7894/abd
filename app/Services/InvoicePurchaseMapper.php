@@ -621,6 +621,11 @@ class InvoicePurchaseMapper
         if (! $supplier || filled($supplier->cr_number) || ! self::isPlausibleCr($crNumber)) {
             return;
         }
+        // The match was by tax number; a misread one ("300") can match the wrong company,
+        // and teaching that company a CR would make the misread permanent.
+        if (! self::isPlausibleTax($supplier->tax_number)) {
+            return;
+        }
         $cr = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $crNumber));
 
         try {

@@ -63,3 +63,16 @@ it('ignores malformed CR readings when deciding agreement', function () {
 
     expect(Supplier::find($s->id)->cr_number)->toBe('2050092979');
 });
+
+it('learnCrNumber does not teach a CR to a supplier matched on an implausible tax number', function () {
+    $learn = new ReflectionMethod(InvoicePurchaseMapper::class, 'learnCrNumber');
+    $learn->setAccessible(true);
+
+    $misread = Supplier::create(['name' => 'محطة سهل', 'tax_number' => '300']);
+    $learn->invoke(null, $misread, '2050092979');
+    expect(Supplier::find($misread->id)->cr_number)->toBeEmpty();
+
+    $good = Supplier::create(['name' => 'Nahla', 'tax_number' => '300975259400003']);
+    $learn->invoke(null, $good, '2050092979');
+    expect(Supplier::find($good->id)->cr_number)->toBe('2050092979');
+});
