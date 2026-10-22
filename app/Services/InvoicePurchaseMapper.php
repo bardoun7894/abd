@@ -70,7 +70,8 @@ class InvoicePurchaseMapper
             'tax_number' => $a['supplier_tax_number'] ?? null,
             'purchase_respon' => self::canonicalSupplierName(
                 $a['supplier_tax_number'] ?? null,
-                $a['supplier_name'] ?? null
+                $a['supplier_name'] ?? null,
+                $a['commercial_registration'] ?? null
             ),
             'shop_id' => $shopId,
             'manager_id' => $managerId,
@@ -534,26 +535,130 @@ class InvoicePurchaseMapper
      * «اسم المورد» searches LIKE against it, so the client only ever found a slice
      * of his own invoices. Tax number identifies a company; the master names it.
      *
-     * Deliberately tax-only: a fuzzy name match must never rename someone's
-     * supplier, and an unknown tax number keeps exactly what was printed.
+     * Deliberately key-only (tax number, then CR): a fuzzy name match must never
+     * rename someone's supplier, and an unknown key keeps exactly what was printed.
+     *
+     * $crNumber comes LAST so the original two-argument form (tax, rawName) keeps
+     * meaning what it always did; a caller that predates the CR is not silently
+     * passing its printed name in as a registration number.
      */
-    public static function canonicalSupplierName($taxNumber, $rawName): ?string
+    public static function canonicalSupplierName($taxNumber, $rawName = null, $crNumber = null): ?string
     {
         $raw = trim((string) $rawName);
+        $fallback = $raw === '' ? null : $raw;
+
         $tax = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $taxNumber));
-        if ($tax === '') {
-            return $raw === '' ? null : $raw;
+        $cr = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $crNumber));
+
+        // Two unique keys, tried in order of authority. The tax number is the primary
+        // one; the commercial registration is the safety net for when OCR mangles it —
+        // this data holds a "300" and a 14-digit tax number, and a supplier identified
+        // by neither key would otherwise start a fresh spelling of an existing company.
+        $keys = [];
+        if (self::isPlausibleTax($tax)) {
+            $keys[] = ['tax_number', $tax];
+        }
+        if (self::isPlausibleCr($cr)) {
+            $keys[] = ['cr_number', $cr];
+        }
+        if (! $keys) {
+            return $fallback;
         }
 
         // Fail-open: naming a supplier is a nicety, pushing the invoice is the job.
         // An unreachable suppliers table must never cost the client a purchase row.
-        try {
-            $canonical = trim((string) \App\Models\Supplier::where('tax_number', $tax)->value('name'));
-        } catch (\Throwable $e) {
-            $canonical = '';
+        foreach ($keys as [$column, $value]) {
+            try {
+                $names = \App\Models\Supplier::where($column, $value)->pluck('name')
+                    ->map(fn ($n) => trim((string) $n))->filter()->unique();
+            } catch (\Throwable $e) {
+                return $fallback;
+            }
+            // A key shared by two different companies identifies neither: fall through.
+            if ($names->count() === 1) {
+                return $names->first();
+            }
         }
 
-        return $canonical !== '' ? $canonical : ($raw === '' ? null : $raw);
+        return $fallback;
+    }
+
+    /**
+     * A Saudi VAT number is 15 digits, starts with 3 and ends with 3.
+     *
+     * Anything else is a misread, not an identity. This data holds a tax number of
+     * "300" that would have merged «محطة سهل» with «WALEED TURNERY», and a misread
+     * 15-digit one that pulled 22 unrelated vendors under a single name.
+     */
+    public static function isPlausibleTax($tax): bool
+    {
+        $t = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $tax));
+
+        return strlen($t) === 15 && str_starts_with($t, '3') && str_ends_with($t, '3');
+    }
+
+    /**
+     * A Saudi commercial registration is 10 digits. Anything shorter or longer came
+     * off a bad scan and is not evidence that two invoices are the same company.
+     */
+    public static function isPlausibleCr($cr): bool
+    {
+        return strlen(preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $cr))) === 10;
+    }
+
+    /**
+     * Record a supplier's commercial registration the first time we see a good one.
+     *
+     * canonicalSupplierName() falls back to the CR when the tax number is misread,
+     * but that only helps if the master carries CRs — most rows predate the field.
+     * Every matched invoice that prints a well-formed CR teaches it one, so the
+     * safety net fills itself in as invoices arrive. Only ever fills a BLANK field:
+     * overwriting a known CR with a fresh reading would let one bad scan rewrite an
+     * identity, which is the failure mode this whole change exists to avoid.
+     */
+    private static function learnCrNumber($supplier, $crNumber): void
+    {
+        if (! $supplier || filled($supplier->cr_number) || ! self::isPlausibleCr($crNumber)) {
+            return;
+        }
+        // The match was by tax number; a misread one ("300") can match the wrong company,
+        // and teaching that company a CR would make the misread permanent.
+        if (! self::isPlausibleTax($supplier->tax_number)) {
+            return;
+        }
+        $cr = preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $crNumber));
+
+        try {
+            // The buyer's own CR printed on the invoice is not the supplier's.
+            if (in_array($cr, self::ownCrNumbers(), true)) {
+                return;
+            }
+
+            // Guarded on blank so concurrent pushes cannot fight over it.
+            \App\Models\Supplier::where('id', $supplier->id)
+                ->where(fn ($q) => $q->whereNull('cr_number')->orWhere('cr_number', ''))
+                ->update(['cr_number' => $cr]);
+        } catch (\Throwable $e) {
+            // Fail-open, exactly like naming: never cost the client a purchase row.
+            Log::warning('could not record supplier CR', ['supplier' => $supplier->id, 'reason' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * The client's own commercial registrations (one per shop). Invoices sometimes
+     * print the buyer's CR where the seller's belongs, so these never identify a supplier.
+     *
+     * @return array<int, string>
+     */
+    public static function ownCrNumbers(): array
+    {
+        if (! Schema::hasTable('shop_comme')) {
+            return [];
+        }
+
+        return DB::table('shop_comme')->whereNotNull('comme_no')->pluck('comme_no')
+            ->map(fn ($v) => preg_replace('/\D+/', '', self::arabicDigitsToAscii((string) $v)))
+            ->filter()->values()->all();
     }
 
     /** ٣٠٠ -> 300, so a tax number typed in Arabic-Indic digits still matches. */
@@ -582,6 +687,11 @@ class InvoicePurchaseMapper
 
         $result = (new SupplierMatcher())->match($tax ?: null, $name ?: null);
         if ($result['match']) {
+            // Only a tax-number match proves the company; a fuzzy name match must not teach it a CR.
+            if ($result['reason'] === 'tax_number') {
+                self::learnCrNumber($result['match'], $a['commercial_registration'] ?? null);
+            }
+
             return (int) $result['match']->id;
         }
 

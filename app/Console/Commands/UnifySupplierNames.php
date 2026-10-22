@@ -30,20 +30,10 @@ class UnifySupplierNames extends Command
 
     protected $description = 'Store one canonical supplier name per company on purchase rows';
 
-    /**
-     * A Saudi VAT number is 15 digits, starts with 3 and ends with 3.
-     *
-     * The first sweep over this data would have merged «محطة سهل» with «WALEED
-     * TURNERY» under a tax number of "300", and pulled 22 unrelated vendors under
-     * one name via a misread 15-digit number. Tax numbers come off the same OCR as
-     * everything else — anything that is not a well-formed VAT number is not
-     * evidence that two invoices are the same company.
-     */
+    /** What counts as a real VAT number — one definition, in the service that owns identity. */
     public static function isPlausibleTax($tax): bool
     {
-        $t = preg_replace('/\D+/', '', (string) $tax);
-
-        return strlen($t) === 15 && str_starts_with($t, '3') && str_ends_with($t, '3');
+        return InvoicePurchaseMapper::isPlausibleTax($tax);
     }
 
     public function handle(): int
