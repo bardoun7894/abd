@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\Schema;
  * numbers — most rows were created before it was captured.
  *
  * Fills suppliers.cr_number from the invoices already on file: for each supplier,
- * the CR that its own invoices agree on. A supplier whose invoices disagree is left
- * alone and reported — a contested CR is a misread, not an identity.
+ * the CR that its own invoices agree on. A supplier whose invoices carry more than one
+ * well-formed CR is left alone and reported: any disagreement means at least one of them
+ * is a misread, and a majority of misreads is still a misread.
  */
 class BackfillSupplierCrNumbers extends Command
 {
@@ -73,8 +74,8 @@ class BackfillSupplierCrNumbers extends Command
             $best = array_key_first($seen);
             $total = array_sum($seen);
 
-            // Require a clear majority: a CR its invoices disagree about is a misread.
-            if ($seen[$best] * 2 <= $total) {
+            // Unanimity, not a majority: 3 invoices saying X and 1 saying Y is contested.
+            if (count($seen) > 1) {
                 $this->warn("{$tag}{$s->name}: invoices disagree on the CR (".implode(', ', array_map(
                     fn ($k, $v) => "{$k} x{$v}", array_keys($seen), $seen
                 )).') — left empty');
