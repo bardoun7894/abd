@@ -239,8 +239,8 @@ class PurchaseController extends Controller
                     // every invoice. A hand-typed name for an unknown supplier is kept.
                     'purchase_respon' => \App\Services\InvoicePurchaseMapper::canonicalSupplierName(
                         $request->tax_number,
-                        $request->commercial_registration,
-                        $request->purchase_respon
+                        $request->purchase_respon,
+                        $request->commercial_registration
                     ),
                     'purchasefile' => $purchasefile_url,
                     'note' => $request->note,
@@ -359,8 +359,8 @@ class PurchaseController extends Controller
                         // Same rule on edit as on create — see store().
                         'purchase_respon' => \App\Services\InvoicePurchaseMapper::canonicalSupplierName(
                             $request->tax_number,
-                            $request->commercial_registration,
-                            $request->purchase_respon
+                            $request->purchase_respon,
+                            $request->commercial_registration
                         ),
                         'purchasefile' => $purchasefile_url,
                         'note' => $request->note,

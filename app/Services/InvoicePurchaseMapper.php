@@ -70,8 +70,8 @@ class InvoicePurchaseMapper
             'tax_number' => $a['supplier_tax_number'] ?? null,
             'purchase_respon' => self::canonicalSupplierName(
                 $a['supplier_tax_number'] ?? null,
-                $a['commercial_registration'] ?? null,
-                $a['supplier_name'] ?? null
+                $a['supplier_name'] ?? null,
+                $a['commercial_registration'] ?? null
             ),
             'shop_id' => $shopId,
             'manager_id' => $managerId,
@@ -535,10 +535,14 @@ class InvoicePurchaseMapper
      * «اسم المورد» searches LIKE against it, so the client only ever found a slice
      * of his own invoices. Tax number identifies a company; the master names it.
      *
-     * Deliberately tax-only: a fuzzy name match must never rename someone's
-     * supplier, and an unknown tax number keeps exactly what was printed.
+     * Deliberately key-only (tax number, then CR): a fuzzy name match must never
+     * rename someone's supplier, and an unknown key keeps exactly what was printed.
+     *
+     * $crNumber comes LAST so the original two-argument form (tax, rawName) keeps
+     * meaning what it always did; a caller that predates the CR is not silently
+     * passing its printed name in as a registration number.
      */
-    public static function canonicalSupplierName($taxNumber, $crNumber = null, $rawName = null): ?string
+    public static function canonicalSupplierName($taxNumber, $rawName = null, $crNumber = null): ?string
     {
         $raw = trim((string) $rawName);
         $fallback = $raw === '' ? null : $raw;

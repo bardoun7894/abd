@@ -38,7 +38,7 @@ it('uses the supplier master name when the tax number identifies a known company
         'Nahla',
     ];
     foreach ($variants as $raw) {
-        expect(InvoicePurchaseMapper::canonicalSupplierName('300975259400003', null, $raw))
+        expect(InvoicePurchaseMapper::canonicalSupplierName('300975259400003', $raw))
             ->toBe('شركة نهلة الوادي للتجارة');
     }
 });
@@ -50,13 +50,13 @@ it('falls back to the commercial registration when the tax number is misread', f
     Supplier::where('tax_number', '300975259400003')->update(['cr_number' => '2050092979']);
 
     // Tax misread (one digit off) but the CR is legible → still the right company.
-    expect(InvoicePurchaseMapper::canonicalSupplierName('300975143300003', '2050092979', 'Nahla Al Wadi Trading Co, LLC'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName('300975143300003', 'Nahla Al Wadi Trading Co, LLC', '2050092979'))
         ->toBe('شركة نهلة الوادي للتجارة');
     // Tax missing entirely, CR present.
-    expect(InvoicePurchaseMapper::canonicalSupplierName(null, '2050092979', 'Nahla'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName(null, 'Nahla', '2050092979'))
         ->toBe('شركة نهلة الوادي للتجارة');
     // CR with the usual punctuation/spacing off a scan.
-    expect(InvoicePurchaseMapper::canonicalSupplierName('', 'C.R. 2050092979', 'Nahla'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName('', 'Nahla', 'C.R. 2050092979'))
         ->toBe('شركة نهلة الوادي للتجارة');
 });
 
@@ -65,7 +65,7 @@ it('prefers the tax number over the CR when both are present and they disagree',
     Supplier::create(['name' => 'CAESAR MANUFACTURING CO.', 'tax_number' => '311102341900003', 'cr_number' => '2050092979']);
 
     // Tax is authoritative: it identifies Caesar even though that CR is shared.
-    expect(InvoicePurchaseMapper::canonicalSupplierName('311102341900003', '2050092979', 'CAESAR'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName('311102341900003', 'CAESAR', '2050092979'))
         ->toBe('CAESAR MANUFACTURING CO.');
 });
 
@@ -78,7 +78,7 @@ it('ignores a CR that is not a real 10-digit registration', function () {
     expect(InvoicePurchaseMapper::isPlausibleCr(null))->toBeFalse();
 
     // A short/garbage CR must never match anyone.
-    expect(InvoicePurchaseMapper::canonicalSupplierName(null, '205', 'مورد من الفاتورة'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName(null, 'مورد من الفاتورة', '205'))
         ->toBe('مورد من الفاتورة');
 });
 
@@ -132,21 +132,21 @@ it('every route that writes purchase_respon canonicalises it', function () {
 });
 
 it('keeps what was printed when the tax number is unknown — never invents a supplier', function () {
-    expect(InvoicePurchaseMapper::canonicalSupplierName('311102341900003', null, 'CAESAR MANUFACTURING CO.'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName('311102341900003', 'CAESAR MANUFACTURING CO.'))
         ->toBe('CAESAR MANUFACTURING CO.');
-    expect(InvoicePurchaseMapper::canonicalSupplierName(null, null, 'مؤسسة عبد العزيز يوسف البوروزة'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName(null, 'مؤسسة عبد العزيز يوسف البوروزة'))
         ->toBe('مؤسسة عبد العزيز يوسف البوروزة');
     expect(InvoicePurchaseMapper::canonicalSupplierName('', '', ''))->toBeNull();
 });
 
 it('tolerates the tax number arriving with spaces or Arabic-Indic digits', function () {
-    expect(InvoicePurchaseMapper::canonicalSupplierName('300 975 259 400 003', null, 'Nahla'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName('300 975 259 400 003', 'Nahla'))
         ->toBe('شركة نهلة الوادي للتجارة');
 });
 
 it('does not overwrite with a blank master name', function () {
     Supplier::create(['name' => null, 'tax_number' => '399999999999993']);
-    expect(InvoicePurchaseMapper::canonicalSupplierName('399999999999993', null, 'مورد من الفاتورة'))
+    expect(InvoicePurchaseMapper::canonicalSupplierName('399999999999993', 'مورد من الفاتورة'))
         ->toBe('مورد من الفاتورة');
 });
 
@@ -212,4 +212,22 @@ it('purchases:unify-supplier-names rewrites existing rows and dry-run writes not
     expect(DB::table('purchase')->where('purchase_no', 'B')->value('purchase_respon'))->toBe('شركة نهلة الوادي للتجارة');
     expect(DB::table('purchase')->where('purchase_no', 'C')->value('purchase_respon'))->toBe('شركة نهلة الوادي للتجارة');
     expect(DB::table('purchase')->where('purchase_no', 'D')->value('purchase_respon'))->toBe('CAESAR MANUFACTURING CO.');
+});
+
+// The CR was added as a third, optional argument. Putting it in the middle would turn
+// every existing (tax, name) call into (tax, cr) and drop the printed name on the floor.
+it('keeps the original two-argument form: (tax, printed name)', function () {
+    expect(InvoicePurchaseMapper::canonicalSupplierName('311102341900003', 'CAESAR MANUFACTURING CO.'))
+        ->toBe('CAESAR MANUFACTURING CO.');
+    expect(InvoicePurchaseMapper::canonicalSupplierName('300975259400003', 'Nahla'))
+        ->toBe('شركة نهلة الوادي للتجارة');
+
+    $params = (new ReflectionMethod(InvoicePurchaseMapper::class, 'canonicalSupplierName'))->getParameters();
+    expect(array_map(fn ($p) => $p->getName(), $params))->toBe(['taxNumber', 'rawName', 'crNumber']);
+});
+
+it('the manual form passes the printed name second and the CR third', function () {
+    $src = file_get_contents(__DIR__.'/../../app/Http/Controllers/Dashboard/PurchaseController.php');
+    expect(preg_match_all('/canonicalSupplierName\(\s*\$request->tax_number,\s*\$request->purchase_respon,\s*\$request->commercial_registration\s*\)/', $src))
+        ->toBe(2);
 });
